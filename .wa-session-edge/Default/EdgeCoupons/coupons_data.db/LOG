@@ -1,0 +1,6 @@
+2025/09/11-12:31:14.305 55a0 Reusing MANIFEST C:\Users\LENOVO\Documents\medplayapp\medplay-web\.wa-session-edge\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2025/09/11-12:31:14.309 55a0 Recovering log #23
+2025/09/11-12:31:14.310 55a0 Reusing old log C:\Users\LENOVO\Documents\medplayapp\medplay-web\.wa-session-edge\Default\EdgeCoupons/coupons_data.db/000023.log 
+2025/09/11-12:31:14.596 7350 Level-0 table #27: started
+2025/09/11-12:31:14.601 7350 Level-0 table #27: 672220 bytes OK
+2025/09/11-12:31:14.602 7350 Delete type=0 #23
