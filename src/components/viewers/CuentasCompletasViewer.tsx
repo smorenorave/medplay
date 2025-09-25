@@ -191,6 +191,44 @@ async function ensureInInventario(plataforma_id: number, correo: string, clave?:
 }
 
 /* ========================================================================
+ * Subcomponentes de tabla
+ * ===================================================================== */
+function Th({
+  children,
+  className = '',
+  ...rest
+}: React.ThHTMLAttributes<HTMLTableHeaderCellElement>) {
+  return (
+    <th
+      {...rest}
+      className={[
+        'px-3 py-2 text-left text-xs uppercase tracking-wide text-neutral-400 font-medium',
+        'whitespace-nowrap',
+        'sticky top-0 z-10 bg-neutral-900/80 backdrop-blur supports-[backdrop-filter]:bg-neutral-900/60',
+        className,
+      ].join(' ')}
+    >
+      {children}
+    </th>
+  );
+}
+
+function Td({
+  children,
+  className = '',
+  ...rest
+}: React.TdHTMLAttributes<HTMLTableCellElement>) {
+  return (
+    <td
+      {...rest}
+      className={['px-3 py-2 text-sm text-neutral-100 whitespace-nowrap', className].join(' ')}
+    >
+      {children}
+    </td>
+  );
+}
+
+/* ========================================================================
  * Componente principal
  * ===================================================================== */
 export default function CuentasCompletasViewer() {
@@ -215,11 +253,29 @@ export default function CuentasCompletasViewer() {
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
 
-  // eliminación
+  // eliminación individual
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
   const [deleteAction, setDeleteAction] = useState<'archive' | 'purge' | null>(null);
+
+  // selección múltiple
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
+  // eliminación masiva
+  type BulkItem = {
+    id: number;
+    label?: string;
+    plataforma_id: number;
+    correo: string;
+    contrasena: string | null;
+  };
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkItems, setBulkItems] = useState<BulkItem[]>([]);
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState(0);
+  const [bulkSummary, setBulkSummary] = useState<{ total: number; archived: number; purged: number; failed: number } | null>(null);
+  const [bulkErr, setBulkErr] = useState<string | null>(null);
 
   // Scroll principal
   const bodyScrollRef = useRef<HTMLDivElement>(null);
@@ -268,6 +324,9 @@ export default function CuentasCompletasViewer() {
       // limpiar resultados de búsqueda de servidor al refrescar dataset base
       setServerResults([]);
       setServerSearchErr(null);
+
+      // limpiar selección
+      setSelectedIds(new Set());
     } catch (e: any) {
       setErr(e?.message ?? 'Error al cargar');
       setRows([]);
@@ -373,7 +432,7 @@ export default function CuentasCompletasViewer() {
       }
     };
 
-    // debounce suave para no pegarle al server en cada keystroke
+    // debounce
     handle = setTimeout(doSearch, 350);
     return () => clearTimeout(handle);
   }, [q, plataformaId]);
@@ -430,7 +489,7 @@ export default function CuentasCompletasViewer() {
     setSaveErr(null);
   };
 
-  // Recalcular automáticamente total_ganado al tocar total o proveedor
+  // Recalcular automáticamente total_ganado
   useEffect(() => {
     if (editingId == null) return;
     setDraft((prev) => {
@@ -444,7 +503,7 @@ export default function CuentasCompletasViewer() {
     });
   }, [editingId, draft.total_pagado, draft.total_pagado_proveedor]);
 
-  // Recalcular automáticamente fecha_vencimiento al cambiar compra/meses
+  // Recalcular automáticamente fecha_vencimiento
   useEffect(() => {
     if (editingId == null) return;
     setDraft((prev) => {
@@ -471,7 +530,6 @@ export default function CuentasCompletasViewer() {
       const totalProv   = toNumOrNull(draft.total_pagado_proveedor);
       const totalGanado = totalPagado == null ? null : (totalProv == null ? totalPagado : totalPagado - totalProv);
 
-      // asegurar que el borrador tenga el vencimiento auto (por si no entró el effect)
       const finalDraft = maybeAutoVencimiento(draft);
 
       const payload: Record<string, any> = {
@@ -596,7 +654,7 @@ export default function CuentasCompletasViewer() {
   const tblInput =
     'w-full rounded-md px-2 py-1 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500';
 
-  /* --------------------------------- Eliminar -------------------------------- */
+  /* --------------------------------- Eliminar (individual) -------------------------------- */
   const openDelete = (id: number) => {
     setDeleteErr(null);
     setDeleteAction(null);
@@ -619,9 +677,11 @@ export default function CuentasCompletasViewer() {
 
       // Datos del registro (para posible inventario)
       const victim = rows.find((r) => r.id === deleteTargetId) || null;
-      const victimPlataforma = victim?.plataforma_id ?? null;
-      const victimCorreo = victim ? normalizeEmail(victim.correo) : null;
-      const victimClave = victim?.contrasena ?? null;
+      if (!victim) throw new Error('Registro no encontrado');
+
+      const victimPlataforma = victim.plataforma_id;
+      const victimCorreo = normalizeEmail(victim.correo);
+      const victimClave = victim.contrasena ?? null;
 
       // Solo si el usuario eligió "Enviar al inventario"
       if (archive && victimPlataforma != null && victimCorreo) {
@@ -636,6 +696,12 @@ export default function CuentasCompletasViewer() {
       }
 
       setRows((rs) => rs.filter((r) => r.id !== deleteTargetId));
+      // limpiar selección si estaba marcada
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(deleteTargetId);
+        return next;
+      });
       closeDelete();
     } catch (e: any) {
       setDeleteErr(e?.message ?? 'Error al eliminar');
@@ -645,25 +711,100 @@ export default function CuentasCompletasViewer() {
     }
   };
 
-  /* --------------------------------- Render -------------------------------- */
-  const headerCells = [
-    <Th key="h-edit" className="w-28 text-center">Acciones</Th>,
-    <Th key="h-plat" className="w-48">Plataforma</Th>,
-    <Th key="h-contacto" className="w-40">Contacto</Th>,
-    <Th key="h-nombre" className="w-40">Nombre</Th>,
-    <Th key="h-correo" className="w-60">Correo</Th>,
-    <Th key="h-clave" className="w-40">Clave</Th>,
-    <Th key="h-total" className="w-36 text-right">Total</Th>,
-    <Th key="h-pag-proveedor" className="w-40 text-right">Pagado prov.</Th>,
-    <Th key="h-ganado" className="w-36 text-right">Ganado</Th>,
-    <Th key="h-meses" className="w-28">Meses</Th>,
-    <Th key="h-compra" className="w-36">Compra</Th>,
-    <Th key="h-vence" className="w-36">Vence</Th>,
-    <Th key="h-estado" className="w-32">Estado</Th>,
-    <Th key="h-proveedor" className="w-40">Proveedor</Th>,
-    <Th key="h-comentario" className="w-[520px] min-w-[380px]">Comentario</Th>,
-  ];
+  /* ------------------------------ Selección múltiple ----------------------------- */
+  const isRowSelected = (id: number) => selectedIds.has(id);
+  const toggleRow = (id: number, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+  const allVisibleIds = viewRows.map((r) => r.id);
+  const allVisibleSelected = allVisibleIds.length > 0 && allVisibleIds.every((id) => selectedIds.has(id));
+  const someVisibleSelected = allVisibleIds.some((id) => selectedIds.has(id));
+  const toggleAllVisible = (checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        for (const id of allVisibleIds) next.add(id);
+      } else {
+        for (const id of allVisibleIds) next.delete(id);
+      }
+      return next;
+    });
+  };
 
+  /* ------------------------------ Eliminación MASIVA ----------------------------- */
+  const openBulk = (ids: number[]) => {
+    const unique = Array.from(new Set(ids));
+    if (unique.length === 0) return;
+
+    const items: BulkItem[] = [];
+    for (const id of unique) {
+      const r = rows.find((x) => x.id === id);
+      if (!r) continue;
+      items.push({
+        id: r.id,
+        label: `${r.correo} / ${r.nombre ?? r.contacto ?? ''}`.trim(),
+        plataforma_id: r.plataforma_id,
+        correo: normalizeEmail(r.correo),
+        contrasena: r.contrasena ?? null,
+      });
+    }
+    setBulkItems(items);
+    setBulkSummary(null);
+    setBulkErr(null);
+    setBulkProgress(0);
+    setBulkProcessing(false);
+    setBulkOpen(true);
+  };
+
+  const openBulkSelected = () => openBulk(Array.from(selectedIds));
+  const openBulkAllView = () => openBulk(viewRows.map((r) => r.id));
+
+  const runBulk = async (preferArchive: boolean) => {
+    if (!bulkOpen || bulkItems.length === 0) return;
+    setBulkProcessing(true);
+    setBulkErr(null);
+    setBulkProgress(0);
+    const total = bulkItems.length;
+    let archived = 0, purged = 0, failed = 0;
+
+    for (let i = 0; i < bulkItems.length; i++) {
+      const it = bulkItems[i];
+      try {
+        if (preferArchive) {
+          await ensureInInventario(it.plataforma_id, it.correo, it.contrasena);
+        }
+        const res = await fetch(`/api/cuentascompletas/${it.id}?cascade=1`, { method: 'DELETE' });
+        if (!res.ok) {
+          failed++;
+        } else {
+          if (preferArchive) archived++; else purged++;
+          // quitar de UI y selección
+          setRows((rs) => rs.filter((r) => r.id !== it.id));
+          setSelectedIds((prev) => {
+            const next = new Set(prev);
+            next.delete(it.id);
+            return next;
+          });
+        }
+      } catch {
+        failed++;
+      } finally {
+        setBulkProgress(Math.round(((i + 1) / total) * 100));
+      }
+    }
+
+    setBulkSummary({ total, archived, purged, failed });
+    setBulkProcessing(false);
+  };
+
+  const selectedCount = selectedIds.size;
+
+  /* --------------------------------- Render -------------------------------- */
   return (
     <div className="space-y-4">
       {/* Filtros */}
@@ -710,6 +851,45 @@ export default function CuentasCompletasViewer() {
         </button>
       </div>
 
+      {/* Barra de acciones masivas */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="text-sm text-neutral-300">
+          Seleccionados: <span className="font-semibold">{selectedCount}</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={openBulkSelected}
+            disabled={selectedCount === 0 || loading}
+            className="rounded-lg border border-red-700 bg-red-800/40 px-3 py-1.5 text-red-100 hover:bg-red-800/60 disabled:opacity-50"
+            title="Enviar al inventario (si lo eliges) y eliminar / o eliminar sin archivar"
+          >
+            Eliminar seleccionados
+          </button>
+
+          <button
+            type="button"
+            onClick={openBulkAllView}
+            disabled={viewRows.length === 0 || loading}
+            className="rounded-lg border border-red-700 bg-red-800/40 px-3 py-1.5 text-red-100 hover:bg-red-800/60 disabled:opacity-50"
+            title="Abrir modal para eliminar todo lo que aparece en la vista"
+          >
+            Eliminar todo (vista)
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSelectedIds(new Set())}
+            disabled={selectedCount === 0}
+            className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-neutral-100 hover:bg-neutral-800 disabled:opacity-50"
+            title="Limpiar selección"
+          >
+            Limpiar selección
+          </button>
+        </div>
+      </div>
+
       {/* Estado */}
       {loading && <div className="rounded-xl border border-neutral-800 bg-neutral-950/40 p-4 text-sm text-neutral-300">Cargando cuentas…</div>}
       {err && <div className="rounded-xl border border-red-800/50 bg-red-950/30 p-4 text-sm text-red-200">Error: {err}</div>}
@@ -731,13 +911,43 @@ export default function CuentasCompletasViewer() {
             onKeyDown={onBodyKeyDown}
             tabIndex={0}
           >
-            <table className="min-w-[2150px] w-full table-fixed">
+            <table className="min-w-[2250px] w-full table-fixed">
               <thead>
-                <tr className="border-b border-neutral-800">{headerCells}</tr>
+                <tr className="border-b border-neutral-800">
+                  {/* Selección */}
+                  <Th className="w-10 text-center">
+                    <input
+                      type="checkbox"
+                      aria-label="Seleccionar todo"
+                      checked={allVisibleSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = !allVisibleSelected && someVisibleSelected;
+                      }}
+                      onChange={(e) => toggleAllVisible(e.target.checked)}
+                    />
+                  </Th>
+
+                  <Th className="w-28 text-center">Acciones</Th>
+                  <Th className="w-48">Plataforma</Th>
+                  <Th className="w-40">Contacto</Th>
+                  <Th className="w-40">Nombre</Th>
+                  <Th className="w-60">Correo</Th>
+                  <Th className="w-40">Clave</Th>
+                  <Th className="w-36 text-right">Total</Th>
+                  <Th className="w-40 text-right">Pagado prov.</Th>
+                  <Th className="w-36 text-right">Ganado</Th>
+                  <Th className="w-28">Meses</Th>
+                  <Th className="w-36">Compra</Th>
+                  <Th className="w-36">Vence</Th>
+                  <Th className="w-32">Estado</Th>
+                  <Th className="w-40">Proveedor</Th>
+                  <Th className="w-[520px] min-w-[380px]">Comentario</Th>
+                </tr>
               </thead>
               <tbody>
                 {viewRows.map((row, idx) => {
                   const isEditing = editingId === row.id;
+                  const checked = isRowSelected(row.id);
 
                   return (
                     <tr
@@ -745,11 +955,21 @@ export default function CuentasCompletasViewer() {
                       onDoubleClick={(e) => {
                         if (isEditing) return;
                         const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-                        if (['button', 'a', 'input', 'textarea', 'select', 'svg', 'path'].includes(tag || '')) return;
+                        if (['button', 'a', 'input', 'textarea', 'select', 'svg', 'path', 'label'].includes(tag || '')) return;
                         beginEdit(row);
                       }}
                       className={`border-b border-neutral-900 ${idx % 2 === 0 ? 'bg-neutral-900/30' : 'bg-transparent'} hover:bg-neutral-800/40 ${!isEditing ? 'cursor-pointer' : ''}`}
                     >
+                      {/* Checkbox selección */}
+                      <Td className="text-center">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => toggleRow(row.id, e.target.checked)}
+                          aria-label={`Seleccionar fila ${row.id}`}
+                        />
+                      </Td>
+
                       {/* Acciones */}
                       <Td className="text-center">
                         {!isEditing ? (
@@ -1048,7 +1268,7 @@ export default function CuentasCompletasViewer() {
         </div>
       )}
 
-      {/* Modal de eliminación con dos opciones */}
+      {/* Modal de eliminación con dos opciones (individual) */}
       {deleteTargetId != null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={closeDelete}>
           <div
@@ -1103,6 +1323,81 @@ export default function CuentasCompletasViewer() {
         </div>
       )}
 
+      {/* Modal eliminación MASIVA */}
+      {bulkOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !bulkProcessing && setBulkOpen(false)}>
+          <div
+            className="w-full max-w-xl rounded-xl border border-neutral-700 bg-neutral-900 p-4 text-neutral-100 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-labelledby="bulk-title"
+            aria-describedby="bulk-desc"
+          >
+            <h4 id="bulk-title" className="text-lg font-semibold mb-2">Eliminar {bulkItems.length} cuentas</h4>
+
+            <p id="bulk-desc" className="text-sm text-neutral-300">
+              Puedes <strong>enviar al inventario</strong> cada cuenta (correo + clave si hay) y luego eliminarla,
+              o bien <strong>eliminar definitivamente</strong> sin archivar.
+            </p>
+
+            {bulkErr && (
+              <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">{bulkErr}</div>
+            )}
+
+            {bulkSummary && (
+              <div className="mt-3 rounded-lg border border-neutral-700 bg-neutral-800/40 p-2 text-sm">
+                <div>Total procesadas: {bulkSummary.total}</div>
+                <div>Enviadas a inventario: {bulkSummary.archived}</div>
+                <div>Eliminadas definitivamente: {bulkSummary.purged}</div>
+                <div>Fallidas: {bulkSummary.failed}</div>
+              </div>
+            )}
+
+            {bulkProcessing && (
+              <div className="mt-3">
+                <div className="h-2 w-full rounded bg-neutral-800 overflow-hidden">
+                  <div className="h-2 bg-emerald-600" style={{ width: `${bulkProgress}%` }} />
+                </div>
+                <div className="mt-1 text-xs text-neutral-400">{bulkProgress}%</div>
+              </div>
+            )}
+
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => runBulk(true)}
+                disabled={bulkProcessing || bulkItems.length === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-700 bg-emerald-800/40 px-3 py-2 hover:bg-emerald-800/60 focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:opacity-60"
+                title="Enviar al inventario y eliminar"
+              >
+                {bulkProcessing ? 'Procesando…' : 'Inventario + Eliminar'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => runBulk(false)}
+                disabled={bulkProcessing || bulkItems.length === 0}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-700 bg-red-800/40 px-3 py-2 hover:bg-red-800/60 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-60"
+                title="Eliminar todo definitivamente"
+              >
+                {bulkProcessing ? 'Procesando…' : 'Eliminar definitivamente'}
+              </button>
+            </div>
+
+            <div className="mt-3 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setBulkOpen(false)}
+                disabled={bulkProcessing}
+                className="rounded-lg border border-neutral-600 px-3 py-2 hover:bg-neutral-800 disabled:opacity-50"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Scrollbar discreto */}
       <style jsx global>{`
         .custom-scroll {
@@ -1120,43 +1415,5 @@ export default function CuentasCompletasViewer() {
         .custom-scroll:hover::-webkit-scrollbar-thumb { background-color: rgba(120,120,120,0.5); }
       `}</style>
     </div>
-  );
-}
-
-/* ========================================================================
- * Subcomponentes de tabla
- * ===================================================================== */
-function Th({
-  children,
-  className = '',
-  ...rest
-}: React.ThHTMLAttributes<HTMLTableHeaderCellElement>) {
-  return (
-    <th
-      {...rest}
-      className={[
-        'px-3 py-2 text-left text-xs uppercase tracking-wide text-neutral-400 font-medium',
-        'whitespace-nowrap',
-        'sticky top-0 z-10 bg-neutral-900/80 backdrop-blur supports-[backdrop-filter]:bg-neutral-900/60',
-        className,
-      ].join(' ')}
-    >
-      {children}
-    </th>
-  );
-}
-
-function Td({
-  children,
-  className = '',
-  ...rest
-}: React.TdHTMLAttributes<HTMLTableCellElement>) {
-  return (
-    <td
-      {...rest}
-      className={['px-3 py-2 text-sm text-neutral-100 whitespace-nowrap', className].join(' ')}
-    >
-      {children}
-    </td>
   );
 }

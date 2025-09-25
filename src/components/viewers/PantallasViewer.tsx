@@ -320,16 +320,36 @@ export default function PantallasViewer() {
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
 
-  // eliminación
+  // eliminación (individual)
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; label?: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
   const [deleteAction, setDeleteAction] = useState<'archive' | 'purge' | null>(null);
 
-  // control “Enviar al inventario”
+  // control “Enviar al inventario” individual
   const [canArchive, setCanArchive] = useState(false);
   const [checkingArchive, setCheckingArchive] = useState(false);
+
+  // selección múltiple
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
+  // modal de eliminación masiva
+  type BulkItem = {
+    id: number;
+    label?: string;
+    canArchive: boolean;
+    plataforma_id: number | null;
+    correo: string | null;
+    contrasena: string | null;
+  };
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkItems, setBulkItems] = useState<BulkItem[]>([]);
+  const [bulkAssessing, setBulkAssessing] = useState(false);
+  const [bulkErr, setBulkErr] = useState<string | null>(null);
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState(0);
+  const [bulkSummary, setBulkSummary] = useState<{ total: number; archived: number; purged: number; failed: number } | null>(null);
 
   // scroll
   const bodyScrollRef = useRef<HTMLDivElement>(null);
@@ -385,9 +405,12 @@ export default function PantallasViewer() {
       setInitialLoaded(true);
       setNextCursor(data.nextCursor);
 
-      // limpiar resultados de búsqueda de servidor al refrescar dataset base
+      // limpiar búsqueda server-side
       setServerResults([]);
       setServerSearchErr(null);
+
+      // limpiar selección si cambia el dataset
+      setSelectedIds(new Set());
     } catch (e: any) {
       setErr(e?.message ?? 'Error al cargar');
       setRows([]);
@@ -456,12 +479,12 @@ export default function PantallasViewer() {
   const [serverSearching, setServerSearching] = useState(false);
   const [serverSearchErr, setServerSearchErr] = useState<string | null>(null);
   const [serverResults, setServerResults] = useState<Pantalla[]>([]);
-  const SEARCH_LIMIT = 2000; // puedes subirlo si quieres
+  const SEARCH_LIMIT = 2000;
 
   useEffect(() => {
     let handle: any;
     const doSearch = async () => {
-      const query = qDebounced; // enviar tal cual; el backend debería normalizar
+      const query = qDebounced;
       if (!query) {
         setServerResults([]);
         setServerSearchErr(null);
@@ -496,7 +519,7 @@ export default function PantallasViewer() {
     return () => clearTimeout(handle);
   }, [qDebounced, plataformaId]);
 
-  /* ===================== Buscador (solo coincidencias; ignora espacios y dígitos) ===================== */
+  /* ===================== Buscador (solo coincidencias) ===================== */
   const stripSpaces = (s: string) => s.replace(/\s+/g, '');
   const onlyDigits = (s: string) => s.replace(/\D+/g, '');
   const norm = (s: unknown) => lowNoAccents(String(s ?? ''));
@@ -579,7 +602,7 @@ export default function PantallasViewer() {
   const maybeAutoVencimiento = (dIn: Partial<Pantalla>): Partial<Pantalla> => {
     const meses = toNumOrNull(dIn.meses_pagados as any);
     const compra = (dIn.fecha_compra as string) || '';
-    const next = { ...dIn };
+       const next = { ...dIn };
     if (compra && meses && meses > 0) {
       next.fecha_vencimiento = addMonthsSafe(compra, meses);
     }
@@ -715,7 +738,7 @@ export default function PantallasViewer() {
     }
   }, [editingId, draft, rows]);
 
-  /* ===== eliminación (verificación SOLO en /api/pantallas por correo) ===== */
+  /* ===== eliminación (individual) ===== */
   const openDelete = async (id: number, label?: string) => {
     setDeleteTarget({ id, label });
     setDeleteErr(null);
@@ -795,6 +818,13 @@ export default function PantallasViewer() {
       if ((info as any)?.usuario_deleted) parts.push('Se eliminó el contacto/usuario (sin referencias).');
       setDeleteMsg(parts.join(' '));
 
+      // limpiar selección por si estaba seleccionada
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(deleteTarget.id);
+        return next;
+      });
+
       setDeleteTarget(null);
     } catch (e: any) {
       setDeleteErr(e?.message ?? 'Error al eliminar');
@@ -825,6 +855,122 @@ export default function PantallasViewer() {
     return () => window.removeEventListener('keydown', onKey);
   }, [editingId, saving, saveEdit]);
 
+  /* ====== SELECCIÓN MÚLTIPLE ====== */
+  const isRowSelected = (id: number) => selectedIds.has(id);
+  const toggleRow = (id: number, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+  const allVisibleIds = viewRows.map((r) => r.id);
+  const allVisibleSelected = allVisibleIds.length > 0 && allVisibleIds.every((id) => selectedIds.has(id));
+  const someVisibleSelected = allVisibleIds.some((id) => selectedIds.has(id));
+  const toggleAllVisible = (checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        for (const id of allVisibleIds) next.add(id);
+      } else {
+        for (const id of allVisibleIds) next.delete(id);
+      }
+      return next;
+    });
+  };
+
+  /* ====== ELIMINACIÓN MASIVA ====== */
+  const buildBulkItem = async (id: number): Promise<BulkItem> => {
+    const local = rows.find((r) => r.id === id) || null;
+    let correo = local?.correo ?? null;
+    let plataforma_id = local?.plataforma_id ?? null;
+    let contrasena = local?.contrasena ?? null;
+    if (!correo) {
+      const resolved = await resolveVictimContextFromAPI(id);
+      if (resolved) {
+        if (!correo) correo = resolved.correo ?? null;
+        if (!plataforma_id) plataforma_id = resolved.plataforma_id ?? null;
+        if (!contrasena) contrasena = resolved.contrasena ?? null;
+      }
+    }
+    let can = false;
+    if (correo) {
+      const uses = await countPantallasByEmail(correo);
+      can = uses <= 1;
+    }
+    const label = correo ? `${correo} / ${local?.nro_pantalla ?? ''}` : local?.nro_pantalla ?? `#${id}`;
+    return { id, label, canArchive: can, plataforma_id: plataforma_id ?? null, correo: correo ?? null, contrasena: contrasena ?? null };
+  };
+
+  const openBulk = async (ids: number[]) => {
+    const unique = Array.from(new Set(ids));
+    if (unique.length === 0) return;
+    setBulkOpen(true);
+    setBulkErr(null);
+    setBulkSummary(null);
+    setBulkItems([]);
+    setBulkAssessing(true);
+    try {
+      const items: BulkItem[] = [];
+      for (const id of unique) {
+        // eslint-disable-next-line no-await-in-loop
+        const it = await buildBulkItem(id);
+        items.push(it);
+      }
+      setBulkItems(items);
+    } catch (e: any) {
+      setBulkErr(e?.message ?? 'Error preparando la eliminación masiva.');
+    } finally {
+      setBulkAssessing(false);
+    }
+  };
+
+  const openBulkSelected = () => openBulk(Array.from(selectedIds));
+  const openBulkAllView = () => openBulk(viewRows.map((r) => r.id));
+
+  const runBulk = async (preferArchive: boolean) => {
+    if (!bulkOpen || bulkItems.length === 0) return;
+    setBulkProcessing(true);
+    setBulkErr(null);
+    setBulkProgress(0);
+    const total = bulkItems.length;
+    let archived = 0, purged = 0, failed = 0;
+
+    for (let i = 0; i < bulkItems.length; i++) {
+      const it = bulkItems[i];
+      try {
+        // archivo condicional
+        if (preferArchive && it.canArchive && it.correo) {
+          // eslint-disable-next-line no-await-in-loop
+          await ensureInInventario(it.plataforma_id, it.correo, it.contrasena ?? null);
+        }
+        // eliminar
+        // eslint-disable-next-line no-await-in-loop
+        const res = await fetch(`/api/pantallas/${it.id}`, { method: 'DELETE' });
+        if (!res.ok) {
+          failed++;
+        } else {
+          if (preferArchive && it.canArchive && it.correo) archived++; else purged++;
+          // quitar de UI y selección
+          setRows((rs) => rs.filter((r) => r.id !== it.id));
+          setSelectedIds((prev) => {
+            const next = new Set(prev);
+            next.delete(it.id);
+            return next;
+          });
+        }
+      } catch {
+        failed++;
+      } finally {
+        setBulkProgress(Math.round(((i + 1) / total) * 100));
+      }
+    }
+
+    setBulkSummary({ total, archived, purged, failed });
+    setBulkProcessing(false);
+  };
+
   /* ---- UI ---- */
   const tblInput =
     'w-full rounded-md px-2 py-1 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500';
@@ -838,6 +984,8 @@ export default function PantallasViewer() {
       onChange={onChange}
     />
   );
+
+  const selectedCount = selectedIds.size;
 
   return (
     <div className="space-y-4">
@@ -890,6 +1038,46 @@ export default function PantallasViewer() {
         </button>
       </div>
 
+      {/* Barra de acciones masivas */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="text-sm text-neutral-300">
+          Seleccionados: <span className="font-semibold">{selectedCount}</span>
+          {selectedCount > 0 && <span className="text-neutral-500"> · (solo de la vista actual o anteriores)</span>}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={openBulkSelected}
+            disabled={selectedCount === 0 || loading}
+            className="rounded-lg border border-red-700 bg-red-800/40 px-3 py-1.5 text-red-100 hover:bg-red-800/60 disabled:opacity-50"
+            title="Verifica cada registro: si es la última relación, lo envía a inventario y elimina; si no, solo elimina"
+          >
+            Eliminar seleccionados
+          </button>
+
+          <button
+            type="button"
+            onClick={openBulkAllView}
+            disabled={viewRows.length === 0 || loading}
+            className="rounded-lg border border-red-700 bg-red-800/40 px-3 py-1.5 text-red-100 hover:bg-red-800/60 disabled:opacity-50"
+            title="Eliminar todo lo que se muestra en la vista actual (aplicará misma lógica de inventario/última relación)"
+          >
+            Eliminar todo (vista)
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSelectedIds(new Set())}
+            disabled={selectedCount === 0}
+            className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-neutral-100 hover:bg-neutral-800 disabled:opacity-50"
+            title="Limpiar selección"
+          >
+            Limpiar selección
+          </button>
+        </div>
+      </div>
+
       {/* Estado */}
       {loading && <div className="rounded-xl border border-neutral-800 bg-neutral-950/40 p-4 text-sm text-neutral-300">Cargando…</div>}
       {err && <div className="rounded-xl border border-red-800/50 bg-red-950/30 p-4 text-sm text-red-200">Error: {err}</div>}
@@ -912,9 +1100,22 @@ export default function PantallasViewer() {
             onKeyDown={onBodyKeyDown}
             tabIndex={0}
           >
-            <table className="min-w-[2100px] w-full table-fixed">
+            <table className="min-w-[2200px] w-full table-fixed">
               <thead>
                 <tr className="border-b border-neutral-800">
+                  {/* Columna selección */}
+                  <Th className="w-10 text-center">
+                    <input
+                      type="checkbox"
+                      aria-label="Seleccionar todo"
+                      checked={allVisibleSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = !allVisibleSelected && someVisibleSelected;
+                      }}
+                      onChange={(e) => toggleAllVisible(e.target.checked)}
+                    />
+                  </Th>
+
                   <Th className="w-28 text-center">Acciones</Th>
                   <Th className="w-48">Plataforma</Th>
                   <Th className="w-40">Contacto</Th>
@@ -938,6 +1139,7 @@ export default function PantallasViewer() {
                   const isEditing = editingId === row.id;
                   const pid = row.plataforma_id == null ? null : Number(row.plataforma_id);
                   const platformName = pid ? platformMap.get(pid) ?? String(pid) : '—';
+                  const checked = isRowSelected(row.id);
 
                   return (
                     <tr
@@ -945,11 +1147,21 @@ export default function PantallasViewer() {
                       onDoubleClick={(e) => {
                         if (isEditing) return;
                         const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-                        if (['button', 'a', 'input', 'textarea', 'select', 'svg', 'path'].includes(tag || '')) return;
+                        if (['button', 'a', 'input', 'textarea', 'select', 'svg', 'path', 'label'].includes(tag || '')) return;
                         beginEdit(row);
                       }}
                       className={`border-b border-neutral-900 ${idx % 2 === 0 ? 'bg-neutral-900/30' : 'bg-transparent'} hover:bg-neutral-800/40 ${!isEditing ? 'cursor-pointer' : ''}`}
                     >
+                      {/* Checkbox selección */}
+                      <Td className="text-center">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => toggleRow(row.id, e.target.checked)}
+                          aria-label={`Seleccionar fila ${row.id}`}
+                        />
+                      </Td>
+
                       {/* Acciones */}
                       <Td className="text-center">
                         {!isEditing ? (
@@ -1203,7 +1415,7 @@ export default function PantallasViewer() {
           </div>
 
           {/* Paginación */}
-          <div className="flex items-center justify-between gap-3 p-3 border-t border-neutral-800">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 border-t border-neutral-800">
             <div className="text-sm text-neutral-300">
               {initialLoaded ? `${rows.length} fila(s) cargadas` : '—'}
               {plataformaId !== '' && <> · Plataforma {String(plataformaId)}</>}
@@ -1240,7 +1452,7 @@ export default function PantallasViewer() {
         </div>
       )}
 
-      {/* Modal eliminar */}
+      {/* Modal eliminar (individual) */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDeleteTarget(null)}>
           <div
@@ -1298,6 +1510,96 @@ export default function PantallasViewer() {
                 Cancelar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal eliminación MASIVA */}
+      {bulkOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !bulkProcessing && setBulkOpen(false)}>
+          <div
+            className="w-full max-w-xl rounded-xl border border-neutral-700 bg-neutral-900 p-4 text-neutral-100 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-labelledby="bulk-title"
+            aria-describedby="bulk-desc"
+          >
+            <h4 id="bulk-title" className="text-lg font-semibold mb-2">Eliminar {bulkItems.length} pantalla(s)</h4>
+
+            {bulkAssessing ? (
+              <p className="text-sm text-neutral-300">Analizando registros para decidir inventario/eliminación…</p>
+            ) : (
+              <>
+                <p id="bulk-desc" className="text-sm text-neutral-300">
+                  {bulkItems.length > 0 ? (
+                    <>
+                      <span className="block">
+                        Se verificará cada registro: si es la última relación por correo, se <strong>enviará al inventario</strong> y luego se eliminará.
+                        En caso contrario, se <strong>eliminará definitivamente</strong>.
+                      </span>
+                      <span className="block mt-2 text-neutral-400">
+                        Preparados: {bulkItems.filter(i => i.canArchive && i.correo).length} para inventario · {bulkItems.filter(i => !i.canArchive || !i.correo).length} solo eliminación
+                      </span>
+                    </>
+                  ) : 'No hay elementos.'}
+                </p>
+
+                {bulkErr && (
+                  <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">{bulkErr}</div>
+                )}
+
+                {bulkSummary && (
+                  <div className="mt-3 rounded-lg border border-neutral-700 bg-neutral-800/40 p-2 text-sm">
+                    <div>Total procesados: {bulkSummary.total}</div>
+                    <div>Enviados a inventario: {bulkSummary.archived}</div>
+                    <div>Eliminados definitivamente: {bulkSummary.purged}</div>
+                    <div>Fallidos: {bulkSummary.failed}</div>
+                  </div>
+                )}
+
+                {bulkProcessing && (
+                  <div className="mt-3">
+                    <div className="h-2 w-full rounded bg-neutral-800 overflow-hidden">
+                      <div className="h-2 bg-emerald-600" style={{ width: `${bulkProgress}%` }} />
+                    </div>
+                    <div className="mt-1 text-xs text-neutral-400">{bulkProgress}%</div>
+                  </div>
+                )}
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => runBulk(true)}
+                    disabled={bulkAssessing || bulkProcessing || bulkItems.length === 0}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-700 bg-emerald-800/40 px-3 py-2 hover:bg-emerald-800/60 focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:opacity-60"
+                    title="Enviar al inventario cuando aplique y eliminar"
+                  >
+                    {bulkProcessing ? 'Procesando…' : 'Inventario (cuando aplique) + Eliminar'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => runBulk(false)}
+                    disabled={bulkAssessing || bulkProcessing || bulkItems.length === 0}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-700 bg-red-800/40 px-3 py-2 hover:bg-red-800/60 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-60"
+                    title="Eliminar todo definitivamente"
+                  >
+                    {bulkProcessing ? 'Procesando…' : 'Eliminar definitivamente'}
+                  </button>
+                </div>
+
+                <div className="mt-3 flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setBulkOpen(false)}
+                    disabled={bulkProcessing}
+                    className="rounded-lg border border-neutral-600 px-3 py-2 hover:bg-neutral-800 disabled:opacity-50"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -49,6 +49,7 @@ const numOrNull = (v: any): number | null =>
  * Normaliza alias desde el cliente al esquema canónico antes de validar con Zod.
  * Acepta: total_pagado_proveedor | pago_total_proveedor | pagado_proveedor | total_pagado_proovedor (typo)
  * y total_ganado | ganado. Contraseña '' => null.
+ * Correo '' => undefined (no modificar). Correo null => null (borrar).
  */
 function normalizeUpdateBody(raw: any) {
   const provAlias =
@@ -59,12 +60,21 @@ function normalizeUpdateBody(raw: any) {
 
   const ganadoAlias = raw?.total_ganado ?? raw?.ganado;
 
+  // correo: string '' -> undefined (ignorar), null -> null (borrar)
+  let correoNormalized: string | null | undefined = undefined;
+  if (raw?.correo === null) {
+    correoNormalized = null;
+  } else if (typeof raw?.correo === 'string') {
+    const t = raw.correo.trim();
+    correoNormalized = t === '' ? undefined : t;
+  }
+
   return {
     contacto: typeof raw?.contacto === 'string' ? raw.contacto.trim() : raw?.contacto,
     nombre: typeof raw?.nombre === 'string' ? raw.nombre.trim() : raw?.nombre,
     plataforma_id: raw?.plataforma_id !== undefined ? Number(raw.plataforma_id) : undefined,
 
-    correo: typeof raw?.correo === 'string' ? raw.correo.trim() : raw?.correo,
+    correo: correoNormalized, // <- ver regla arriba
     contrasena: typeof raw?.contrasena === 'string' && raw.contrasena.trim() === '' ? null : raw?.contrasena,
     proveedor: raw?.proveedor ?? null,
     fecha_compra: raw?.fecha_compra ?? null,
@@ -81,13 +91,14 @@ function normalizeUpdateBody(raw: any) {
 }
 
 /* ============ Zod (parcial para PATCH/PUT) ============ */
+// Nota: correo ahora permite null (para borrar) u omitirse (para no tocar).
 const CCUpdatePartial = z.object({
   contacto: z.string().min(1).optional(),            // cambiar el contacto (usuario) asociado
   nombre: z.string().nullable().optional(),          // opcional para actualizar/crear usuario
   plataforma_id: z.coerce.number().int().positive().optional(),
 
-  correo: z.string().email().optional(),
-  contrasena: z.string().min(7).nullable().optional(),
+  correo: z.string().email().nullable().optional(),
+  contrasena: z.string().nullable().optional(),
   proveedor: z.string().nullable().optional(),
   fecha_compra: DateLike,
   fecha_vencimiento: DateLike,
@@ -205,9 +216,10 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
 
     // Datos escalares para cuentascompletas (con fechas *locales*)
     const scalarData: Record<string, any> = {
-      ...(c.correo !== undefined ? { correo: c.correo } : {}),
-      ...(c.contrasena !== undefined ? { contrasena: c.contrasena } : {}),
+      ...(c.correo !== undefined ? { correo: c.correo } : {}),                    // string | null | undefined
+      ...(c.contrasena !== undefined ? { contrasena: c.contrasena } : {}),       // string | null | undefined
       ...(c.proveedor !== undefined ? { proveedor: c.proveedor } : {}),
+
       ...(c.fecha_compra !== undefined
         ? { fecha_compra: parseYMDToUTCDate(c.fecha_compra as any) }
         : {}),
@@ -215,9 +227,11 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
         ? { fecha_vencimiento: parseYMDToUTCDate(c.fecha_vencimiento as any) }
         : {}),
       ...(c.meses_pagados !== undefined ? { meses_pagados: c.meses_pagados } : {}),
+
       ...(c.total_pagado !== undefined ? { total_pagado: c.total_pagado } : {}),
       ...(c.total_pagado_proveedor !== undefined ? { total_pagado_proveedor: c.total_pagado_proveedor } : {}),
       ...(computedTotalGanado !== undefined ? { total_ganado: computedTotalGanado } : {}),
+
       ...(c.estado !== undefined ? { estado: c.estado } : {}),
       ...(c.comentario !== undefined ? { comentario: c.comentario } : {}),
       ...(c.plataforma_id !== undefined ? { plataforma_id: c.plataforma_id } : {}),

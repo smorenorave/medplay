@@ -1,3 +1,4 @@
+// app/api/inventario/route.ts
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
@@ -12,8 +13,8 @@ const Body = z.object({
 });
 
 const Patch = z.object({
-  plataforma_id: z.coerce.number().int().positive().optional(),
-  correo: z.string().email().optional(),
+  plataforma_id: z.coerce.number().int().positive(),
+  correo: z.string().email(),
   clave: z.string().trim().optional().nullable(),
 });
 
@@ -45,15 +46,9 @@ export async function GET(req: Request) {
       where,
       orderBy: { id: 'desc' },
       take: 500,
-      select: {
-        id: true,
-        plataforma_id: true,
-        correo: true,
-        clave: true,
-      },
+      select: { id: true, plataforma_id: true, correo: true, clave: true },
     });
 
-    // Enviamos números nativos
     const json = rows.map((r) => ({
       id: Number((r as any).id),
       plataforma_id:
@@ -71,7 +66,7 @@ export async function GET(req: Request) {
   }
 }
 
-/* ---------- POST: crear ---------- */
+/* ---------- POST: crear / actualizar si ya existe (idempotente) ---------- */
 export async function POST(req: Request) {
   try {
     const raw = await req.json();
@@ -86,30 +81,86 @@ export async function POST(req: Request) {
 
     // normalizamos correo
     const correo = b.correo.trim().toLowerCase();
+    const plataforma_id = b.plataforma_id;
+    const clave = (b.clave ?? null) as string | null;
 
-    const saved = await prisma.inventario.create({
-      data: {
-        plataforma_id: b.plataforma_id,
-        correo,
-        clave: b.clave ?? null,
+    // upsert por clave compuesta (plataforma_id, correo)
+    const row = await prisma.inventario.upsert({
+      where: {
+        // ⚠️ Ajusta el nombre si tu cliente generó otro identificador para la clave compuesta
+        plataforma_id_correo: { plataforma_id, correo },
       },
+      create: { plataforma_id, correo, clave },
+      update: { clave },
       select: { id: true, plataforma_id: true, correo: true, clave: true },
     });
 
     return NextResponse.json(
       {
-        id: Number((saved as any).id),
-        plataforma_id: Number((saved as any).plataforma_id),
-        correo: saved.correo,
-        clave: saved.clave,
+        id: Number((row as any).id),
+        plataforma_id: Number((row as any).plataforma_id),
+        correo: row.correo,
+        clave: row.clave,
       },
-      { status: 201 }
+      { status: 200 } // 200 porque puede ser create o update; si prefieres 201 solo cuando se crea, habría que detectar existencia previa
     );
   } catch (e: any) {
-    console.error('POST /api/inventario', e);
+    console.error('POST /api/inventario failed:', e);
+    // FK a plataforma inexistente
+    if (e?.code === 'P2003') {
+      return NextResponse.json({ error: 'fk_plataforma' }, { status: 409 });
+    }
+    return NextResponse.json({ error: 'save_failed' }, { status: 500 });
+  }
+}
+
+/* ---------- PATCH: actualizar por (plataforma_id, correo) ---------- */
+// Body requiere plataforma_id y correo para ubicar, y clave para actualizar (opcional)
+export async function PATCH(req: Request) {
+  try {
+    const raw = await req.json();
+    const parsed = Patch.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'validation', issues: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
+    const b = parsed.data;
+
+    const plataforma_id = b.plataforma_id;
+    const correo = b.correo.trim().toLowerCase();
+    const data: any = {};
+    if (b.clave !== undefined) data.clave = (b.clave ?? null) as string | null;
+
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json({ error: 'nothing_to_update' }, { status: 400 });
+    }
+
+    const row = await prisma.inventario.update({
+      where: {
+        // ⚠️ Ajustar si el nombre difiere en tu cliente
+        plataforma_id_correo: { plataforma_id, correo },
+      },
+      data,
+      select: { id: true, plataforma_id: true, correo: true, clave: true },
+    });
+
     return NextResponse.json(
-      { error: e?.code === 'P2003' ? 'fk_plataforma' : 'server_error' },
-      { status: 500 }
+      {
+        id: Number((row as any).id),
+        plataforma_id: Number((row as any).plataforma_id),
+        correo: row.correo,
+        clave: row.clave,
+      },
+      { status: 200 }
     );
+  } catch (e: any) {
+    console.error('PATCH /api/inventario failed:', e);
+    if (e?.code === 'P2025') {
+      // no existe esa combinación plataforma/correo
+      return NextResponse.json({ error: 'not_found' }, { status: 404 });
+    }
+    return NextResponse.json({ error: 'update_failed' }, { status: 500 });
   }
 }

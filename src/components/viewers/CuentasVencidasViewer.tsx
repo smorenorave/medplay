@@ -481,41 +481,58 @@ export default function CuentasVencidasViewer() {
     if (!editingKey || saving) return;
     setSaving(true); setSaveErr(null);
     try {
-      const [tipo, idStr] = editingKey.split('-'); const id = Number(idStr);
+      const [tipo, idStr] = editingKey.split('-');
+      const id = Number(idStr);
 
-      const payload = {
-        contacto: (draft.contacto ?? '').toString(),
-        nombre: (draft.nombre ?? null) as any,
-        correo: (draft.correo ?? '') as any,
-        meses_pagados: draft.meses_pagados == null || (draft.meses_pagados as any) === '' ? null : Number(draft.meses_pagados),
-        fecha_compra: (draft.fecha_compra as string) || null,
-        fecha_vencimiento: (draft.fecha_vencimiento as string) || null,
-        total_pagado: draft.total_pagado == null || draft.total_pagado === '' ? null : Number(draft.total_pagado),
-        estado: (draft.estado ?? '').toString(),
-        comentario: ((draft.comentario ?? '') as string) || null,
-      };
+      // Normalizaciones seguras
+      const contacto = (draft.contacto ?? '').toString();
+      const nombreTrim = (draft.nombre ?? '').toString().trim();
+      const correoTrim = (draft.correo ?? '').toString().trim(); // si queda "", NO se envía
+      const estadoTrim = (draft.estado ?? '').toString().trim();
 
-      const original = rows.find(r => keyFrom(r) === editingKey) || allRows.find(r => keyFrom(r) === editingKey);
+      const meses_pagados =
+        draft.meses_pagados == null || (draft.meses_pagados as any) === ''
+          ? null
+          : Number(draft.meses_pagados);
+
+      const total_pagado =
+        draft.total_pagado == null || draft.total_pagado === ''
+          ? null
+          : Number(draft.total_pagado);
+
+      const fecha_compra = (draft.fecha_compra as string) || null;
+      const fecha_vencimiento = (draft.fecha_vencimiento as string) || null;
+      const comentario = ((draft.comentario ?? '') as string) || null;
+
+      const original =
+        rows.find(r => keyFrom(r) === editingKey) ||
+        allRows.find(r => keyFrom(r) === editingKey);
+
       const claveCambio = (draft.contrasena ?? '') !== (original?.contrasena ?? '');
 
       if (tipo === 'pantalla') {
+        // -------- Pantallas --------
         const res = await fetch(`/api/pantallas/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contacto: payload.contacto,
+            contacto,
             nro_pantalla: draft.nro_pantalla ?? null,
-            fecha_compra: payload.fecha_compra,
-            fecha_vencimiento: payload.fecha_vencimiento,
-            meses_pagados: payload.meses_pagados,
-            total_pagado: payload.total_pagado,
-            estado: payload.estado,
-            comentario: payload.comentario,
+            fecha_compra,
+            fecha_vencimiento,
+            meses_pagados,
+            total_pagado,
+            estado: estadoTrim === '' ? null : estadoTrim,
+            comentario,
           }),
         });
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'No se pudo guardar');
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j?.error ?? 'No se pudo guardar');
+        }
 
-        const correoDraft = (draft.correo as string) ?? '';
+        // Si hay correo/clave, sincronizar cuenta_compartida asociada (si aplica)
+        const correoDraft = correoTrim;
         const passDraft = (draft.contrasena as string) ?? '';
         if (correoDraft || passDraft) {
           let pid: number | null = toNum(draft.plataforma_id);
@@ -526,15 +543,25 @@ export default function CuentasVencidasViewer() {
             await fetch(`/api/cuentascompartidas/${draft.cuenta_id}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ correo: correoDraft || null, contrasena: passDraft.trim() === '' ? null : passDraft }),
+              body: JSON.stringify({
+                correo: correoDraft || null,
+                contrasena: passDraft.trim() === '' ? null : passDraft,
+              }),
             }).catch(() => {});
           } else {
             const rNew = await fetch('/api/cuentascompartidas', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ plataforma_id: pid, correo: correoDraft || null, contrasena: passDraft.trim() === '' ? null : passDraft }),
+              body: JSON.stringify({
+                plataforma_id: pid,
+                correo: correoDraft || null,
+                contrasena: passDraft.trim() === '' ? null : passDraft,
+              }),
             });
-            if (!rNew.ok) throw new Error((await rNew.json().catch(() => ({}))).error ?? 'No se pudo crear la cuenta compartida');
+            if (!rNew.ok) {
+              const j = await rNew.json().catch(() => ({}));
+              throw new Error(j?.error ?? 'No se pudo crear la cuenta compartida');
+            }
             const created = await rNew.json();
             if (created?.id) {
               await fetch(`/api/pantallas/${id}`, {
@@ -547,25 +574,36 @@ export default function CuentasVencidasViewer() {
           }
         }
       } else {
+        // -------- Cuentas completas --------
+        const body: any = {
+          contacto,
+          ...(draft.nombre !== undefined ? { nombre: nombreTrim === '' ? null : nombreTrim } : {}),
+          ...(correoTrim !== '' ? { correo: correoTrim } : {}), // <- no enviar "" al backend
+          contrasena:
+            (draft.contrasena as string)?.trim() === ''
+              ? null
+              : (draft.contrasena as string) ?? undefined,
+          meses_pagados,
+          fecha_compra,
+          fecha_vencimiento,
+          total_pagado,
+          ...(draft.estado !== undefined ? { estado: estadoTrim === '' ? null : estadoTrim } : {}),
+          ...(draft.comentario !== undefined ? { comentario } : {}),
+        };
+
         const res = await fetch(`/api/cuentascompletas/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contacto: payload.contacto,
-            nombre: payload.nombre,
-            correo: payload.correo,
-            contrasena: (draft.contrasena as string)?.trim() === '' ? null : (draft.contrasena as string) ?? undefined,
-            meses_pagados: payload.meses_pagados,
-            fecha_compra: payload.fecha_compra,
-            fecha_vencimiento: payload.fecha_vencimiento,
-            total_pagado: payload.total_pagado,
-            estado: payload.estado,
-            comentario: payload.comentario,
-          }),
+          body: JSON.stringify(body),
         });
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'No se pudo guardar');
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          console.log('PATCH error:', j);
+          throw new Error(j?.error ?? 'No se pudo guardar');
+        }
       }
 
+      // Reflejar cambios en la tabla local
       setRows((rs) =>
         rs.map((r) =>
           keyFrom(r) !== editingKey
@@ -573,13 +611,17 @@ export default function CuentasVencidasViewer() {
             : ({
                 ...r,
                 ...draft,
-                fecha_compra: payload.fecha_compra || r.fecha_compra,
-                fecha_vencimiento: payload.fecha_vencimiento || r.fecha_vencimiento,
+                fecha_compra: fecha_compra ?? r.fecha_compra,
+                fecha_vencimiento: fecha_vencimiento ?? r.fecha_vencimiento,
+                estado: estadoTrim === '' ? null : estadoTrim,
+                total_pagado,
+                meses_pagados,
               } as VRow)
         )
       );
 
-      const correoFinal = (draft.correo ?? original?.correo ?? '').toString().trim();
+      // Encolar notificación si cambió la clave
+      const correoFinal = (correoTrim || original?.correo || '').toString().trim();
       const claveFinal = (draft.contrasena ?? '').toString().trim();
       const cuentaIdFinal = (draft.cuenta_id ?? original?.cuenta_id) ?? null;
       const platIdFinal = (draft.plataforma_id ?? original?.plataforma_id) ?? null;
@@ -599,8 +641,11 @@ export default function CuentasVencidasViewer() {
       }
 
       cancelEdit();
-    } catch (e: any) { setSaveErr(e?.message ?? 'Error al guardar'); }
-    finally { setSaving(false); }
+    } catch (e: any) {
+      setSaveErr(e?.message ?? 'Error al guardar');
+    } finally {
+      setSaving(false);
+    }
   }, [editingKey, draft, saving, rows, allRows]);
 
   /* ===================== Inventario / eliminación ===================== */
@@ -678,7 +723,7 @@ export default function CuentasVencidasViewer() {
       setModal({ type: 'confirm-delete', rowsCount, singleRow });
     });
   }
-    function closeModal(result: 'inventory' | 'delete' | 'cancel') {
+  function closeModal(result: 'inventory' | 'delete' | 'cancel') {
     const r = modalResolver.current;
     modalResolver.current = null;  // libera el handler
     setModal(null);
