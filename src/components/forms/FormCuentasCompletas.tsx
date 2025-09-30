@@ -383,7 +383,18 @@ export default function FormCuentaCompletas() {
     return () => { if (emailTimer.current) window.clearTimeout(emailTimer.current); };
   }, [form.correo, form.contrasena, form.plataforma_id]);
 
-  /* totales preview */
+  /* ===================== Recalcular fecha de vencimiento ===================== */
+  useEffect(() => {
+    const compra = form.fecha_compra;
+    const meses = form.meses_pagados;
+    if (!compra || !Number.isFinite(meses) || meses < 1) return;
+
+    const nueva = addMonthsLocal(compra, meses);
+    // Evitar renders innecesarios
+    setForm((s) => (s.fecha_vencimiento === nueva ? s : { ...s, fecha_vencimiento: nueva }));
+  }, [form.fecha_compra, form.meses_pagados]);
+
+  /* ===================== Totales preview ===================== */
   const totalGanadoPreview = useMemo(() => {
     const tpStr = form.total_pagado.trim();
     if (tpStr === '' || Number.isNaN(Number(tpStr))) return '';
@@ -395,7 +406,7 @@ export default function FormCuentaCompletas() {
     return String(tp - tpp);
   }, [form.total_pagado, form.total_pagado_proveedor]);
 
-  /* validaciones */
+  /* ===================== Validaciones ===================== */
   const canSubmit = useMemo(() => {
     const requiredOk =
       form.contacto.trim() !== '' &&
@@ -410,7 +421,7 @@ export default function FormCuentaCompletas() {
     return requiredOk && totalOk && totalProvOk;
   }, [form]);
 
-  /* payload */
+  /* ===================== Payload ===================== */
   const buildPayload = () => {
     const totalPagadoNum = form.total_pagado !== '' ? Number(form.total_pagado) : null;
     const totalProvNum = form.total_pagado_proveedor !== '' ? Number(form.total_pagado_proveedor) : null;
@@ -434,7 +445,7 @@ export default function FormCuentaCompletas() {
     };
   };
 
-  /* submit => abrir modal */
+  /* ===================== Submit => abrir modal ===================== */
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setOkMsg(null); setErrMsg(null);
@@ -446,7 +457,7 @@ export default function FormCuentaCompletas() {
     setConfirmOpen(true);
   }
 
-  /* confirmar y guardar (sin checkbox de confirmación) */
+  /* ===================== Confirmar y guardar ===================== */
   async function confirmAndSave() {
     if (!confirmPayload) return;
     setLoading(true); setErrMsg(null);
