@@ -545,34 +545,36 @@ export default function FormPantallas() {
   }, [form]);
 
   /* ===== Payload & submit (abre modal) ===== */
-  const buildPayload = () => {
-    const totalPag = toNumOrNull(form.total_pagado);
-    const totalProv = toNumOrNull(form.total_pagado_proveedor);
-    const totalGan = totalPag == null ? null : totalProv == null ? totalPag : totalPag - totalProv;
+const buildPayload = () => {
+  const totalPag = toNumOrNull(form.total_pagado);
+  const totalProv = toNumOrNull(form.total_pagado_proveedor);
+  const totalGan = totalPag == null ? null : totalProv == null ? totalPag : totalPag - totalProv;
 
-    return {
-      cuenta_id: form.cuenta_id ?? null,
-      contacto: normalizeContacto(form.contacto.trim()),
-      nro_pantalla: String(form.nro_pantalla ?? '').trim() || null,
-      plataforma_id: form.plataforma_id,
-      correo: form.correo.trim().toLowerCase() || null,
-      contrasena: form.contrasena || null,
-      proveedor: form.proveedor.trim() || null,
-      fecha_compra: form.fecha_compra ? new Date(form.fecha_compra).toISOString() : null,
-      fecha_vencimiento: form.fecha_vencimiento
-        ? new Date(form.fecha_vencimiento).toISOString()
-        : null,
-      meses_pagados: form.meses_pagados,
-      total_pagado: totalPag == null ? null : Number(totalPag.toFixed(2)),
-      total_pagado_proveedor: totalProv == null ? null : Number(totalProv.toFixed(2)),
-      pago_total_proveedor: totalProv == null ? null : Number(totalProv.toFixed(2)),
-      pagado_proveedor: totalProv == null ? null : Number(totalProv.toFixed(2)),
-      total_ganado: totalGan == null ? null : Number(totalGan.toFixed(2)),
-      ganado: totalGan == null ? null : Number(totalGan.toFixed(2)),
-      estado: form.estado.trim(),
-      comentario: form.comentario.trim() || null,
-    };
+  return {
+    cuenta_id: form.cuenta_id ?? null,
+    contacto: normalizeContacto(form.contacto.trim()),
+    nombre: (form.nombre ?? '').trim() || null, // ⬅️  NUEVO: manda el nombre
+    nro_pantalla: String(form.nro_pantalla ?? '').trim() || null,
+    plataforma_id: form.plataforma_id,
+    correo: form.correo.trim().toLowerCase() || null,
+    contrasena: form.contrasena || null,
+    proveedor: form.proveedor.trim() || null,
+    fecha_compra: form.fecha_compra ? new Date(form.fecha_compra).toISOString() : null,
+    fecha_vencimiento: form.fecha_vencimiento
+      ? new Date(form.fecha_vencimiento).toISOString()
+      : null,
+    meses_pagados: form.meses_pagados,
+    total_pagado: totalPag == null ? null : Number(totalPag.toFixed(2)),
+    total_pagado_proveedor: totalProv == null ? null : Number(totalProv.toFixed(2)),
+    pago_total_proveedor: totalProv == null ? null : Number(totalProv.toFixed(2)),
+    pagado_proveedor: totalProv == null ? null : Number(totalProv.toFixed(2)),
+    total_ganado: totalGan == null ? null : Number(totalGan.toFixed(2)),
+    ganado: totalGan == null ? null : Number(totalGan.toFixed(2)),
+    estado: form.estado.trim(),
+    comentario: form.comentario.trim() || null,
   };
+};
+
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -606,71 +608,86 @@ export default function FormPantallas() {
   }
 
   /* ===== Confirmar y guardar (sin checkbox, contraseña visible) ===== */
-  async function confirmAndSave() {
-    if (!confirmPayload) return;
-    setLoading(true);
-    setErrMsg(null);
+ async function confirmAndSave() {
+  if (!confirmPayload) return;
+  setLoading(true);
+  setErrMsg(null);
+  try {
+    let toSend = confirmPayload;
     try {
-      let toSend = confirmPayload;
-      try {
-        toSend = JSON.parse(confirmText);
-      } catch {}
+      toSend = JSON.parse(confirmText);
+    } catch {}
 
-      const res = await fetch('/api/pantallas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(toSend),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j?.error ?? 'No se pudo guardar');
-      }
-      const saved = await res.json().catch(() => ({}));
-      setOkMsg(`Guardado correctamente (id: ${saved?.id ?? '—'}).`);
-      setConfirmOpen(false);
-
-      // Recordar última plataforma
-      try {
-        window.localStorage.setItem(LAST_PLATFORM_KEY, String(toSend.plataforma_id));
-      } catch {}
-
-      // Reset con plataforma priorizada
-      const base = todayStr();
-      const stored = typeof window !== 'undefined'
-        ? window.localStorage.getItem(LAST_PLATFORM_KEY)
-        : null;
-      const lastId = stored ? Number(stored) : NaN;
-      const nextPlat =
-        Number.isFinite(lastId) && lastId > 0
-          ? lastId
-          : plataformasOrdered[0]?.id ?? 0;
-
-      setForm({
-        contacto: '',
-        nombre: '',
-        plataforma_id: nextPlat,
-        cuenta_id: null,
-        nro_pantalla: '',
-        correo: '',
-        contrasena: '',
-        proveedor: '',
-        fecha_compra: base,
-        fecha_vencimiento: addMonthsLocal(base, 1),
-        meses_pagados: 1,
-        total_pagado: '',
-        total_pagado_proveedor: '',
-        total_ganado: '',
-        estado: 'ACTIVA',
-        comentario: '',
-      });
-      setOptions([]);
-      setEmailCounts({});
-    } catch (err: any) {
-      setErrMsg(err?.message ?? 'Error desconocido');
-    } finally {
-      setLoading(false);
+    const res = await fetch('/api/pantallas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(toSend),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j?.error ?? 'No se pudo guardar');
     }
+    const saved = await res.json().catch(() => ({}));
+    setOkMsg(`Guardado correctamente (id: ${saved?.id ?? '—'}).`);
+    setConfirmOpen(false);
+
+    // ⬇⬇⬇ NUEVO: limpiar caches para que nombre/clave actualizados se reflejen al instante
+    try {
+      // cache del autocompletado de usuario (nombre)
+      userCache.current?.clear?.();
+      // caches y contadores de correos (cuentas/inventario)
+      setAcctIdMap({});
+      setAcctPassMap({});
+      setInvPassMap({});
+      setEmailCounts({});
+    } catch {}
+
+    // Recordar última plataforma
+    try {
+      window.localStorage.setItem(LAST_PLATFORM_KEY, String(toSend.plataforma_id));
+    } catch {}
+
+    // Reset con plataforma priorizada
+    const base = todayStr();
+    const stored = typeof window !== 'undefined'
+      ? window.localStorage.getItem(LAST_PLATFORM_KEY)
+      : null;
+    const lastId = stored ? Number(stored) : NaN;
+    const nextPlat =
+      Number.isFinite(lastId) && lastId > 0
+        ? lastId
+        : plataformasOrdered[0]?.id ?? 0;
+
+    setForm({
+      contacto: '',
+      nombre: '',
+      plataforma_id: nextPlat,
+      cuenta_id: null,
+      nro_pantalla: '',
+      correo: '',
+      contrasena: '',
+      proveedor: '',
+      fecha_compra: base,
+      fecha_vencimiento: addMonthsLocal(base, 1),
+      meses_pagados: 1,
+      total_pagado: '',
+      total_pagado_proveedor: '',
+      total_ganado: '',
+      estado: 'ACTIVA',
+      comentario: '',
+    });
+    setOptions([]);
+
+    // (opcional) este setEmailCounts({}) de abajo puedes quitarlo
+    // porque ya lo limpiamos arriba en el bloque nuevo.
+    // Lo dejo aquí por si prefieres mantenerlo; no rompe nada.
+    setEmailCounts({});
+  } catch (err: any) {
+    setErrMsg(err?.message ?? 'Error desconocido');
+  } finally {
+    setLoading(false);
   }
+}
 
   /* ===================== UI ===================== */
   const badge = (() => {
