@@ -1,3 +1,4 @@
+// src/app/api/cuentascompletas/route.ts
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
@@ -20,7 +21,13 @@ function parseYMDToUTCDate(s?: string | null): Date | null {
   const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
   return new Date(Date.UTC(y, mo - 1, d));
 }
+
 /* ===================== Otras utils ===================== */
+
+// normaliza contacto (mismo criterio que en otros routers)
+function normalizeContactoServer(raw?: string | null) {
+  return (raw ?? '').trim().replace(/\s+/g, '');
+}
 
 // clamp seguro
 const clamp = (n: number | null | undefined, min: number, max: number, fallback: number) => {
@@ -138,8 +145,12 @@ export async function POST(req: Request) {
       : json;
 
     // Validaciones ligeras
-    const contacto = String(flat?.contacto ?? '').trim();
-    const nombre = (flat?.nombre ?? null) == null ? null : String(flat.nombre).trim();
+    const contactoRaw = String(flat?.contacto ?? '').trim();
+    const contacto = normalizeContactoServer(contactoRaw);
+    const nombreRaw = flat?.nombre ?? null;
+    const nombre =
+      nombreRaw == null ? null : (String(nombreRaw).trim() || null);
+
     const plataforma_id = Number(flat?.plataforma_id);
     const correo = String(flat?.correo ?? '').trim().toLowerCase(); // normaliza a minúsculas
     const contrasena = String(flat?.contrasena ?? '').trim();
@@ -190,10 +201,13 @@ export async function POST(req: Request) {
     // Transacción: upsert usuario + crear cuenta + limpiar inventario
     const created = await prisma.$transaction(async (tx) => {
       // 1) upsert de usuario por contacto
+      //    👉 IMPORTANTE: actualizamos nombre SIEMPRE que venga en el payload.
+      //       - string vacío => guardamos null (para “borrar” el nombre)
+      //       - string no vacío => actualizamos al valor nuevo
       await tx.usuarios.upsert({
         where: { contacto },
-        update: nombre ? { nombre } : {},
-        create: { contacto, nombre: nombre ?? null },
+        update: { nombre },                // <- siempre, puede ser null
+        create: { contacto, nombre },      // <- creación con el nombre (o null)
       });
 
       // 2) crear cuenta completa
@@ -202,7 +216,7 @@ export async function POST(req: Request) {
           contacto,
           plataforma_id,
           correo,            // ya en minúsculas
-          contrasena,
+          contrasena,        // si editaste la clave en el form, entra aquí
           proveedor,
           fecha_compra,
           fecha_vencimiento,
