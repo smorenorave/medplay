@@ -660,83 +660,100 @@ export default function PantallasViewer() {
     });
   }, [editingId, draft.fecha_compra, draft.meses_pagados]);
 
-  /* ===== saveEdit con re-vinculación de cuenta_id por correo ===== */
-  const saveEdit = useCallback(async () => {
-    if (editingId == null) return;
-    setSaving(true);
-    setSaveErr(null);
-    try {
-      const row = rows.find((r) => r.id === editingId);
-      if (!row) throw new Error('Fila no encontrada');
+const saveEdit = useCallback(async () => {
+  if (editingId == null) return;
+  setSaving(true);
+  setSaveErr(null);
+  try {
+    const row = rows.find((r) => r.id === editingId);
+    if (!row) throw new Error('Fila no encontrada');
 
-      const oldCorreo = normEmail(row.correo);
-      const newCorreo = normEmail(draft.correo as string);
-      const pid: number | null = row.plataforma_id == null ? null : Number(row.plataforma_id);
+    const oldCorreo = normEmail(row.correo);
+    const newCorreo = normEmail(draft.correo as string);
+    const pid: number | null = row.plataforma_id == null ? null : Number(row.plataforma_id);
 
-      // Payload base de pantalla (aseguramos vencimiento auto)
-      const finalDraft = maybeAutoVencimiento(draft);
-      const pantallaPayload: any = {
-        contacto: finalDraft.contacto,
-        nro_pantalla: finalDraft.nro_pantalla,
-        fecha_compra: (finalDraft.fecha_compra as string) || null,
-        fecha_vencimiento: (finalDraft.fecha_vencimiento as string) || null,
-        meses_pagados: (finalDraft.meses_pagados as any) === '' ? null : Number(finalDraft.meses_pagados as any),
-        total_pagado: toNumOrNull(finalDraft.total_pagado),
-        total_pagado_proveedor: toNumOrNull(finalDraft.total_pagado_proveedor),
-        total_ganado: toNumOrNull(finalDraft.total_ganado),
-        estado: finalDraft.estado ?? '',
-        comentario: finalDraft.comentario == null ? undefined : String(finalDraft.comentario).trim() === '' ? null : String(finalDraft.comentario),
-      };
+    // Asegura fecha_vencimiento si hay compra + meses
+    const finalDraft = maybeAutoVencimiento(draft);
 
-      // Si cambió el correo ⇒ buscar/crear en cuentascompartidas y asignar cuenta_id
-      if (newCorreo && newCorreo !== oldCorreo) {
-        const newCuentaId = await upsertCuentaCompartida(pid, newCorreo, (finalDraft.contrasena as string) ?? null);
-        pantallaPayload.cuenta_id = newCuentaId;
-        pantallaPayload.correo = newCorreo; // por si el backend no lo devuelve en el PATCH
-      } else {
-        // Si no cambió el correo pero cambiaste clave y hay cuenta_id ⇒ actualizar clave
-        const hasNewPass = typeof finalDraft.contrasena === 'string' && finalDraft.contrasena.trim() !== '' && finalDraft.contrasena !== row.contrasena;
-        if (hasNewPass && row.cuenta_id) {
-          try {
-            await fetch(`/api/cuentascompartidas/${row.cuenta_id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ contrasena: finalDraft.contrasena }),
-            });
-          } catch {}
-        }
+    // Incluimos "nombre" (el backend lo persiste en usuarios.nombre)
+    const pantallaPayload: any = {
+      contacto: finalDraft.contacto,
+      nro_pantalla: finalDraft.nro_pantalla,
+      nombre: (finalDraft.nombre as string)?.trim() || null,
+      fecha_compra: (finalDraft.fecha_compra as string) || null,
+      fecha_vencimiento: (finalDraft.fecha_vencimiento as string) || null,
+      meses_pagados: (finalDraft.meses_pagados as any) === '' ? null : Number(finalDraft.meses_pagados as any),
+      total_pagado: toNumOrNull(finalDraft.total_pagado),
+      total_pagado_proveedor: toNumOrNull(finalDraft.total_pagado_proveedor),
+      total_ganado: toNumOrNull(finalDraft.total_ganado),
+      estado: finalDraft.estado ?? '',
+      comentario:
+        finalDraft.comentario == null
+          ? undefined
+          : String(finalDraft.comentario).trim() === ''
+          ? null
+          : String(finalDraft.comentario),
+    };
+
+    // Guardamos aquí el id de cuenta compartida resultante
+    let cuentaIdToUpdate: number | null = row.cuenta_id ?? null;
+
+    // Si cambió el correo ⇒ upsert de cuenta compartida y reasignar cuenta_id
+    if (newCorreo && newCorreo !== oldCorreo) {
+      const newCuentaId = await upsertCuentaCompartida(pid, newCorreo, (finalDraft.contrasena as string) ?? null);
+      pantallaPayload.cuenta_id = newCuentaId;
+      pantallaPayload.correo = newCorreo; // por si el backend no lo propaga
+      cuentaIdToUpdate = newCuentaId;
+    } else {
+      // Si no cambió correo pero cambió clave y hay cuenta_id ⇒ actualizar clave en cuentascompartidas
+      const hasNewPass =
+        typeof finalDraft.contrasena === 'string' &&
+        finalDraft.contrasena.trim() !== '' &&
+        finalDraft.contrasena !== row.contrasena;
+      if (hasNewPass && row.cuenta_id) {
+        try {
+          await fetch(`/api/cuentascompartidas/${row.cuenta_id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contrasena: finalDraft.contrasena }),
+          });
+        } catch {}
       }
-
-      // Guardar la pantalla
-      const r1 = await fetch(`/api/pantallas/${editingId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(pantallaPayload),
-      });
-      if (!r1.ok) throw new Error((await r1.json().catch(() => ({})))?.error ?? 'No se pudo guardar la pantalla');
-      const savedPantalla: Pantalla = normalizeRow(await r1.json());
-
-      // Refrescar UI (asegurando correo/clave visibles)
-      setRows((rs) =>
-        rs.map((r) =>
-          r.id === editingId
-            ? {
-                ...r,
-                ...savedPantalla,
-                correo: newCorreo || r.correo,
-                contrasena: (finalDraft.contrasena as string) ?? r.contrasena,
-              }
-            : r
-        )
-      );
-
-      cancelEdit();
-    } catch (e: any) {
-      setSaveErr(e?.message ?? 'Error al guardar');
-    } finally {
-      setSaving(false);
     }
-  }, [editingId, draft, rows]);
+
+    // Guardar la pantalla (el backend actualiza usuarios.nombre)
+    const r1 = await fetch(`/api/pantallas/${editingId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(pantallaPayload),
+    });
+    if (!r1.ok) throw new Error((await r1.json().catch(() => ({})))?.error ?? 'No se pudo guardar la pantalla');
+    const savedPantalla: Pantalla = normalizeRow(await r1.json());
+
+    // Refrescar UI (incluye nombre/correo/clave y cuenta_id final)
+    const newName = (finalDraft.nombre as string)?.trim() || null;
+    setRows((rs) =>
+      rs.map((r) =>
+        r.id === editingId
+          ? {
+              ...r,
+              ...savedPantalla,
+              correo: newCorreo || r.correo,
+              contrasena: (finalDraft.contrasena as string) ?? r.contrasena,
+              nombre: newName ?? r.nombre,
+              cuenta_id: cuentaIdToUpdate ?? r.cuenta_id,
+            }
+          : r
+      )
+    );
+
+    cancelEdit();
+  } catch (e: any) {
+    setSaveErr(e?.message ?? 'Error al guardar');
+  } finally {
+    setSaving(false);
+  }
+}, [editingId, draft, rows]);
 
   /* ===== eliminación (individual) ===== */
   const openDelete = async (id: number, label?: string) => {

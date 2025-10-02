@@ -98,6 +98,9 @@ const PatchSchema = z.object({
    */
   correo: z.string().nullable().optional(),
   contrasena: z.string().nullable().optional(),
+
+  /** 👇 NUEVO: nombre se persiste en `usuarios.nombre` */
+  nombre: z.string().nullable().optional(),
 });
 
 /* ===================== GET ===================== */
@@ -225,7 +228,7 @@ export async function PATCH(
       data.total_ganado = toDecStr(computed);
     }
 
-    if (Object.keys(data).length === 0 && c.correo === undefined && c.contrasena === undefined) {
+    if (Object.keys(data).length === 0 && c.correo === undefined && c.contrasena === undefined && c.nombre === undefined) {
       return NextResponse.json({ error: 'no_fields_to_update' }, { status: 400 });
     }
 
@@ -261,6 +264,22 @@ export async function PATCH(
       }
     }
 
+    // 👇 NUEVO: si vino `nombre`, actualizarlo en la tabla `usuarios`
+    if (c.nombre !== undefined) {
+      const newNombre =
+        c.nombre == null
+          ? null
+          : (String(c.nombre).trim() === '' ? null : String(c.nombre).trim());
+
+      const usuarioContacto = updated.usuarios?.contacto;
+      if (usuarioContacto) {
+        await prisma.usuarios.update({
+          where: { contacto: usuarioContacto },
+          data: { nombre: newNombre },
+        });
+      }
+    }
+
     // Traer de nuevo con los últimos datos de la relación (y normalizar fechas)
     const finalRow = await prisma.pantallas.findUnique({
       where: { id: pid },
@@ -272,8 +291,8 @@ export async function PATCH(
 
     const finalOut = finalRow && {
       ...finalRow,
-      fecha_compra: toYMDUTC(finalRow.fecha_compra),
-      fecha_vencimiento: toYMDUTC(finalRow.fecha_vencimiento),
+      fecha_compra: toYMDUTC(finalRow!.fecha_compra),
+      fecha_vencimiento: toYMDUTC(finalRow!.fecha_vencimiento),
     };
 
     const flat = {
