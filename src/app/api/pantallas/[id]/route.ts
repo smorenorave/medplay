@@ -35,25 +35,23 @@ function normalizeContactoServer(raw?: string | null) {
  * - undefined  -> no tocar el campo (omit update)
  * - '' (vacío) -> guardar cadena vacía
  * - string     -> guardar el string
- * - null       -> NUNCA retornar null (si el schema no lo permite)
+ * - null       -> normalizamos a '' (nunca null si schema no lo permite)
  */
 const toEmptyOrString = (v: unknown): string | undefined => {
-  if (v === undefined) return undefined;          // no actualizar
-  if (v === null) return '';                      // si te llega null, lo normalizamos a ''
+  if (v === undefined) return undefined;
+  if (v === null) return '';
   const s = String(v);
-  return s;                                       // puede ser '' o un string
+  return s;
 };
 
 /* ===================== Utils de FECHA (UTC-safe) ===================== */
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
-/** Date -> 'YYYY-MM-DD' usando componentes UTC (evita -1 día por huso) */
 function toYMDUTC(d?: Date | null): string | null {
   if (!d) return null;
   return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
 }
 
-/** 'YYYY-MM-DD' -> Date en medianoche UTC */
 function parseYMDToUTCDate(s?: string | null): Date | null {
   if (!s) return null;
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s).trim());
@@ -62,14 +60,13 @@ function parseYMDToUTCDate(s?: string | null): Date | null {
   return new Date(Date.UTC(y, mo - 1, d));
 }
 
-/** Parser tolerante: acepta 'YYYY-MM-DD' o ISO completo; normaliza cuando aplica */
 function toUTCDateOrNull(v: unknown): Date | null {
   if (v == null || v === '') return null;
   const s = String(v).trim();
   const asYMD = parseYMDToUTCDate(s);
   if (asYMD) return asYMD;
   const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? null : d; // si vino con hora real, se respeta
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 /* ===================== Schema (PATCH) ===================== */
@@ -92,14 +89,15 @@ const PatchSchema = z.object({
   comentario: z.string().nullable().optional(),
 
   /**
-   * Estos pueden venir desde el viewer para “acompañar”,
-   * pero OJO: la tabla pantallas no tiene estos campos.
-   * Los usamos solo si existe relación `cuentascompartidas` para actualizarla.
+   * OJO: el endpoint **NO** modificará `correo` en `cuentascompartidas`.
+   * Puedes mandarlo, pero aquí se IGNORA. El correo solo cambia re-asignando `cuenta_id` o creando otra cuenta.
    */
   correo: z.string().nullable().optional(),
+
+  // Sí permitimos cambiar la clave de la cuenta compartida
   contrasena: z.string().nullable().optional(),
 
-  /** 👇 NUEVO: nombre se persiste en `usuarios.nombre` */
+  /** nombre se persiste en `usuarios.nombre` */
   nombre: z.string().nullable().optional(),
 });
 
@@ -121,14 +119,12 @@ export async function GET(
     });
     if (!row) return NextResponse.json({ error: 'not-found' }, { status: 404 });
 
-    // Normaliza fechas a YMD (UTC) para evitar -1 día en front
     const rowOut = {
       ...row,
       fecha_compra: toYMDUTC(row.fecha_compra),
       fecha_vencimiento: toYMDUTC(row.fecha_vencimiento),
     } as const;
 
-    // aplanado para el viewer
     const flat = {
       row: rowOut,
       correo: row.cuentascompartidas?.correo ?? null,
@@ -169,6 +165,7 @@ export async function PATCH(
         total_pagado: true,
         total_pagado_proveedor: true,
         total_ganado: true,
+        contacto: true,
       },
     });
     if (!current) return NextResponse.json({ error: 'not-found' }, { status: 404 });
@@ -228,43 +225,60 @@ export async function PATCH(
       data.total_ganado = toDecStr(computed);
     }
 
-    if (Object.keys(data).length === 0 && c.correo === undefined && c.contrasena === undefined && c.nombre === undefined) {
+    // Si no vienen cambios en pantallas y TAMPOCO vienen contrasena/nombre/cuenta_id, no hay nada que hacer.
+    const noPantallasChanges = Object.keys(data).length === 0;
+    if (
+      noPantallasChanges &&
+      c.contrasena === undefined &&
+      c.nombre === undefined &&
+      c.cuenta_id === undefined
+      // `correo` no cuenta: aquí está PROHIBIDO modificarlo
+    ) {
       return NextResponse.json({ error: 'no_fields_to_update' }, { status: 400 });
     }
 
-    // Update principal de PANTALLAS
-    const updated = await prisma.pantallas.update({
-      where: { id: pid },
-      data,
-      include: {
-        cuentascompartidas: { select: { id: true, correo: true, contrasena: true, plataforma_id: true } },
-        usuarios: { select: { contacto: true, nombre: true } },
-      },
-    });
+    // Actualizar pantallas SOLO si hay cambios en ella
+    let updated = null as unknown as {
+      cuentascompartidas: { id: number | null } | null;
+      usuarios: { contacto: string | null } | null;
+    };
 
-    // Si llegaron correo/contrasena y HAY relación con cuentascompartidas, actualizamos allá también.
+    if (!noPantallasChanges) {
+      updated = await prisma.pantallas.update({
+        where: { id: pid },
+        data,
+        include: {
+          cuentascompartidas: { select: { id: true, correo: true, contrasena: true, plataforma_id: true } },
+          usuarios: { select: { contacto: true, nombre: true } },
+        },
+      });
+    } else {
+      // No hay cambios en pantallas -> traemos la fila para poder tocar relaciones
+      const row = await prisma.pantallas.findUnique({
+        where: { id: pid },
+        include: {
+          cuentascompartidas: { select: { id: true, correo: true, contrasena: true, plataforma_id: true } },
+          usuarios: { select: { contacto: true, nombre: true } },
+        },
+      });
+      if (!row) return NextResponse.json({ error: 'not-found' }, { status: 404 });
+      updated = row as any;
+    }
+
+    // ====== ACTUALIZAR RELACIONES ======
+    // 1) Cuentas compartidas: SOLO contrasena (correo está prohibido aquí)
     const hasCuentaRelacion = !!updated.cuentascompartidas?.id;
-    if (hasCuentaRelacion && (c.correo !== undefined || c.contrasena !== undefined)) {
-      const updateCuentaData: Record<string, any> = {};
-      if (c.correo !== undefined) {
-        updateCuentaData.correo = c.correo ?? '';
-      }
-      if (c.contrasena !== undefined) {
-        const normalized = toEmptyOrString(c.contrasena);
-        if (normalized !== undefined) {
-          updateCuentaData.contrasena = normalized;
-        }
-      }
-
-      if (Object.keys(updateCuentaData).length > 0) {
+    if (hasCuentaRelacion && c.contrasena !== undefined) {
+      const normalized = toEmptyOrString(c.contrasena);
+      if (normalized !== undefined) {
         await prisma.cuentascompartidas.update({
-          where: { id: updated.cuentascompartidas!.id },
-          data: updateCuentaData,
+          where: { id: updated.cuentascompartidas!.id! },
+          data: { contrasena: normalized }, // ¡NO correo!
         });
       }
     }
 
-    // 👇 NUEVO: si vino `nombre`, actualizarlo en la tabla `usuarios`
+    // 2) Usuarios: nombre
     if (c.nombre !== undefined) {
       const newNombre =
         c.nombre == null

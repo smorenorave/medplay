@@ -1,3 +1,4 @@
+// src/components/forms/FormCuentaCompletas.tsx
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -6,6 +7,10 @@ import TextArea from '@/components/ui/TextArea';
 import { normalizeContacto } from '@/lib/strings';
 import { todayStr } from '@/lib/dates';
 import { usePlataformas } from '@/hooks/usePlataformas';
+
+/* 🔁 NUEVO: helpers para caché + bus */
+import { mergeCuentaCompletaIntoCache } from '@/lib/cuentasAll';
+import { notifyCuentasChanged } from '@/lib/cuentasMutationBus';
 
 /* ===================== Tipos ===================== */
 type Usuario = { contacto: string; nombre: string | null };
@@ -474,13 +479,45 @@ export default function FormCuentaCompletas() {
         const j = await res.json().catch(() => ({}));
         throw new Error(j?.error ?? 'No se pudo guardar');
       }
-      const data = await res.json();
 
+      // La API puede devolver {cuenta:{...}} o el objeto directo
+      const raw = await res.json();
+      const saved = raw?.cuenta ?? raw;
+
+      // ✅ 1) Persistir preferencia de plataforma
       try { window.localStorage.setItem(LAST_PLATFORM_KEY, String(toSend.plataforma_id)); } catch {}
 
+      // ✅ 2) Si venía de inventario, eliminarlo
       if (selectedInvId != null) { try { await fetch(`/api/inventario/${selectedInvId}`, { method: 'DELETE' }); } catch {} }
 
-      setOkMsg('Guardado correctamente. ID: ' + (data?.cuenta?.id ?? data?.id ?? ''));
+      // ✅ 3) Actualizar caché local (mem + localStorage) con el nuevo registro
+      try {
+        // Build robust row para el cache (completa con toSend si faltan campos en la respuesta)
+        const rowForCache = {
+          id: Number(saved?.id),
+          contacto: String(saved?.contacto ?? toSend.contacto ?? ''),
+          nombre: (saved?.nombre ?? toSend.nombre ?? null) as string | null,
+          plataforma_id: Number(saved?.plataforma_id ?? toSend.plataforma_id),
+          correo: String(saved?.correo ?? toSend.correo ?? ''),
+          contrasena: (saved?.contrasena ?? toSend.contrasena ?? null) as string | null,
+          proveedor: (saved?.proveedor ?? toSend.proveedor ?? null) as string | null,
+          fecha_compra: (saved?.fecha_compra ?? toSend.fecha_compra ?? null) as string | null,
+          fecha_vencimiento: (saved?.fecha_vencimiento ?? toSend.fecha_vencimiento ?? null) as string | null,
+          meses_pagados: (saved?.meses_pagados ?? toSend.meses_pagados ?? null) as number | null,
+          total_pagado: (saved?.total_pagado ?? toSend.total_pagado ?? null) as number | null,
+          total_pagado_proveedor: (saved?.total_pagado_proveedor ?? toSend.total_pagado_proveedor ?? null) as number | null,
+          total_ganado: (saved?.total_ganado ?? toSend.total_ganado ?? null) as number | null,
+          estado: (saved?.estado ?? toSend.estado ?? null) as string | null,
+          comentario: (saved?.comentario ?? toSend.comentario ?? null) as string | null,
+        };
+        mergeCuentaCompletaIntoCache(rowForCache as any);
+      } catch {}
+
+      // ✅ 4) Notificar a otros viewers/pestañas
+      try { notifyCuentasChanged({ action: 'insert', id: Number(saved?.id), plataforma_id: Number(saved?.plataforma_id ?? toSend.plataforma_id) }); } catch {}
+
+      // ✅ 5) UI OK + reset del form
+      setOkMsg('Guardado correctamente. ID: ' + (saved?.id ?? ''));
       setConfirmOpen(false);
 
       const base = todayStr();

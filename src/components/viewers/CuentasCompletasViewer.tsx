@@ -1,717 +1,527 @@
-// src/components/viewers/CuentasCompletasViewer.tsx
 'use client';
 
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { usePlataformas } from '@/hooks/usePlataformas';
-import { normalizeContacto } from '@/lib/strings';
 
-/* ========================================================================
+/* =========================================================
  * Tipos
- * ===================================================================== */
-type CuentaCompleta = {
+ * ======================================================= */
+type Cuenta = {
   id: number;
+  plataforma_id: number | null;
   contacto: string;
-  nombre?: string | null; // aplanado para UI
-  plataforma_id: number;
-  correo: string;
-  contrasena?: string | null;
-  proveedor?: string | null;
-  fecha_compra?: string | null;       // 'YYYY-MM-DD'
-  fecha_vencimiento?: string | null;  // 'YYYY-MM-DD'
-  meses_pagados?: number | null;
-  total_pagado?: number | string | null;
-  total_pagado_proveedor?: number | string | null;
-  total_ganado?: number | string | null;
-  estado?: string | null;
-  comentario?: string | null;
+  nombre: string | null;
+  correo: string | null;
+  contrasena: string | null;
+  proveedor: string | null;
+  fecha_compra: string | null;       // YYYY-MM-DD
+  fecha_vencimiento: string | null;  // YYYY-MM-DD (auto)
+  meses_pagados: number | null;
+  total_pagado: number | null;
+  total_pagado_proveedor: number | null;
+  total_ganado: number | null;
+  estado: string | null;
+  comentario: string | null;
 };
+type EditState = Partial<Cuenta> & { id: number };
 
-/* ========================================================================
- * Iconos (inline, sin dependencias)
- * ===================================================================== */
-function PencilIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-    </svg>
-  );
-}
-function CheckIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
-      <path d="M20 6L9 17l-5-5" />
-    </svg>
-  );
-}
-function XIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
-      <path d="M18 6 6 18M6 6l12 12" />
-    </svg>
-  );
-}
-function TrashIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-      <path d="M10 11v6" />
-      <path d="M14 11v6" />
-      <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
-    </svg>
-  );
-}
+/* =========================================================
+ * Config
+ * ======================================================= */
+const REFETCH_ON_FOCUS = false;
+const STALE_AFTER_MS   = 5 * 60_000;
+const STAMP_TTL_MS     = 5 * 30_000;
 
-/* ========================================================================
- * Utils de fecha (tz-safe)
- * ===================================================================== */
-const pad2 = (n: number) => String(n).padStart(2, '0');
-const extractYMD = (s?: string | null) => {
-  if (!s) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
-  if (!m) return null;
-  return { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) };
-};
-const toDateInput = (s?: string | null) => {
-  const p = extractYMD(s);
-  if (!p) return '';
-  return `${p.y}-${pad2(p.m)}-${pad2(p.d)}`;
-};
-const fmtDate = (s?: string | null) => {
-  const p = extractYMD(s);
-  if (!p) return '—';
-  return `${pad2(p.d)}/${pad2(p.m)}/${p.y}`;
-};
+/* =========================================================
+ * Cache y sync
+ * ======================================================= */
+const LS_CACHE_KEY     = '__cuentas_cache_v3';
+const LS_REMOTE_STAMP  = '__cuentas_remote_stamp';
+const BC_NAME          = 'cuentas_mutations_bc';
 
-/** Suma meses preservando fin de mes cuando aplica (31→30/28/29) */
-function addMonthsSafe(isoYMD: string, months: number): string {
-  const p = extractYMD(isoYMD);
-  if (!p) return isoYMD;
-  const y0 = p.y, m0 = p.m - 1, d0 = p.d; // JS: mes 0-11
-  const base = new Date(Date.UTC(y0, m0, 1));
-  const y1 = base.getUTCFullYear();
-  const m1 = base.getUTCMonth() + months; // puede overflow
-  const target = new Date(Date.UTC(y1, m1, 1));
-  // último día del mes destino
-  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
-  const day = Math.min(d0, lastDay);
-  const final = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth(), day));
-  return `${final.getUTCFullYear()}-${pad2(final.getUTCMonth() + 1)}-${pad2(final.getUTCDate())}`;
-}
+type CacheShape = { rows: Cuenta[]; ts: number };
 
-/* ========================================================================
- * Otros utils
- * ===================================================================== */
-const fmtMoney = (v?: number | string | null) => {
-  if (v === '' || v == null || Number.isNaN(Number(v))) return '—';
-  const num = Number(v);
-  try {
-    return `$ ${new Intl.NumberFormat(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(num)}`;
-  } catch {
-    return `$ ${num.toFixed(2)}`;
-  }
-};
-function normalizeText(input: unknown): string {
-  return String(input ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-const toNumOrNull = (val: any): number | null =>
-  val == null || val === '' || Number.isNaN(Number(val)) ? null : Number(val);
+const hasWindow = () => typeof window !== 'undefined';
+const n = (x: unknown) =>
+  x == null || x === '' || Number.isNaN(Number(x)) ? null : Number(x);
 
-const normalizeEmail = (s: string) => s?.trim().toLowerCase();
-
-/* ---------- Normalizador robusto (aplana nombre/relación) ---------- */
-function normalizeRow(r: any): CuentaCompleta {
-  const nombre = r.nombre ?? r.usuarios?.nombre ?? null;
+function normalizeRow(r: any): Cuenta {
   return {
     id: Number(r.id),
+    plataforma_id: n(r.plataforma_id),
     contacto: String(r.contacto ?? ''),
-    nombre,
-    plataforma_id: Number(r.plataforma_id),
-    correo: String(r.correo ?? ''),
+    nombre: r.nombre ?? null,
+    correo: r.correo ?? null,
     contrasena: r.contrasena ?? null,
     proveedor: r.proveedor ?? null,
     fecha_compra: r.fecha_compra ?? null,
     fecha_vencimiento: r.fecha_vencimiento ?? null,
-    meses_pagados: r.meses_pagados == null ? null : Number(r.meses_pagados),
+    meses_pagados: n(r.meses_pagados),
     total_pagado: r.total_pagado == null ? null : Number(r.total_pagado),
-    total_pagado_proveedor: r.total_pagado_proveedor == null ? null : Number(r.total_pagado_proveedor),
+    total_pagado_proveedor:
+      r.total_pagado_proveedor == null ? null : Number(r.total_pagado_proveedor),
     total_ganado: r.total_ganado == null ? null : Number(r.total_ganado),
     estado: r.estado ?? null,
     comentario: r.comentario ?? null,
   };
 }
 
-/* ========================================================================
- * Helpers para Inventario (sin auto-archivar)
- * ===================================================================== */
-
-/** ¿Ya está en inventario? */
-async function existsInInventario(plataforma_id: number, correo: string): Promise<boolean> {
-  const email = normalizeEmail(correo);
+function readCache(): CacheShape | null {
+  if (!hasWindow()) return null;
   try {
-    const res = await fetch(`/api/inventario?q=${encodeURIComponent(email)}&plataforma_id=${plataforma_id}`, {
-      cache: 'no-store',
-    });
+    const raw = localStorage.getItem(LS_CACHE_KEY);
+    return raw ? (JSON.parse(raw) as CacheShape) : null;
+  } catch {
+    return null;
+  }
+}
+function writeCache(rows: Cuenta[], remoteStamp?: number) {
+  if (!hasWindow()) return;
+  try {
+    localStorage.setItem(LS_CACHE_KEY, JSON.stringify({ rows, ts: Date.now() }));
+    if (typeof remoteStamp === 'number') {
+      localStorage.setItem(LS_REMOTE_STAMP, String(remoteStamp));
+    }
+  } catch {}
+}
+function mergeIntoCache(p: any): Cuenta[] {
+  const row = normalizeRow(p);
+  const current = readCache();
+  const list = current?.rows ?? [];
+  const idx = list.findIndex((x) => x.id === row.id);
+  let next: Cuenta[];
+  if (idx === -1) next = [row, ...list];
+  else {
+    next = [...list];
+    next[idx] = { ...next[idx], ...row };
+  }
+  writeCache(next);
+  return next;
+}
+function removeFromCache(id: number) {
+  const current = readCache();
+  const list = current?.rows ?? [];
+  const next = list.filter((x) => x.id !== id);
+  writeCache(next);
+  return next;
+}
+function broadcastInvalidate() {
+  try {
+    const bc = new BroadcastChannel(BC_NAME);
+    bc.postMessage({ type: 'invalidate-cuentas' });
+    bc.close();
+  } catch {}
+}
+
+/* =========================================================
+ * Fetchers
+ * ======================================================= */
+async function fetchStamp(): Promise<number> {
+  try {
+    const r = await fetch('/api/cuentascompletas/stamp', { cache: 'no-store' });
+    const j = (await r.json()) as { stamp?: number };
+    return Number(j?.stamp || 0);
+  } catch { return 0; }
+}
+async function fetchAllCuentas(): Promise<Cuenta[]> {
+  const out: Cuenta[] = [];
+  let cursor: number | null = null;
+  let guard = 0;
+  while (guard++ < 50) {
+    const url =
+      '/api/cuentascompletas?limit=500' +
+      (cursor ? `&cursor=${encodeURIComponent(String(cursor))}` : '');
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('No se pudieron cargar las cuentas completas');
+    const j: any = await res.json();
+    const items: any[] = Array.isArray(j?.items) ? j.items : [];
+    out.push(...items.map(normalizeRow));
+    const nx = j?.nextCursor ?? null;
+    cursor = nx == null ? null : Number(nx);
+    if (!cursor) break;
+  }
+  return out;
+}
+
+/* =========================================================
+ * UI helpers
+ * ======================================================= */
+const money = (v: number | null) =>
+  v == null || Number.isNaN(v)
+    ? '—'
+    : '$\u00A0' + new Intl.NumberFormat('es-CO').format(v);
+
+const clamp = (val: unknown, min: number) => {
+  const num = Number(val);
+  return Number.isFinite(num) ? Math.max(min, num) : min;
+};
+
+/** YYYY-MM-DD + meses (conserva fin de mes) */
+function addMonthsYYYYMMDD(ymd: string, months: number): string {
+  if (!ymd || !Number.isFinite(months)) return '';
+  const [y, m, d] = ymd.split('-').map(Number);
+  const base = new Date(y, (m ?? 1) - 1, d ?? 1);
+  if (Number.isNaN(base.getTime())) return '';
+  const target = new Date(base);
+  target.setMonth(target.getMonth() + months);
+  if (target.getDate() !== (d ?? 1)) target.setDate(0);
+  return target.toISOString().slice(0, 10);
+}
+
+/* =========================================================
+ * Portal
+ * ======================================================= */
+function ModalPortal({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, []);
+  if (!mounted) return null;
+  return createPortal(children, document.body);
+}
+
+/* =========================================================
+ * Helpers Inventario / Conteos
+ * ======================================================= */
+const normEmail = (s?: string | null) => (s ?? '').trim().toLowerCase();
+
+async function existsInInventario(plataforma_id: number | null | undefined, correo: string): Promise<boolean> {
+  const email = normEmail(correo);
+  try {
+    const base = `/api/inventario`;
+    const url = plataforma_id != null
+      ? `${base}?q=${encodeURIComponent(email)}&plataforma_id=${plataforma_id}`
+      : `${base}?q=${encodeURIComponent(email)}`;
+    const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) return false;
     const data = await res.json();
     const arr: any[] = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
-    return arr.some(
-      (r) =>
-        Number(r?.plataforma_id ?? r?.plataformaId) === plataforma_id &&
-        String(r?.correo ?? '').toLowerCase() === email
-    );
-  } catch {
-    return false;
-  }
+    return arr.some((r) => String(r?.correo ?? '').toLowerCase() === email);
+  } catch { return false; }
 }
-
-/** Crea en inventario si no existe (solo cuando el usuario lo elige). */
-async function ensureInInventario(plataforma_id: number, correo: string, clave?: string | null) {
-  const email = normalizeEmail(correo);
+async function ensureInInventario(plataforma_id?: number | null, correo?: string | null, clave?: string | null) {
+  if (!correo) return;
+  const email = normEmail(correo);
   try {
-    if (await existsInInventario(plataforma_id, email)) return;
+    if (await existsInInventario(plataforma_id ?? null, email)) return;
+    const body: any = { correo: email };
+    if (plataforma_id != null) body.plataforma_id = plataforma_id;
+    if (clave && clave.trim().length > 0) body.clave = clave;
     await fetch('/api/inventario', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        plataforma_id,
-        correo: email,
-        clave: (clave && clave.trim().length > 0) ? clave : null,
-      }),
+      body: JSON.stringify(body),
     });
-  } catch {
-    // best-effort
-  }
+  } catch { /* best-effort */ }
 }
 
-/* ========================================================================
- * Subcomponentes de tabla
- * ===================================================================== */
-function Th({
-  children,
-  className = '',
-  ...rest
-}: React.ThHTMLAttributes<HTMLTableHeaderCellElement>) {
-  return (
-    <th
-      {...rest}
-      className={[
-        'px-3 py-2 text-left text-xs uppercase tracking-wide text-neutral-400 font-medium',
-        'whitespace-nowrap',
-        'sticky top-0 z-10 bg-neutral-900/80 backdrop-blur supports-[backdrop-filter]:bg-neutral-900/60',
-        className,
-      ].join(' ')}
-    >
-      {children}
-    </th>
-  );
+/** conteo local por (correo + plataforma) sobre la vista cargada */
+function countLocalByEmailAndPlatform(
+  all: Cuenta[],
+  correo: string | null | undefined,
+  plataforma_id: number | null | undefined
+): number {
+  if (!correo || plataforma_id == null) return 0;
+  const email = (correo ?? '').trim().toLowerCase();
+  const pid = Number(plataforma_id);
+  return all.reduce((acc, r) => {
+    const sameEmail = (r.correo ?? '').trim().toLowerCase() === email;
+    const samePlat  = Number(r.plataforma_id) === pid;
+    return acc + (sameEmail && samePlat ? 1 : 0);
+  }, 0);
 }
 
-function Td({
-  children,
-  className = '',
-  ...rest
-}: React.TdHTMLAttributes<HTMLTableCellElement>) {
-  return (
-    <td
-      {...rest}
-      className={['px-3 py-2 text-sm text-neutral-100 whitespace-nowrap', className].join(' ')}
-    >
-      {children}
-    </td>
-  );
-}
-
-/* ========================================================================
+/* =========================================================
  * Componente principal
- * ===================================================================== */
+ * ======================================================= */
 export default function CuentasCompletasViewer() {
-  const { plataformas, loading: platLoading, error: platError } = usePlataformas();
+  const { plataformas } = usePlataformas();
 
-  // filtros
-  const [q, setQ] = useState('');
-  const [plataformaId, setPlataformaId] = useState<number | ''>('');
-
-  // datos + paginación por cursor
-  const PAGE_SIZE = 200;
-  const [rows, setRows] = useState<CuentaCompleta[]>([]);
-  const [nextCursor, setNextCursor] = useState<number | null>(null);
-  const [initialLoaded, setInitialLoaded] = useState(false);
-
+  const [rows, setRows] = useState<Cuenta[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // edición inline
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [draft, setDraft] = useState<Partial<CuentaCompleta>>({});
-  const [saving, setSaving] = useState(false);
-  const [saveErr, setSaveErr] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [platFilter, setPlatFilter] = useState<number | 'all'>('all');
 
-  // eliminación individual
-  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteErr, setDeleteErr] = useState<string | null>(null);
-  const [deleteAction, setDeleteAction] = useState<'archive' | 'purge' | null>(null);
+  // edición
+  const [edit, setEdit] = useState<EditState | null>(null);
+  const [saving, setSaving] = useState(false);
 
   // selección múltiple
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
+  // eliminación individual
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; label?: string } | null>(null);
+  const [checkingArchive, setCheckingArchive] = useState(false);
+  const [canArchive, setCanArchive] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
+  const [deleteAction, setDeleteAction] = useState<'archive' | 'purge' | null>(null);
+  const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
 
   // eliminación masiva
   type BulkItem = {
     id: number;
     label?: string;
-    plataforma_id: number;
-    correo: string;
+    canArchive: boolean;
+    plataforma_id: number | null;
+    correo: string | null;
     contrasena: string | null;
   };
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkItems, setBulkItems] = useState<BulkItem[]>([]);
+  const [bulkAssessing, setBulkAssessing] = useState(false);
+  const [bulkErr, setBulkErr] = useState<string | null>(null);
   const [bulkProcessing, setBulkProcessing] = useState(false);
   const [bulkProgress, setBulkProgress] = useState(0);
   const [bulkSummary, setBulkSummary] = useState<{ total: number; archived: number; purged: number; failed: number } | null>(null);
-  const [bulkErr, setBulkErr] = useState<string | null>(null);
 
-  // Scroll principal
-  const bodyScrollRef = useRef<HTMLDivElement>(null);
+  const mounted = useRef(false);
 
-  // búsqueda server-side (toda la base)
-  const [serverSearching, setServerSearching] = useState(false);
-  const [serverSearchErr, setServerSearchErr] = useState<string | null>(null);
-  const [serverResults, setServerResults] = useState<CuentaCompleta[]>([]);
-  const SEARCH_LIMIT = 1000; // límite generoso y rápido
-
-  const platformMap = useMemo(() => {
-    const m = new Map<number, string>();
-    for (const p of plataformas) m.set(p.id, (p as any).nombre ?? String(p.id));
-    return m;
-  }, [plataformas]);
-
-  /* ----------------------------- Fetch helpers ----------------------------- */
-  const buildUrl = (cursor?: number | null) => {
-    const sp = new URLSearchParams();
-    sp.set('limit', String(PAGE_SIZE));
-    if (cursor != null) sp.set('cursor', String(cursor));
-    if (plataformaId !== '') sp.set('plataforma_id', String(plataformaId));
-    return `/api/cuentascompletas?${sp.toString()}`;
-  };
-
-  const fetchFirstPage = useCallback(async () => {
-    setLoading(true);
-    setErr(null);
-    setEditingId(null);
-    setSaveErr(null);
-    try {
-      setRows([]);
-      setNextCursor(null);
-      setInitialLoaded(false);
-
-      const res = await fetch(buildUrl(null), { cache: 'no-store' });
-      if (!res.ok) throw new Error('No se pudieron cargar las cuentas');
-      const j = await res.json();
-      const arr: any[] = Array.isArray(j) ? j : Array.isArray(j?.items) ? j.items : [];
-      const normalized = arr.map(normalizeRow);
-
-      setRows(normalized);
-      setInitialLoaded(true);
-      setNextCursor(j?.nextCursor ?? (normalized.length === PAGE_SIZE ? normalized[normalized.length - 1]?.id ?? null : null));
-
-      // limpiar resultados de búsqueda de servidor al refrescar dataset base
-      setServerResults([]);
-      setServerSearchErr(null);
-
-      // limpiar selección
-      setSelectedIds(new Set());
-    } catch (e: any) {
-      setErr(e?.message ?? 'Error al cargar');
-      setRows([]);
-      setNextCursor(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [plataformaId]);
-
-  const fetchNextPage = useCallback(async () => {
-    if (nextCursor == null) return;
-    setLoading(true);
-    setErr(null);
-    try {
-      const res = await fetch(buildUrl(nextCursor), { cache: 'no-store' });
-      if (!res.ok) throw new Error('No se pudieron cargar más cuentas');
-      const j = await res.json();
-      const arr: any[] = Array.isArray(j) ? j : Array.isArray(j?.items) ? j.items : [];
-      const normalized = arr.map(normalizeRow);
-
-      setRows((prev) => [...prev, ...normalized]);
-      setNextCursor(j?.nextCursor ?? (normalized.length === PAGE_SIZE ? normalized[normalized.length - 1]?.id ?? null : null));
-    } catch (e: any) {
-      setErr(e?.message ?? 'Error al cargar más');
-    } finally {
-      setLoading(false);
-    }
-  }, [nextCursor, plataformaId]);
-
+  /* ===== Boot ===== */
   useEffect(() => {
-    fetchFirstPage();
-  }, [fetchFirstPage]);
+    mounted.current = true;
+    (async () => {
+      setErr(null);
+      const cached = readCache();
+      if (cached?.rows?.length) setRows(cached.rows);
 
-  /* ----------------------------- Búsqueda (front) ----------------------------- */
-  const indexedRows = useMemo(() => {
-    return rows.map((r) => {
-      const platformName = r.plataforma_id ? platformMap.get(r.plataforma_id) ?? String(r.plataforma_id) : '';
-      const haystack = normalizeText(
-        [
-          r.nombre,
-          r.contacto,
-          r.correo,
-          r.proveedor,
-          r.estado,
-          r.comentario,
-          platformName,
-          r.total_pagado,
-          r.total_pagado_proveedor,
-          r.total_ganado,
-        ]
-          .filter((v) => v !== undefined && v !== null && v !== '')
-          .join(' | ')
-      );
-      return { row: r, haystack };
-    });
-  }, [rows, platformMap]);
+      const cacheAge = cached ? Date.now() - cached.ts : Infinity;
+      const skipStamp = cacheAge < STAMP_TTL_MS;
 
-  const localFiltered = useMemo(() => {
-    const tokens = normalizeText(q).split(' ').filter(Boolean);
-    if (!tokens.length) return indexedRows.map(({ row }) => row);
-    return indexedRows.filter(({ haystack }) => tokens.every((t) => haystack.includes(t))).map(({ row }) => row);
-  }, [indexedRows, q]);
+      const remoteStamp = skipStamp
+        ? Number(localStorage.getItem(LS_REMOTE_STAMP) || 0)
+        : await fetchStamp();
 
-  /* ----------------------------- Búsqueda (server) ----------------------------- */
-  useEffect(() => {
-    let handle: any;
-    const doSearch = async () => {
-      const query = normalizeText(q);
-      if (!query) {
-        setServerResults([]);
-        setServerSearchErr(null);
-        return;
-      }
-      setServerSearching(true);
-      setServerSearchErr(null);
+      const localStamp = Number(localStorage.getItem(LS_REMOTE_STAMP) || 0);
+      const needServer =
+        !cached?.rows?.length || cacheAge > STALE_AFTER_MS || remoteStamp !== localStamp;
+
+      if (!needServer) return;
+
       try {
-        // Endpoint sugerido: /api/cuentascompletas/search
-        const sp = new URLSearchParams();
-        sp.set('q', query);
-        sp.set('limit', String(SEARCH_LIMIT));
-        if (plataformaId !== '') sp.set('plataforma_id', String(plataformaId));
-
-        // 1) intento canónico
-        let res = await fetch(`/api/cuentascompletas/search?${sp.toString()}`, { cache: 'no-store' });
-
-        // 2) fallback (por si el backend decidió usar el mismo endpoint con ?q=)
-        if (!res.ok) {
-          res = await fetch(`/api/cuentascompletas?${sp.toString()}`, { cache: 'no-store' });
-        }
-
-        if (!res.ok) throw new Error('No se pudo buscar en el servidor');
-
-        const j = await res.json();
-        const arr: any[] = Array.isArray(j) ? j : Array.isArray(j?.items) ? j.items : [];
-        const normalized = arr.map(normalizeRow);
-
-        setServerResults(normalized);
+        setLoading(true);
+        const all = await fetchAllCuentas();
+        if (!mounted.current) return;
+        setRows(all);
+        writeCache(all, remoteStamp);
       } catch (e: any) {
-        setServerResults([]);
-        setServerSearchErr(e?.message ?? 'Error de búsqueda');
+        if (mounted.current) setErr(e?.message ?? 'Error cargando cuentas completas');
       } finally {
-        setServerSearching(false);
+        if (mounted.current) setLoading(false);
       }
-    };
+    })();
 
-    // debounce
-    handle = setTimeout(doSearch, 350);
-    return () => clearTimeout(handle);
-  }, [q, plataformaId]);
-
-  // Unión de resultados: prioriza locales y agrega server, deduplicando por id
-  const viewRows = useMemo(() => {
-    if (!q) return localFiltered;
-    const map = new Map<number, CuentaCompleta>();
-    for (const r of localFiltered) map.set(r.id, r);
-    for (const r of serverResults) if (!map.has(r.id)) map.set(r.id, r);
-    return Array.from(map.values());
-  }, [localFiltered, serverResults, q]);
-
-  /* ------------------------------ Edit helpers ---------------------------- */
-  const applyGanadoRule = (draftIn: Partial<CuentaCompleta>): Partial<CuentaCompleta> => {
-    const tp = toNumOrNull(draftIn.total_pagado);
-    const tpp = toNumOrNull(draftIn.total_pagado_proveedor);
-    const next: Partial<CuentaCompleta> = { ...draftIn };
-    if (tp == null) return next;
-    const newGan = tpp == null ? tp : tp - tpp;
-    next.total_ganado = String(newGan) as any;
-    return next;
-  };
-
-  const maybeAutoVencimiento = (dIn: Partial<CuentaCompleta>): Partial<CuentaCompleta> => {
-    const meses = toNumOrNull(dIn.meses_pagados as any);
-    const compra = (dIn.fecha_compra as string) || '';
-    const next = { ...dIn };
-    if (compra && meses && meses > 0) {
-      next.fecha_vencimiento = addMonthsSafe(compra, meses);
-    }
-    return next;
-  };
-
-  const beginEdit = (row: CuentaCompleta) => {
-    setEditingId(row.id);
-    setSaveErr(null);
-    setDraft({
-      ...row,
-      fecha_compra: toDateInput(row.fecha_compra),
-      fecha_vencimiento: toDateInput(row.fecha_vencimiento),
-      total_pagado: row.total_pagado == null || row.total_pagado === '' ? '' : String(row.total_pagado),
-      total_pagado_proveedor:
-        row.total_pagado_proveedor == null || row.total_pagado_proveedor === '' ? '' : String(row.total_pagado_proveedor),
-      total_ganado: row.total_ganado == null || row.total_ganado === '' ? '' : String(row.total_ganado),
-      contrasena: row.contrasena ?? '',
-      comentario: row.comentario ?? '',
-    });
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setDraft({});
-    setSaveErr(null);
-  };
-
-  // Recalcular automáticamente total_ganado
-  useEffect(() => {
-    if (editingId == null) return;
-    setDraft((prev) => {
-      const tp = toNumOrNull(prev.total_pagado);
-      if (tp == null) return prev;
-      const tpp = toNumOrNull(prev.total_pagado_proveedor);
-      const newGan = tpp == null ? tp : tp - tpp;
-      const prevGan = toNumOrNull(prev.total_ganado);
-      if (prevGan === newGan) return prev;
-      return { ...prev, total_ganado: String(newGan) as any };
-    });
-  }, [editingId, draft.total_pagado, draft.total_pagado_proveedor]);
-
-  // Recalcular automáticamente fecha_vencimiento
-  useEffect(() => {
-    if (editingId == null) return;
-    setDraft((prev) => {
-      const meses = toNumOrNull(prev.meses_pagados as any);
-      const compra = (prev.fecha_compra as string) || '';
-      if (!compra || !meses || meses <= 0) return prev;
-      const nuevo = addMonthsSafe(compra, meses);
-      if (prev.fecha_vencimiento === nuevo) return prev;
-      return { ...prev, fecha_vencimiento: nuevo };
-    });
-  }, [editingId, draft.fecha_compra, draft.meses_pagados]);
-
-  const saveEdit = useCallback(async () => {
-    if (editingId == null || saving) return;
-    setSaving(true);
-    setSaveErr(null);
+    let bc: BroadcastChannel | null = null;
     try {
-      const current = rows.find((r) => r.id === editingId);
+      bc = new BroadcastChannel(BC_NAME);
+      bc.onmessage = async (ev) => {
+        if (ev?.data?.type === 'invalidate-cuentas') {
+          try {
+            setLoading(true);
+            const stamp = await fetchStamp();
+            const local = Number(localStorage.getItem(LS_REMOTE_STAMP) || 0);
+            if (stamp !== local) {
+              const all = await fetchAllCuentas();
+              if (!mounted.current) return;
+              setRows(all);
+              writeCache(all, stamp);
+            }
+          } catch (e: any) {
+            if (mounted.current) setErr(e?.message ?? 'Error actualizando datos');
+          } finally {
+            if (mounted.current) setLoading(false);
+          }
+        }
+      };
+    } catch {}
 
-      const nombreVal = ((draft.nombre ?? '') as string) || null;
-      const comentarioVal = ((draft.comentario ?? '') as string) || null;
+    const onFocus = async () => {
+      if (!REFETCH_ON_FOCUS) return;
+      const cached = readCache();
+      const cacheAge = cached ? Date.now() - cached.ts : Infinity;
+      if (cacheAge > STALE_AFTER_MS) { await forceRefresh(); return; }
+      try {
+        const stamp = await fetchStamp();
+        const local = Number(localStorage.getItem(LS_REMOTE_STAMP) || 0);
+        if (stamp !== local) await forceRefresh();
+      } catch {}
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      mounted.current = false;
+      try { bc?.close(); } catch {}
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, []);
 
-      const totalPagado = toNumOrNull(draft.total_pagado);
-      const totalProv   = toNumOrNull(draft.total_pagado_proveedor);
-      const totalGanado = totalPagado == null ? null : (totalProv == null ? totalPagado : totalPagado - totalProv);
+  async function forceRefresh() {
+    try {
+      setLoading(true);
+      setErr(null);
+      const [stamp, all] = await Promise.all([fetchStamp(), fetchAllCuentas()]);
+      if (!mounted.current) return;
+      setRows(all);
+      writeCache(all, stamp);
+    } catch (e: any) {
+      if (mounted.current) setErr(e?.message ?? 'No se pudo refrescar');
+    } finally {
+      if (mounted.current) setLoading(false);
+    }
+  }
 
-      const finalDraft = maybeAutoVencimiento(draft);
+  // Filtro + búsqueda local
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    const pid: number | null = platFilter === 'all' ? null : Number(platFilter);
+    return rows.filter((r) => {
+      if (pid !== null && r.plataforma_id !== pid) return false;
+      if (!term) return true;
+      const hay =
+        (r.nombre ?? '').toLowerCase().includes(term) ||
+        (r.contacto ?? '').toLowerCase().includes(term) ||
+        (r.correo ?? '').toLowerCase().includes(term) ||
+        (r.estado ?? '').toLowerCase().includes(term) ||
+        (r.proveedor ?? '').toLowerCase().includes(term) ||
+        (r.comentario ?? '').toLowerCase().includes(term);
+      return hay;
+    });
+  }, [rows, q, platFilter]);
 
-      const payload: Record<string, any> = {
-        contacto: (finalDraft.contacto ?? '').toString(),
-        nombre: nombreVal,
-        correo: (finalDraft.correo ?? '').toString(),
-        proveedor: (finalDraft.proveedor ?? '') || null,
-        meses_pagados:
-          finalDraft.meses_pagados == null || (finalDraft.meses_pagados as any) === ''
-            ? null
-            : Number(finalDraft.meses_pagados),
-        fecha_compra: (finalDraft.fecha_compra as string) || null,
-        fecha_vencimiento: (finalDraft.fecha_vencimiento as string) || null,
-        total_pagado: totalPagado,
-        total_pagado_proveedor: totalProv,
-        pago_total_proveedor: totalProv,
-        pagado_proveedor: totalProv,
-        total_ganado: totalGanado,
-        ganado: totalGanado,
-        estado: finalDraft.estado == null || finalDraft.estado === '' ? null : String(finalDraft.estado),
-        comentario: comentarioVal,
+  /* =========================================================
+   * Editar / Guardar
+   * ======================================================= */
+  function openEdit(row: Cuenta) {
+    const seeded: EditState = {
+      ...row,
+      nombre: row.nombre ?? '',
+      correo: row.correo ?? '',
+      contrasena: row.contrasena ?? '',
+      proveedor: row.proveedor ?? '',
+      fecha_compra: row.fecha_compra ?? '',
+      fecha_vencimiento: row.fecha_vencimiento ?? '',
+      estado: row.estado ?? '',
+      comentario: row.comentario ?? '',
+    };
+    if (seeded.fecha_compra && seeded.meses_pagados && !seeded.fecha_vencimiento) {
+      const venc = addMonthsYYYYMMDD(seeded.fecha_compra as string, Number(seeded.meses_pagados));
+      if (venc) seeded.fecha_vencimiento = venc;
+    }
+    setEdit(seeded);
+  }
+
+  // recalcula vencimiento cuando cambia compra/meses
+  useEffect(() => {
+    if (!edit) return;
+    const fc = edit.fecha_compra ?? '';
+    const m = edit.meses_pagados ?? null;
+    if (fc && m != null && m >= 1) {
+      const venc = addMonthsYYYYMMDD(fc, m);
+      if (venc !== edit.fecha_vencimiento) {
+        setEdit((s) => ({ ...(s as EditState), fecha_vencimiento: venc }));
+      }
+    } else if (edit.fecha_vencimiento) {
+      setEdit((s) => ({ ...(s as EditState), fecha_vencimiento: '' }));
+    }
+  }, [edit?.fecha_compra, edit?.meses_pagados]);
+
+  async function saveEdit() {
+    if (!edit) return;
+    setSaving(true);
+    setErr(null);
+    try {
+      const row = rows.find((r) => r.id === edit.id);
+      if (!row) throw new Error('Fila no encontrada');
+
+      // fecha_vencimiento derivada si hay compra+meses
+      let finalVence = edit.fecha_vencimiento ?? null;
+      if (edit.fecha_compra && edit.meses_pagados && edit.meses_pagados >= 1) {
+        finalVence = addMonthsYYYYMMDD(edit.fecha_compra, edit.meses_pagados);
+      }
+
+      // calcular total_ganado si ambos totales vienen
+      let total_ganado = edit.total_ganado ?? null;
+      if (edit.total_pagado != null) {
+        total_ganado =
+          edit.total_pagado -
+          (edit.total_pagado_proveedor != null ? edit.total_pagado_proveedor : 0);
+      }
+
+      const payload: Record<string, unknown> = {
+        contacto: edit.contacto ?? '',
+        nombre: (edit.nombre ?? '') === '' ? null : (edit.nombre ?? ''),
+        proveedor: (edit.proveedor ?? '') === '' ? null : (edit.proveedor ?? ''),
+        fecha_compra: edit.fecha_compra ?? null,
+        fecha_vencimiento: finalVence,
+        meses_pagados: edit.meses_pagados == null ? null : clamp(edit.meses_pagados, 1),
+        total_pagado: edit.total_pagado,
+        total_pagado_proveedor: edit.total_pagado_proveedor,
+        total_ganado,
+        estado: (edit.estado ?? '') || null,
+        comentario: (edit.comentario ?? null) as string | null,
+        correo: (edit.correo ?? null) as string | null,
       };
 
-      // Contraseña (si cambió)
-      const rawPwd = (finalDraft.contrasena as string) ?? '';
-      const originalPwd = current?.contrasena ?? '';
-      if (rawPwd !== originalPwd) {
-        if (rawPwd.trim() === '') {
-          payload.contrasena = null;
-        } else if (rawPwd.length < 7) {
-          setSaveErr('La clave debe tener al menos 7 caracteres (o déjala vacía para no cambiarla).');
-          setSaving(false);
-          return;
-        } else {
-          payload.contrasena = rawPwd;
-        }
+      // contraseña: enviar si cambió (permitir limpiar => null)
+      if ((edit.contrasena ?? '') !== (row.contrasena ?? '')) {
+        const raw = (edit.contrasena ?? '').toString();
+        payload.contrasena = raw.trim() === '' ? null : raw;
       }
 
-      const res = await fetch(`/api/cuentascompletas/${editingId}`, {
+      const res = await fetch(`/api/cuentascompletas/${edit.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-
       if (!res.ok) {
-        const msg = await res.text().catch(() => '');
-        throw new Error(msg || 'No se pudo guardar');
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error ?? 'No se pudo guardar');
       }
+      const flat = await res.json();
 
-      let updated: any = {};
-      const ct = res.headers.get('content-type') || '';
-      if (ct.includes('application/json')) {
-        updated = await res.json();
-      } else {
-        updated = payload; // optimistic
-      }
+      const updated = {
+        id: Number(flat?.row?.id ?? edit.id),
+        contacto: flat?.row?.contacto ?? edit.contacto,
+        nombre: flat?.row?.nombre ?? edit.nombre ?? null,
+        proveedor: flat?.row?.proveedor ?? edit.proveedor ?? null,
+        fecha_compra: flat?.row?.fecha_compra ?? edit.fecha_compra ?? null,
+        fecha_vencimiento: flat?.row?.fecha_vencimiento ?? finalVence ?? null,
+        meses_pagados:
+          flat?.row?.meses_pagados ?? (edit.meses_pagados == null ? null : edit.meses_pagados),
+        total_pagado: flat?.row?.total_pagado == null ? null : Number(flat.row.total_pagado as any),
+        total_pagado_proveedor:
+          flat?.row?.total_pagado_proveedor == null
+            ? null
+            : Number(flat.row.total_pagado_proveedor as any),
+        total_ganado: flat?.row?.total_ganado == null ? null : Number(flat.row.total_ganado as any),
+        estado: flat?.row?.estado ?? edit.estado ?? null,
+        comentario: flat?.row?.comentario ?? edit.comentario ?? null,
+        plataforma_id: row.plataforma_id,
+        correo: (flat?.row?.correo ?? edit.correo ?? row.correo ?? null) as any,
+        contrasena: (edit.contrasena as string) ?? row.contrasena ?? null,
+      } satisfies Partial<Cuenta> & { id: number };
 
-      setRows((rs) =>
-        rs.map((r) => {
-          if (r.id !== editingId) return r;
-          const mergedNorm = normalizeRow({ ...r, ...updated });
-          if ((updated as any)?.plataforma_id == null) mergedNorm.plataforma_id = r.plataforma_id;
-          if ((updated as any)?.nombre === undefined && mergedNorm.nombre == null) mergedNorm.nombre = nombreVal;
-          if ((updated as any)?.comentario === undefined && mergedNorm.comentario == null) mergedNorm.comentario = comentarioVal;
-          return mergedNorm;
-        })
-      );
-
-      cancelEdit();
+      const nextCache = mergeIntoCache(updated);
+      setRows(nextCache);
+      broadcastInvalidate();
+      setEdit(null);
     } catch (e: any) {
-      setSaveErr(e?.message ?? 'Error al guardar');
+      setErr(e?.message ?? 'Error guardando');
     } finally {
       setSaving(false);
     }
-  }, [editingId, saving, draft, rows]);
+  }
 
-  // Guardado con Enter global; en textarea Ctrl/Cmd+Enter
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (editingId == null || saving) return;
-      if (e.key !== 'Enter') return;
-      const el = document.activeElement as HTMLElement | null;
-      const isTextarea = (el?.tagName || '').toLowerCase() === 'textarea';
-      if (isTextarea) {
-        if (e.ctrlKey || e.metaKey) {
-          e.preventDefault();
-          saveEdit();
-        }
-        return;
-      }
-      e.preventDefault();
-      saveEdit();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [editingId, saving, saveEdit]);
-
-  // Navegación: flechas + Shift+rueda
-  const handleWheelHorizontal: React.WheelEventHandler<HTMLDivElement> = (e) => {
-    if (!e.shiftKey) return;
-    e.preventDefault();
-    e.currentTarget.scrollLeft += e.deltaY;
-  };
-  const onBodyKeyDown: React.KeyboardEventHandler<HTMLDivElement> = (e) => {
-    const el = bodyScrollRef.current;
-    if (!el) return;
-    const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-    if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
-    const stepX = 80;
-    const stepY = 40;
-    switch (e.key) {
-      case 'ArrowLeft': e.preventDefault(); el.scrollLeft -= stepX; break;
-      case 'ArrowRight': e.preventDefault(); el.scrollLeft += stepX; break;
-      case 'ArrowUp': e.preventDefault(); el.scrollTop -= stepY; break;
-      case 'ArrowDown': e.preventDefault(); el.scrollTop += stepY; break;
-      case 'Home': e.preventDefault(); el.scrollLeft = 0; break;
-      case 'End': e.preventDefault(); el.scrollLeft = el.scrollWidth; break;
-      default: break;
-    }
-  };
-
-  const tblInput =
-    'w-full rounded-md px-2 py-1 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500';
-
-  /* --------------------------------- Eliminar (individual) -------------------------------- */
-  const openDelete = (id: number) => {
-    setDeleteErr(null);
-    setDeleteAction(null);
-    setDeleteTargetId(id);
-  };
-  const closeDelete = () => {
-    if (deleting) return;
-    setDeleteTargetId(null);
-    setDeleteErr(null);
-    setDeleteAction(null);
-  };
-
-  // El borrado ahora depende de la opción elegida en el modal
-  const doDelete = async (archive: boolean) => {
-    if (deleteTargetId == null) return;
-    try {
-      setDeleting(true);
-      setDeleteErr(null);
-      setDeleteAction(archive ? 'archive' : 'purge');
-
-      // Datos del registro (para posible inventario)
-      const victim = rows.find((r) => r.id === deleteTargetId) || null;
-      if (!victim) throw new Error('Registro no encontrado');
-
-      const victimPlataforma = victim.plataforma_id;
-      const victimCorreo = normalizeEmail(victim.correo);
-      const victimClave = victim.contrasena ?? null;
-
-      // Solo si el usuario eligió "Enviar al inventario"
-      if (archive && victimPlataforma != null && victimCorreo) {
-        await ensureInInventario(victimPlataforma, victimCorreo, victimClave);
-      }
-
-      // Borrado definitivo de cuentascompletas (con cascade)
-      const res = await fetch(`/api/cuentascompletas/${deleteTargetId}?cascade=1`, { method: 'DELETE' });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j?.error ?? 'No se pudo eliminar');
-      }
-
-      setRows((rs) => rs.filter((r) => r.id !== deleteTargetId));
-      // limpiar selección si estaba marcada
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(deleteTargetId);
-        return next;
-      });
-      closeDelete();
-    } catch (e: any) {
-      setDeleteErr(e?.message ?? 'Error al eliminar');
-    } finally {
-      setDeleting(false);
-      setDeleteAction(null);
-    }
-  };
-
-  /* ------------------------------ Selección múltiple ----------------------------- */
+  /* =========================================================
+   * Selección
+   * ======================================================= */
   const isRowSelected = (id: number) => selectedIds.has(id);
   const toggleRow = (id: number, checked: boolean) => {
     setSelectedIds((prev) => {
@@ -721,48 +531,182 @@ export default function CuentasCompletasViewer() {
       return next;
     });
   };
-  const allVisibleIds = viewRows.map((r) => r.id);
+  const allVisibleIds = filtered.map((r) => r.id).filter((id) => Number.isFinite(id));
   const allVisibleSelected = allVisibleIds.length > 0 && allVisibleIds.every((id) => selectedIds.has(id));
   const someVisibleSelected = allVisibleIds.some((id) => selectedIds.has(id));
   const toggleAllVisible = (checked: boolean) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (checked) {
-        for (const id of allVisibleIds) next.add(id);
-      } else {
-        for (const id of allVisibleIds) next.delete(id);
-      }
+      if (checked) for (const id of allVisibleIds) next.add(id);
+      else for (const id of allVisibleIds) next.delete(id);
       return next;
     });
   };
 
-  /* ------------------------------ Eliminación MASIVA ----------------------------- */
-  const openBulk = (ids: number[]) => {
-    const unique = Array.from(new Set(ids));
-    if (unique.length === 0) return;
+  /* =========================================================
+   * Eliminación (individual y masiva) con inventario opcional
+   * ======================================================= */
+  const openDelete = async (id: number, label?: string) => {
+    setDeleteTarget({ id, label });
+    setDeleteErr(null);
+    setDeleteAction(null);
+    setCanArchive(false);
+    setCheckingArchive(true);
 
-    const items: BulkItem[] = [];
-    for (const id of unique) {
-      const r = rows.find((x) => x.id === id);
-      if (!r) continue;
-      items.push({
-        id: r.id,
-        label: `${r.correo} / ${r.nombre ?? r.contacto ?? ''}`.trim(),
-        plataforma_id: r.plataforma_id,
-        correo: normalizeEmail(r.correo),
-        contrasena: r.contrasena ?? null,
+    try {
+      const victimLocal = rows.find((r) => r.id === id) || null;
+      let correo = victimLocal?.correo ?? null;
+      let plataforma_id = victimLocal?.plataforma_id ?? null;
+
+      if (!correo || plataforma_id == null) {
+        const resolved = await (async () => {
+          try {
+            const res = await fetch(`/api/cuentascompletas/${id}`, { cache: 'no-store' });
+            if (!res.ok) return null;
+            const j = await res.json();
+            return {
+              correo: j?.item?.correo ?? j?.correo ?? null,
+              plataforma_id: j?.item?.plataforma_id ?? j?.plataforma_id ?? null,
+            };
+          } catch { return null; }
+        })();
+        if (resolved) {
+          if (!correo) correo = resolved.correo;
+          if (plataforma_id == null) plataforma_id = resolved.plataforma_id;
+        }
+      }
+
+      setDeleteTarget({
+        id,
+        label: label ?? (correo ? correo : `#${id}`),
       });
+
+      if (!correo || plataforma_id == null) { setCanArchive(false); return; }
+
+      // usar SOLO las filas cargadas (lo que "miras")
+      const usesLocal = countLocalByEmailAndPlatform(rows, correo, plataforma_id);
+      setCanArchive(usesLocal <= 1);
+    } catch (e: any) {
+      setDeleteErr(e?.message ?? 'Error al verificar estado del correo.');
+    } finally {
+      setCheckingArchive(false);
     }
-    setBulkItems(items);
-    setBulkSummary(null);
-    setBulkErr(null);
-    setBulkProgress(0);
-    setBulkProcessing(false);
-    setBulkOpen(true);
   };
 
+  const doDelete = async (archive: boolean) => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteErr(null);
+    setDeleteAction(archive ? 'archive' : 'purge');
+    try {
+      let victim = rows.find((r) => r.id === deleteTarget.id) || null;
+      let victimPlataforma = victim?.plataforma_id ?? null;
+      let victimCorreo = victim?.correo ?? null;
+      let victimClave = victim?.contrasena ?? null;
+
+      if ((!victimCorreo || victimPlataforma == null) && archive) {
+        try {
+          const resolved = await fetch(`/api/cuentascompletas/${deleteTarget.id}`, { cache: 'no-store' })
+            .then(r => r.ok ? r.json() : null);
+          if (resolved) {
+            if (!victimCorreo) victimCorreo = resolved?.item?.correo ?? resolved?.correo ?? null;
+            if (victimPlataforma == null) victimPlataforma = resolved?.item?.plataforma_id ?? resolved?.plataforma_id ?? null;
+            if (!victimClave) victimClave = resolved?.item?.contrasena ?? resolved?.contrasena ?? null;
+          }
+        } catch {}
+      }
+
+      if (archive && victimCorreo && victimPlataforma != null) {
+        await ensureInInventario(victimPlataforma as number | null, victimCorreo, victimClave);
+      }
+
+      const res = await fetch(`/api/cuentascompletas/${deleteTarget.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error ?? 'No se pudo eliminar');
+      }
+      await res.json().catch(() => ({}));
+
+      const next = removeFromCache(deleteTarget.id);
+      setRows(next);
+      broadcastInvalidate();
+
+      setDeleteMsg('Cuenta completa eliminada correctamente.');
+      setSelectedIds((prev) => { const s = new Set(prev); s.delete(deleteTarget.id); return s; });
+      setDeleteTarget(null);
+    } catch (e: any) {
+      setDeleteErr(e?.message ?? 'Error al eliminar');
+    } finally {
+      setDeleting(false);
+      setDeleteAction(null);
+    }
+  };
+
+  // ==== BULK ====
+  type Built = {
+    id: number; label?: string; canArchive: boolean;
+    plataforma_id: number | null; correo: string | null; contrasena: string | null;
+  };
+
+  const buildBulkItem = async (id: number): Promise<Built> => {
+    const local = rows.find((r) => r.id === id) || null;
+    let correo = local?.correo ?? null;
+    let plataforma_id = local?.plataforma_id ?? null;
+    let contrasena = local?.contrasena ?? null;
+
+    if (!correo || plataforma_id == null) {
+      const resolved = await (async () => {
+        try {
+          const res = await fetch(`/api/cuentascompletas/${id}`, { cache: 'no-store' });
+          if (!res.ok) return null;
+          const j = await res.json();
+          return {
+            correo: j?.item?.correo ?? j?.correo ?? null,
+            plataforma_id: j?.item?.plataforma_id ?? j?.plataforma_id ?? null,
+            contrasena: j?.item?.contrasena ?? j?.contrasena ?? null,
+          };
+        } catch { return null; }
+      })();
+      if (resolved) {
+        if (!correo) correo = resolved.correo;
+        if (plataforma_id == null) plataforma_id = resolved.plataforma_id;
+        if (!contrasena) contrasena = resolved.contrasena;
+      }
+    }
+
+    let can = false;
+    if (correo && plataforma_id != null) {
+      const usesLocal = countLocalByEmailAndPlatform(rows, correo, plataforma_id);
+      can = usesLocal <= 1;
+    }
+    const label = correo ? correo : `#${id}`;
+    return { id, label, canArchive: can, plataforma_id: plataforma_id ?? null, correo: correo ?? null, contrasena: contrasena ?? null };
+  };
+
+  const openBulk = async (ids: number[]) => {
+    const unique = Array.from(new Set(ids));
+    if (unique.length === 0) return;
+    setBulkOpen(true);
+    setBulkErr(null);
+    setBulkSummary(null);
+    setBulkItems([]);
+    setBulkAssessing(true);
+    try {
+      const items: Built[] = [];
+      for (const id of unique) {
+        // eslint-disable-next-line no-await-in-loop
+        const it = await buildBulkItem(id);
+        items.push(it);
+      }
+      setBulkItems(items);
+    } catch (e: any) {
+      setBulkErr(e?.message ?? 'Error preparando la eliminación masiva.');
+    } finally {
+      setBulkAssessing(false);
+    }
+  };
   const openBulkSelected = () => openBulk(Array.from(selectedIds));
-  const openBulkAllView = () => openBulk(viewRows.map((r) => r.id));
+  const openBulkAllView = () => openBulk(filtered.map((r) => r.id));
 
   const runBulk = async (preferArchive: boolean) => {
     if (!bulkOpen || bulkItems.length === 0) return;
@@ -775,21 +719,19 @@ export default function CuentasCompletasViewer() {
     for (let i = 0; i < bulkItems.length; i++) {
       const it = bulkItems[i];
       try {
-        if (preferArchive) {
-          await ensureInInventario(it.plataforma_id, it.correo, it.contrasena);
+        if (preferArchive && it.canArchive && it.correo && it.plataforma_id != null) {
+          // eslint-disable-next-line no-await-in-loop
+          await ensureInInventario(it.plataforma_id, it.correo, it.contrasena ?? null);
         }
-        const res = await fetch(`/api/cuentascompletas/${it.id}?cascade=1`, { method: 'DELETE' });
+        // eslint-disable-next-line no-await-in-loop
+        const res = await fetch(`/api/cuentascompletas/${it.id}`, { method: 'DELETE' });
         if (!res.ok) {
           failed++;
         } else {
-          if (preferArchive) archived++; else purged++;
-          // quitar de UI y selección
+          if (preferArchive && it.canArchive && it.correo && it.plataforma_id != null) archived++; else purged++;
           setRows((rs) => rs.filter((r) => r.id !== it.id));
-          setSelectedIds((prev) => {
-            const next = new Set(prev);
-            next.delete(it.id);
-            return next;
-          });
+          setSelectedIds((prev) => { const next = new Set(prev); next.delete(it.id); return next; });
+          removeFromCache(it.id);
         }
       } catch {
         failed++;
@@ -798,622 +740,550 @@ export default function CuentasCompletasViewer() {
       }
     }
 
+    broadcastInvalidate();
     setBulkSummary({ total, archived, purged, failed });
     setBulkProcessing(false);
   };
 
+  /* =========================================================
+   * Render
+   * ======================================================= */
   const selectedCount = selectedIds.size;
 
-  /* --------------------------------- Render -------------------------------- */
   return (
-    <div className="space-y-4">
+    <div className="p-4">
+      <h2 className="text-xl font-semibold text-neutral-100 mb-3">Ver/Editar Cuentas Completas</h2>
+
       {/* Filtros */}
-      <div className="grid gap-3 sm:grid-cols-[1fr_260px_auto_auto]">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center mb-3">
         <input
-          type="text"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por nombre, correo, contacto, proveedor, estado, comentario, totales… (Shift+rueda = scroll horizontal)"
-          className="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+          placeholder="Buscar por nombre, contacto, correo, proveedor, estado, comentario… | Shift+rueda = scroll horizontal"
+          className="flex-1 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
         />
-
-        <div>
-          <label className="block text-sm mb-1 text-neutral-300">Plataforma (server)</label>
-          <select
-            className="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
-            value={plataformaId === '' ? '' : String(plataformaId)}
-            onChange={(e) => setPlataformaId(e.target.value ? Number(e.target.value) : '')}
-            disabled={platLoading || !!platError}
-          >
-            <option value="">Todas</option>
-            {plataformas.map((p) => (
-              <option key={p.id} value={p.id}>
-                {(p as any).nombre ?? p.id}
-              </option>
-            ))}
-          </select>
-        </div>
+        <select
+          value={platFilter === 'all' ? '' : String(platFilter)}
+          onChange={(e) => setPlatFilter(e.target.value ? Number(e.target.value) : 'all')}
+          className="w-64 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
+        >
+          <option value="">Todas</option>
+          {plataformas.map((p) => (
+            <option key={p.id} value={p.id}>{p.nombre}</option>
+          ))}
+        </select>
 
         <button
-          type="button"
-          onClick={fetchFirstPage}
-          className="h-10 self-end rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 hover:bg-neutral-800"
+          onClick={forceRefresh}
+          disabled={loading}
+          className="px-4 py-2 rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-100 hover:bg-neutral-800 disabled:opacity-60"
         >
-          Aplicar filtros
-        </button>
-
-        <button
-          type="button"
-          onClick={fetchFirstPage}
-          className="h-10 self-end rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 hover:bg-neutral-800"
-        >
-          Refrescar
+          {loading ? 'Actualizando…' : 'Refrescar'}
         </button>
       </div>
 
       {/* Barra de acciones masivas */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
         <div className="text-sm text-neutral-300">
           Seleccionados: <span className="font-semibold">{selectedCount}</span>
         </div>
-
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={openBulkSelected}
             disabled={selectedCount === 0 || loading}
             className="rounded-lg border border-red-700 bg-red-800/40 px-3 py-1.5 text-red-100 hover:bg-red-800/60 disabled:opacity-50"
-            title="Enviar al inventario (si lo eliges) y eliminar / o eliminar sin archivar"
+            title="Si es la última relación por correo+plataforma → inventario; si no → eliminar"
           >
             Eliminar seleccionados
           </button>
-
           <button
             type="button"
             onClick={openBulkAllView}
-            disabled={viewRows.length === 0 || loading}
+            disabled={filtered.length === 0 || loading}
             className="rounded-lg border border-red-700 bg-red-800/40 px-3 py-1.5 text-red-100 hover:bg-red-800/60 disabled:opacity-50"
-            title="Abrir modal para eliminar todo lo que aparece en la vista"
           >
             Eliminar todo (vista)
           </button>
-
           <button
             type="button"
             onClick={() => setSelectedIds(new Set())}
             disabled={selectedCount === 0}
             className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-neutral-100 hover:bg-neutral-800 disabled:opacity-50"
-            title="Limpiar selección"
           >
             Limpiar selección
           </button>
         </div>
       </div>
 
-      {/* Estado */}
-      {loading && <div className="rounded-xl border border-neutral-800 bg-neutral-950/40 p-4 text-sm text-neutral-300">Cargando cuentas…</div>}
-      {err && <div className="rounded-xl border border-red-800/50 bg-red-950/30 p-4 text-sm text-red-200">Error: {err}</div>}
-
-      {/* Aviso búsqueda server */}
-      {q && (
-        <div className="text-xs text-neutral-400">
-          {serverSearching ? 'Buscando en el servidor…' : serverSearchErr ? `Búsqueda local activa (error server: ${serverSearchErr})` : 'Combinando resultados locales + servidor'}
-        </div>
-      )}
-
       {/* Tabla */}
-      {!loading && !err && viewRows.length > 0 && (
-        <div className="rounded-2xl border border-neutral-800 bg-neutral-950/40 overflow-hidden">
-          <div
-            ref={bodyScrollRef}
-            className="custom-scroll overflow-x-auto max-h-[70vh] overflow-y-auto focus:outline-none"
-            onWheel={handleWheelHorizontal}
-            onKeyDown={onBodyKeyDown}
-            tabIndex={0}
-          >
-            <table className="min-w-[2250px] w-full table-fixed">
-              <thead>
-                <tr className="border-b border-neutral-800">
-                  {/* Selección */}
-                  <Th className="w-10 text-center">
-                    <input
-                      type="checkbox"
-                      aria-label="Seleccionar todo"
-                      checked={allVisibleSelected}
-                      ref={(el) => {
-                        if (el) el.indeterminate = !allVisibleSelected && someVisibleSelected;
-                      }}
-                      onChange={(e) => toggleAllVisible(e.target.checked)}
-                    />
-                  </Th>
+      <div className="overflow-auto rounded-xl border border-neutral-800">
+        <table className="min-w-[1200px] w-full text-sm text-neutral-100">
+          <thead className="bg-neutral-900/70 border-b border-neutral-800 sticky top-0 z-10">
+            <tr>
+              <th className="px-3 py-2 text-center w-10">
+                <input
+                  type="checkbox"
+                  aria-label="Seleccionar todo"
+                  checked={allVisibleSelected}
+                  ref={(el) => { if (el) el.indeterminate = !allVisibleSelected && someVisibleSelected; }}
+                  onChange={(e) => toggleAllVisible(e.target.checked)}
+                />
+              </th>
+              <th className="px-3 py-2 text-left w-20">Acciones</th>
+              <th className="px-3 py-2 text-left w-40">Plataforma</th>
+              <th className="px-3 py-2 text-left w-44">Contacto</th>
+              <th className="px-3 py-2 text-left w-40">Nombre</th>
+              <th className="px-3 py-2 text-left w-[280px]">Correo</th>
+              <th className="px-3 py-2 text-left w-[220px]">Clave</th>
+              <th className="px-3 py-2 text-right w-28">Total</th>
+              <th className="px-3 py-2 text-right w-28">Pagado Prov.</th>
+              <th className="px-3 py-2 text-right w-28">Ganado</th>
+              <th className="px-3 py-2 text-center w-16">Meses</th>
+              <th className="px-3 py-2 text-center w-28">Compra</th>
+              <th className="px-3 py-2 text-center w-28">Vence</th>
+              <th className="px-3 py-2 text-left w-28">Estado</th>
+              <th className="px-3 py-2 text-left w-40">Proveedor</th>
+              <th className="px-3 py-2 text-left">Comentario</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((r, idx) => (
+              <tr
+                key={r.id ?? `row-${idx}`}
+                className="border-b border-neutral-800 hover:bg-neutral-900/30"
+                onDoubleClick={() => openEdit(r)}
+              >
+                <td className="px-3 py-2 text-center">
+                  <input
+                    type="checkbox"
+                    checked={isRowSelected(r.id)}
+                    onChange={(e) => toggleRow(r.id, e.target.checked)}
+                  />
+                </td>
 
-                  <Th className="w-28 text-center">Acciones</Th>
-                  <Th className="w-48">Plataforma</Th>
-                  <Th className="w-40">Contacto</Th>
-                  <Th className="w-40">Nombre</Th>
-                  <Th className="w-60">Correo</Th>
-                  <Th className="w-40">Clave</Th>
-                  <Th className="w-36 text-right">Total</Th>
-                  <Th className="w-40 text-right">Pagado prov.</Th>
-                  <Th className="w-36 text-right">Ganado</Th>
-                  <Th className="w-28">Meses</Th>
-                  <Th className="w-36">Compra</Th>
-                  <Th className="w-36">Vence</Th>
-                  <Th className="w-32">Estado</Th>
-                  <Th className="w-40">Proveedor</Th>
-                  <Th className="w-[520px] min-w-[380px]">Comentario</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {viewRows.map((row, idx) => {
-                  const isEditing = editingId === row.id;
-                  const checked = isRowSelected(row.id);
-
-                  return (
-                    <tr
-                      key={row.id}
-                      onDoubleClick={(e) => {
-                        if (isEditing) return;
-                        const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-                        if (['button', 'a', 'input', 'textarea', 'select', 'svg', 'path', 'label'].includes(tag || '')) return;
-                        beginEdit(row);
-                      }}
-                      className={`border-b border-neutral-900 ${idx % 2 === 0 ? 'bg-neutral-900/30' : 'bg-transparent'} hover:bg-neutral-800/40 ${!isEditing ? 'cursor-pointer' : ''}`}
+                <td className="px-3 py-2">
+                  <div className="flex gap-2">
+                    <button
+                      title="Editar"
+                      onClick={() => openEdit(r)}
+                      className="text-neutral-300 hover:text-white inline-flex p-1 rounded-md hover:bg-neutral-800/60"
+                      aria-label="Editar"
                     >
-                      {/* Checkbox selección */}
-                      <Td className="text-center">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e) => toggleRow(row.id, e.target.checked)}
-                          aria-label={`Seleccionar fila ${row.id}`}
-                        />
-                      </Td>
+                      {/* lápiz */}
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                      </svg>
+                    </button>
+                    <button
+                      title="Eliminar"
+                      onClick={() => openDelete(r.id, r.correo ?? undefined)}
+                      className="text-rose-300 hover:text-rose-200 inline-flex p-1 rounded-md hover:bg-rose-900/30"
+                      aria-label="Eliminar"
+                    >
+                      {/* papelera */}
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                        <path d="M10 11v6" />
+                        <path d="M14 11v6" />
+                        <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                      </svg>
+                    </button>
+                  </div>
+                </td>
 
-                      {/* Acciones */}
-                      <Td className="text-center">
-                        {!isEditing ? (
-                          <div className="flex items-center justify-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => beginEdit(row)}
-                              className="inline-flex items-center justify-center rounded-md p-2 text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-600"
-                              aria-label={`Editar fila ${row.id}`}
-                              title={`Editar fila ${row.id}`}
-                            >
-                              <PencilIcon />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openDelete(row.id)}
-                              className="inline-flex items-center justify-center rounded-md p-2 text-red-300 hover:bg-red-800/20 hover:text-red-100 focus:outline-none focus:ring-2 focus:ring-red-600"
-                              aria-label={`Eliminar fila ${row.id}`}
-                              title={`Eliminar fila ${row.id}`}
-                            >
-                              <TrashIcon />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-center gap-2">
-                            <button
-                              type="button"
-                              onClick={saveEdit}
-                              disabled={saving}
-                              className="inline-flex items-center justify-center rounded-md p-2 text-emerald-200 hover:bg-emerald-800/30 hover:text-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:opacity-50"
-                              title="Guardar cambios (Enter o Ctrl/Cmd+Enter en comentario)"
-                              aria-label="Guardar"
-                            >
-                              <CheckIcon />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={cancelEdit}
-                              disabled={saving}
-                              className="inline-flex items-center justify-center rounded-md p-2 text-red-200 hover:bg-red-800/30 hover:text-red-100 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-50"
-                              title="Cancelar"
-                              aria-label="Cancelar"
-                            >
-                              <XIcon />
-                            </button>
-                          </div>
-                        )}
-                      </Td>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  {plataformas.find((p) => p.id === r.plataforma_id)?.nombre ?? '—'}
+                </td>
+                <td className="px-3 py-2 whitespace-nowrap">{r.contacto || '—'}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{r.nombre || '—'}</td>
 
-                      {/* Plataforma (no editable) */}
-                      <Td>{platformMap.get(row.plataforma_id) ?? row.plataforma_id}</Td>
+                <td className="px-3 py-2">
+                  <span className="inline-block max-w-[260px] truncate align-bottom" title={r.correo ?? ''}>
+                    {r.correo || '—'}
+                  </span>
+                </td>
+                <td className="px-3 py-2">
+                  <span className="inline-block max-w-[200px] truncate align-bottom" title={r.contrasena ?? ''}>
+                    {r.contrasena || '—'}
+                  </span>
+                </td>
 
-                      {/* Contacto */}
-                      <Td title={row.contacto} className="font-medium">
-                        {!isEditing ? (
-                          row.contacto
-                        ) : (
-                          <input
-                            className={tblInput}
-                            value={(draft.contacto as string) ?? row.contacto}
-                            onChange={(e) => setDraft((d) => ({ ...d, contacto: e.target.value }))}
-                          />
-                        )}
-                      </Td>
-
-                      {/* Nombre */}
-                      <Td title={row.nombre ?? ''}>
-                        {!isEditing ? (
-                          row.nombre ?? '—'
-                        ) : (
-                          <input
-                            className={tblInput}
-                            value={(draft.nombre as string) ?? row.nombre ?? ''}
-                            onChange={(e) => setDraft((d) => ({ ...d, nombre: e.target.value }))}
-                          />
-                        )}
-                      </Td>
-
-                      {/* Correo */}
-                      <Td title={row.correo}>
-                        {!isEditing ? (
-                          row.correo
-                        ) : (
-                          <input
-                            type="email"
-                            className={tblInput}
-                            value={(draft.correo as string) ?? row.correo}
-                            onChange={(e) => setDraft((d) => ({ ...d, correo: e.target.value }))}
-                          />
-                        )}
-                      </Td>
-
-                      {/* Clave */}
-                      <Td title={row.contrasena ?? ''}>
-                        {!isEditing ? (
-                          row.contrasena ?? '—'
-                        ) : (
-                          <input
-                            type="text"
-                            className={tblInput}
-                            value={(draft.contrasena as string) ?? row.contrasena ?? ''}
-                            onChange={(e) => setDraft((d) => ({ ...d, contrasena: e.target.value }))}
-                            placeholder="Opcional"
-                          />
-                        )}
-                      </Td>
-
-                      {/* Total (cliente) */}
-                      <Td className="text-right tabular-nums">
-                        {!isEditing ? (
-                          fmtMoney(row.total_pagado)
-                        ) : (
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            className={`${tblInput} text-right tabular-nums`}
-                            value={draft.total_pagado == null ? '' : String(draft.total_pagado)}
-                            onChange={(e) => setDraft((d) => applyGanadoRule({ ...d, total_pagado: e.target.value }))}
-                          />
-                        )}
-                      </Td>
-
-                      {/* Pagado proveedor */}
-                      <Td className="text-right tabular-nums">
-                        {!isEditing ? (
-                          fmtMoney(row.total_pagado_proveedor)
-                        ) : (
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            className={`${tblInput} text-right tabular-nums`}
-                            value={draft.total_pagado_proveedor == null ? '' : String(draft.total_pagado_proveedor)}
-                            onChange={(e) =>
-                              setDraft((d) => applyGanadoRule({ ...d, total_pagado_proveedor: e.target.value }))
-                            }
-                          />
-                        )}
-                      </Td>
-
-                      {/* Ganado */}
-                      <Td className="text-right tabular-nums">
-                        {!isEditing ? (
-                          fmtMoney(row.total_ganado)
-                        ) : (
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            className={`${tblInput} text-right tabular-nums`}
-                            value={draft.total_ganado == null ? '' : String(draft.total_ganado)}
-                            onChange={(e) => setDraft((d) => ({ ...d, total_ganado: e.target.value }))}
-                          />
-                        )}
-                      </Td>
-
-                      {/* Meses */}
-                      <Td>
-                        {!isEditing ? (
-                          row.meses_pagados == null ? '—' : String(row.meses_pagados)
-                        ) : (
-                          <input
-                            type="number"
-                            min={0}
-                            className={tblInput}
-                            value={draft.meses_pagados == null || (draft.meses_pagados as any) === '' ? '' : String(draft.meses_pagados)}
-                            onChange={(e) =>
-                              setDraft((d) =>
-                                maybeAutoVencimiento({
-                                  ...d,
-                                  meses_pagados: e.target.value === '' ? ('' as any) : Number(e.target.value),
-                                })
-                              )
-                            }
-                          />
-                        )}
-                      </Td>
-
-                      {/* Compra */}
-                      <Td>
-                        {!isEditing ? (
-                          fmtDate(row.fecha_compra)
-                        ) : (
-                          <input
-                            type="date"
-                            className={tblInput}
-                            value={(draft.fecha_compra as string) ?? toDateInput(row.fecha_compra)}
-                            onChange={(e) => setDraft((d) => maybeAutoVencimiento({ ...d, fecha_compra: e.target.value }))}
-                          />
-                        )}
-                      </Td>
-
-                      {/* Vence */}
-                      <Td>
-                        {!isEditing ? (
-                          fmtDate(row.fecha_vencimiento)
-                        ) : (
-                          <input
-                            type="date"
-                            className={tblInput}
-                            value={(draft.fecha_vencimiento as string) ?? toDateInput(row.fecha_vencimiento)}
-                            onChange={(e) => setDraft((d) => ({ ...d, fecha_vencimiento: e.target.value }))}
-                          />
-                        )}
-                      </Td>
-
-                      {/* Estado */}
-                      <Td>
-                        {!isEditing ? (
-                          row.estado ?? '—'
-                        ) : (
-                          <input
-                            className={tblInput}
-                            value={(draft.estado as string) ?? row.estado ?? ''}
-                            onChange={(e) => setDraft((d) => ({ ...d, estado: e.target.value }))}
-                          />
-                        )}
-                      </Td>
-
-                      {/* Proveedor */}
-                      <Td title={row.proveedor ?? ''}>
-                        {!isEditing ? (
-                          row.proveedor ?? '—'
-                        ) : (
-                          <input
-                            className={tblInput}
-                            value={(draft.proveedor as string) ?? row.proveedor ?? ''}
-                            onChange={(e) => setDraft((d) => ({ ...d, proveedor: e.target.value }))}
-                          />
-                        )}
-                      </Td>
-
-                      {/* Comentario */}
-                      <Td title={row.comentario ?? ''} className="align-top !whitespace-pre-wrap break-words" onDoubleClick={() => beginEdit(row)}>
-                        {!isEditing ? (
-                          <div className="whitespace-pre-wrap break-words">{row.comentario ?? '—'}</div>
-                        ) : (
-                          <textarea
-                            className={`${tblInput} resize-y whitespace-pre-wrap`}
-                            rows={3}
-                            value={(draft.comentario as string) ?? row.comentario ?? ''}
-                            onChange={(e) => setDraft((d) => ({ ...d, comentario: e.target.value }))}
-                            onKeyDown={(e) => {
-                              if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                                e.preventDefault();
-                                saveEdit();
-                              }
-                            }}
-                            placeholder="Enter = salto • Ctrl/Cmd+Enter = guardar"
-                          />
-                        )}
-                      </Td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Footer / Paginación */}
-          <div className="flex items-center justify-between gap-3 p-3 border-t border-neutral-800">
-            <div className="text-sm text-neutral-300">
-              {initialLoaded ? `${rows.length} fila(s) cargadas` : '—'}
-              {plataformaId !== '' && <> · Plataforma {String(plataformaId)}</>}
-              {q && <> · {serverSearching ? 'buscando…' : `+${serverResults.length} resultado(s) de servidor`}</>}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={fetchFirstPage}
-                className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-neutral-100 hover:bg-neutral-800"
-                disabled={loading}
-              >
-                Refrescar
-              </button>
-              <button
-                type="button"
-                onClick={fetchNextPage}
-                className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-neutral-100 hover:bg-neutral-800 disabled:opacity-50"
-                disabled={loading || nextCursor == null}
-                title={nextCursor == null ? 'No hay más' : `Seguir desde id ${nextCursor}`}
-              >
-                {loading ? 'Cargando…' : nextCursor == null ? 'No hay más' : 'Cargar más'}
-              </button>
-            </div>
-          </div>
-
-          {saveErr && <div className="m-3 rounded-lg border border-red-800/50 bg-red-950/30 p-3 text-sm text-red-200">{saveErr}</div>}
-        </div>
-      )}
-
-      {!loading && !err && viewRows.length === 0 && (
-        <div className="rounded-xl border border-neutral-800 bg-neutral-950/40 p-4 text-sm text-neutral-300">
-          No se encontraron resultados con los filtros actuales.
-        </div>
-      )}
-
-      {/* Modal de eliminación con dos opciones (individual) */}
-      {deleteTargetId != null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={closeDelete}>
-          <div
-            className="w-full max-w-md rounded-xl border border-neutral-700 bg-neutral-900 p-4 text-neutral-100 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-labelledby="modal-title"
-            aria-describedby="modal-desc"
-          >
-            <h4 id="modal-title" className="text-lg font-semibold mb-2">¿Qué deseas hacer con la cuenta #{deleteTargetId}?</h4>
-            <p id="modal-desc" className="text-sm text-neutral-300">
-              Elige <span className="font-semibold">Enviar al inventario</span> para archivarla (se guardará correo y, si existe, la clave)
-              y luego se eliminará; o <span className="font-semibold">Eliminar definitivamente</span> para borrar sin archivar.
-            </p>
-
-            {deleteErr && (
-              <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">{deleteErr}</div>
+                <td className="px-3 py-2 text-right whitespace-nowrap">{money(r.total_pagado)}</td>
+                <td className="px-3 py-2 text-right whitespace-nowrap">{money(r.total_pagado_proveedor)}</td>
+                <td className="px-3 py-2 text-right whitespace-nowrap">{money(r.total_ganado)}</td>
+                <td className="px-3 py-2 text-center">{r.meses_pagados ?? '—'}</td>
+                <td className="px-3 py-2 text-center whitespace-nowrap">{r.fecha_compra || '—'}</td>
+                <td className="px-3 py-2 text-center whitespace-nowrap">{r.fecha_vencimiento || '—'}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{r.estado || '—'}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{r.proveedor || '—'}</td>
+                <td className="px-3 py-2">
+                  <span className="inline-block max-w-[420px] truncate align-bottom" title={r.comentario ?? ''}>
+                    {r.comentario || '—'}
+                  </span>
+                </td>
+              </tr>
+            ))}
+            {!filtered.length && (
+              <tr>
+                <td colSpan={16} className="px-3 py-6 text-center text-neutral-400">
+                  {loading ? 'Cargando…' : 'No se encontraron resultados.'}
+                </td>
+              </tr>
             )}
+          </tbody>
+        </table>
+      </div>
 
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => doDelete(true)}
-                disabled={deleting}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-700 bg-emerald-800/40 px-3 py-2 hover:bg-emerald-800/60 focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:opacity-60"
-                title="Crear/asegurar inventario y eliminar"
-              >
-                {deleting && deleteAction === 'archive' ? 'Enviando…' : 'Enviar al inventario'}
-              </button>
-              <button
-                type="button"
-                onClick={() => doDelete(false)}
-                disabled={deleting}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-700 bg-red-800/40 px-3 py-2 hover:bg-red-800/60 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-60"
-                title="Eliminar sin archivar"
-              >
-                {deleting && deleteAction === 'purge' ? 'Eliminando…' : 'Eliminar definitivamente'}
-              </button>
-            </div>
+      {/* Footer info */}
+      <div className="mt-2 text-sm text-neutral-400">
+        {rows.length} fila(s) en cache · {filtered.length} visible(s)
+        {err && <span className="text-rose-400 ml-2">— {err}</span>}
+        {deleteMsg && <span className="text-emerald-400 ml-2">— {deleteMsg}</span>}
+      </div>
 
-            <div className="mt-3 flex items-center justify-end">
-              <button
-                type="button"
-                onClick={closeDelete}
-                disabled={deleting}
-                className="rounded-lg border border-neutral-600 px-3 py-2 hover:bg-neutral-800 disabled:opacity-50"
+      {/* Modal edición */}
+      {edit && (
+        <ModalPortal>
+          <div
+            className="fixed inset-0 z-50 bg-black/60 overflow-y-auto"
+            onClick={() => !saving && setEdit(null)}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="min-h-screen flex items-center justify-center p-4">
+              <div
+                className="w-full max-w-3xl rounded-2xl border border-neutral-800 bg-neutral-900 text-neutral-100 shadow-xl"
+                onClick={(e) => e.stopPropagation()}
               >
-                Cancelar
-              </button>
+                <div className="px-5 py-3 border-b border-neutral-800 flex items-center justify-between sticky top-0 bg-neutral-900 rounded-t-2xl">
+                  <h3 className="font-semibold">Editar cuenta #{edit.id}</h3>
+                  <button className="px-2 py-1 hover:text-white" onClick={() => setEdit(null)} disabled={saving}>
+                    ✕
+                  </button>
+                </div>
+
+                <div className="p-5 grid gap-4 sm:grid-cols-2">
+                  <label className="grid gap-1">
+                    <span className="text-sm text-neutral-300">Contacto</span>
+                    <input
+                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
+                      value={edit.contacto ?? ''}
+                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), contacto: e.target.value }))}
+                    />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="text-sm text-neutral-300">Nombre</span>
+                    <input
+                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
+                      value={edit.nombre ?? ''}
+                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), nombre: e.target.value }))}
+                    />
+                  </label>
+
+                  <label className="grid gap-1">
+                    <span className="text-sm text-neutral-300">Correo</span>
+                    <input
+                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
+                      value={edit.correo ?? ''}
+                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), correo: e.target.value }))}
+                    />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="text-sm text-neutral-300">Contraseña</span>
+                    <input
+                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
+                      value={edit.contrasena ?? ''}
+                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), contrasena: e.target.value }))}
+                    />
+                  </label>
+
+                  <label className="grid gap-1">
+                    <span className="text-sm text-neutral-300">Fecha compra (YYYY-MM-DD)</span>
+                    <input
+                      type="date"
+                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
+                      value={edit.fecha_compra ?? ''}
+                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), fecha_compra: e.target.value }))}
+                    />
+                  </label>
+
+                  <label className="grid gap-1">
+                    <span className="text-sm text-neutral-300">Meses pagados</span>
+                    <input
+                      type="number"
+                      min={1}
+                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
+                      value={String(edit.meses_pagados ?? '')}
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          meses_pagados: e.target.value === '' ? null : Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </label>
+
+                  <label className="grid gap-1">
+                    <span className="text-sm text-neutral-300">Fecha vencimiento (auto)</span>
+                    <input
+                      type="date"
+                      disabled
+                      readOnly
+                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950/70 text-neutral-400 cursor-not-allowed"
+                      value={edit.fecha_vencimiento ?? ''}
+                    />
+                  </label>
+
+                  <label className="grid gap-1">
+                    <span className="text-sm text-neutral-300">Estado</span>
+                    <input
+                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
+                      value={edit.estado ?? ''}
+                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), estado: e.target.value }))}
+                    />
+                  </label>
+
+                  <label className="grid gap-1">
+                    <span className="text-sm text-neutral-300">Proveedor</span>
+                    <input
+                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
+                      value={edit.proveedor ?? ''}
+                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), proveedor: e.target.value }))}
+                    />
+                  </label>
+
+                  <label className="grid gap-1">
+                    <span className="text-sm text-neutral-300">Total pagado</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
+                      value={edit.total_pagado ?? ''}
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          total_pagado: e.target.value === '' ? null : Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="text-sm text-neutral-300">Pagado proveedor</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
+                      value={edit.total_pagado_proveedor ?? ''}
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          total_pagado_proveedor: e.target.value === '' ? null : Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="text-sm text-neutral-300">Total ganado</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
+                      value={edit.total_ganado ?? ''}
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          total_ganado: e.target.value === '' ? null : Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </label>
+
+                  <label className="grid gap-1 sm:col-span-2">
+                    <span className="text-sm text-neutral-300">Comentario</span>
+                    <textarea
+                      rows={3}
+                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
+                      value={edit.comentario ?? ''}
+                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), comentario: e.target.value }))}
+                    />
+                  </label>
+                </div>
+
+                <div className="px-5 py-3 border-t border-neutral-800 flex items-center justify-end gap-2 sticky bottom-0 bg-neutral-900 rounded-b-2xl">
+                  <button
+                    className="px-3 py-2 rounded-lg border border-neutral-600 hover:bg-neutral-800"
+                    onClick={() => setEdit(null)}
+                    disabled={saving}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    className="px-3 py-2 rounded-lg border border-emerald-700 bg-emerald-800/40 hover:bg-emerald-800/60 disabled:opacity-60"
+                    onClick={saveEdit}
+                    disabled={saving}
+                  >
+                    {saving ? 'Guardando…' : 'Guardar cambios'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        </ModalPortal>
+      )}
+
+      {/* Modal eliminar (individual) */}
+      {deleteTarget && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 bg-black/60 overflow-y-auto" onClick={() => !deleting && setDeleteTarget(null)}>
+            <div className="min-h-screen flex items-center justify-center p-4">
+              <div
+                className="w-full max-w-md rounded-xl border border-neutral-700 bg-neutral-900 p-4 text-neutral-100 shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-labelledby="modal-title"
+                aria-describedby="modal-desc"
+              >
+                <h4 id="modal-title" className="text-lg font-semibold mb-2">Eliminar cuenta completa</h4>
+                <p id="modal-desc" className="text-sm text-neutral-300">
+                  {deleteTarget.label ? <><span className="opacity-80">({deleteTarget.label})</span><br/></> : null}
+                  {checkingArchive
+                    ? 'Verificando si es la última relación por correo y plataforma…'
+                    : canArchive
+                      ? 'Es la última cuenta con este correo en esta plataforma. Puedes enviarla al inventario antes de eliminar.'
+                      : 'Existen más cuentas con este correo en esta plataforma. Solo puedes eliminar definitivamente.'}
+                </p>
+
+                {deleteErr && (
+                  <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">{deleteErr}</div>
+                )}
+
+                <div className={`mt-4 ${canArchive ? 'grid gap-2 sm:grid-cols-2' : 'flex justify-end gap-2'}`}>
+                  {canArchive && (
+                    <button
+                      type="button"
+                      onClick={() => doDelete(true)}
+                      disabled={deleting || checkingArchive}
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-700 bg-emerald-800/40 px-3 py-2 hover:bg-emerald-800/60 focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:opacity-60"
+                      title="Crear/asegurar inventario y eliminar"
+                    >
+                      {deleting && deleteAction === 'archive' ? 'Enviando…' : 'Inventario + Eliminar'}
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => doDelete(false)}
+                    disabled={deleting}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-700 bg-red-800/40 px-3 py-2 hover:bg-red-800/60 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-60"
+                    title="Eliminar sin archivar"
+                  >
+                    {deleting && deleteAction === 'purge' ? 'Eliminando…' : 'Eliminar definitivamente'}
+                  </button>
+                </div>
+
+                <div className="mt-3 flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(null)}
+                    disabled={deleting}
+                    className="rounded-lg border border-neutral-600 px-3 py-2 hover:bg-neutral-800 disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
       )}
 
       {/* Modal eliminación MASIVA */}
       {bulkOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !bulkProcessing && setBulkOpen(false)}>
-          <div
-            className="w-full max-w-xl rounded-xl border border-neutral-700 bg-neutral-900 p-4 text-neutral-100 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-labelledby="bulk-title"
-            aria-describedby="bulk-desc"
-          >
-            <h4 id="bulk-title" className="text-lg font-semibold mb-2">Eliminar {bulkItems.length} cuentas</h4>
+        <ModalPortal>
+          <div className="fixed inset-0 z-50 bg-black/60 overflow-y-auto" onClick={() => !bulkProcessing && setBulkOpen(false)}>
+            <div className="min-h-screen flex items-center justify-center p-4">
+              <div
+                className="w-full max-w-xl rounded-xl border border-neutral-700 bg-neutral-900 p-4 text-neutral-100 shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-labelledby="bulk-title"
+                aria-describedby="bulk-desc"
+              >
+                <h4 id="bulk-title" className="text-lg font-semibold mb-2">Eliminar {bulkItems.length} cuenta(s)</h4>
 
-            <p id="bulk-desc" className="text-sm text-neutral-300">
-              Puedes <strong>enviar al inventario</strong> cada cuenta (correo + clave si hay) y luego eliminarla,
-              o bien <strong>eliminar definitivamente</strong> sin archivar.
-            </p>
+                {bulkAssessing ? (
+                  <p className="text-sm text-neutral-300">Analizando registros para decidir inventario/eliminación…</p>
+                ) : (
+                  <>
+                    <p id="bulk-desc" className="text-sm text-neutral-300">
+                      Para cada registro: si es la última relación por <strong>correo + plataforma</strong>, se enviará al inventario y luego se eliminará; en caso contrario, se eliminará definitivamente.
+                    </p>
 
-            {bulkErr && (
-              <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">{bulkErr}</div>
-            )}
+                    {bulkErr && (
+                      <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">{bulkErr}</div>
+                    )}
 
-            {bulkSummary && (
-              <div className="mt-3 rounded-lg border border-neutral-700 bg-neutral-800/40 p-2 text-sm">
-                <div>Total procesadas: {bulkSummary.total}</div>
-                <div>Enviadas a inventario: {bulkSummary.archived}</div>
-                <div>Eliminadas definitivamente: {bulkSummary.purged}</div>
-                <div>Fallidas: {bulkSummary.failed}</div>
+                    {bulkSummary && (
+                      <div className="mt-3 rounded-lg border border-neutral-700 bg-neutral-800/40 p-2 text-sm">
+                        <div>Total procesados: {bulkSummary.total}</div>
+                        <div>Enviados a inventario: {bulkSummary.archived}</div>
+                        <div>Eliminados definitivamente: {bulkSummary.purged}</div>
+                        <div>Fallidos: {bulkSummary.failed}</div>
+                      </div>
+                    )}
+
+                    {bulkProcessing && (
+                      <div className="mt-3">
+                        <div className="h-2 w-full rounded bg-neutral-800 overflow-hidden">
+                          <div className="h-2 bg-emerald-600" style={{ width: `${bulkProgress}%` }} />
+                        </div>
+                        <div className="mt-1 text-xs text-neutral-400">{bulkProgress}%</div>
+                      </div>
+                    )}
+
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => runBulk(true)}
+                        disabled={bulkAssessing || bulkProcessing || bulkItems.length === 0}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-700 bg-emerald-800/40 px-3 py-2 hover:bg-emerald-800/60 focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:opacity-60"
+                      >
+                        Inventario (cuando aplique) + Eliminar
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => runBulk(false)}
+                        disabled={bulkAssessing || bulkProcessing || bulkItems.length === 0}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-700 bg-red-800/40 px-3 py-2 hover:bg-red-800/60 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-60"
+                      >
+                        Eliminar definitivamente
+                      </button>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setBulkOpen(false)}
+                        disabled={bulkProcessing}
+                        className="rounded-lg border border-neutral-600 px-3 py-2 hover:bg-neutral-800 disabled:opacity-50"
+                      >
+                        Cerrar
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
-            )}
-
-            {bulkProcessing && (
-              <div className="mt-3">
-                <div className="h-2 w-full rounded bg-neutral-800 overflow-hidden">
-                  <div className="h-2 bg-emerald-600" style={{ width: `${bulkProgress}%` }} />
-                </div>
-                <div className="mt-1 text-xs text-neutral-400">{bulkProgress}%</div>
-              </div>
-            )}
-
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => runBulk(true)}
-                disabled={bulkProcessing || bulkItems.length === 0}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-700 bg-emerald-800/40 px-3 py-2 hover:bg-emerald-800/60 focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:opacity-60"
-                title="Enviar al inventario y eliminar"
-              >
-                {bulkProcessing ? 'Procesando…' : 'Inventario + Eliminar'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => runBulk(false)}
-                disabled={bulkProcessing || bulkItems.length === 0}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-700 bg-red-800/40 px-3 py-2 hover:bg-red-800/60 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-60"
-                title="Eliminar todo definitivamente"
-              >
-                {bulkProcessing ? 'Procesando…' : 'Eliminar definitivamente'}
-              </button>
-            </div>
-
-            <div className="mt-3 flex items-center justify-end">
-              <button
-                type="button"
-                onClick={() => setBulkOpen(false)}
-                disabled={bulkProcessing}
-                className="rounded-lg border border-neutral-600 px-3 py-2 hover:bg-neutral-800 disabled:opacity-50"
-              >
-                Cerrar
-              </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
-
-      {/* Scrollbar discreto */}
-      <style jsx global>{`
-        .custom-scroll {
-          scrollbar-width: thin;
-          scrollbar-color: rgba(120,120,120,0.35) transparent;
-        }
-        .custom-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
-        .custom-scroll::-webkit-scrollbar-thumb {
-          background-color: rgba(120,120,120,0.35);
-          border-radius: 9999px;
-          border: 2px solid transparent;
-          background-clip: padding-box;
-        }
-        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
-        .custom-scroll:hover::-webkit-scrollbar-thumb { background-color: rgba(120,120,120,0.5); }
-      `}</style>
     </div>
   );
 }

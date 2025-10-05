@@ -80,9 +80,6 @@ const clamp = (n: number | null | undefined, min: number, max: number, fallback:
 
 /* ========================================================================
  * GET /api/pantallas
- *  - Filtros: plataforma_id | plataformaId | pid, cuenta_id, correo, q
- *  - Cursor:  cursor=<id>&limit=300 (máx 5000)
- *  - Orden:   fecha_vencimiento asc, id asc
  * ======================================================================== */
 export async function GET(req: Request) {
   try {
@@ -110,12 +107,10 @@ export async function GET(req: Request) {
 
     const where: any = {};
 
-    // Filtro por cuenta
     if (cuentaIdRaw && !Number.isNaN(Number(cuentaIdRaw))) {
       where.cuenta_id = Number(cuentaIdRaw);
     }
 
-    // Filtros sobre la relación cuentascompartidas
     const ccWhere: any = {};
     if (plataformaRaw && !Number.isNaN(Number(plataformaRaw))) {
       ccWhere.plataforma_id = Number(plataformaRaw);
@@ -127,7 +122,6 @@ export async function GET(req: Request) {
       where.cuentascompartidas = ccWhere;
     }
 
-    // Búsqueda libre
     if (qRaw) {
       const qLower = qRaw.toLowerCase();
       const qNoSpaces = qRaw.replace(/\s+/g, '');
@@ -165,18 +159,14 @@ export async function GET(req: Request) {
       cuenta_id: r.cuenta_id == null ? null : Number(r.cuenta_id),
       contacto: r.contacto,
       nro_pantalla: String(r.nro_pantalla ?? ''),
-      // Fechas como YMD (UTC) para que coincidan 1:1 con BD
       fecha_compra: toYMDUTC(r.fecha_compra ?? null),
       fecha_vencimiento: toYMDUTC(r.fecha_vencimiento ?? null),
       meses_pagados: r.meses_pagados == null ? null : Number(r.meses_pagados),
-
       total_pagado: r.total_pagado == null ? null : Number(r.total_pagado),
       total_pagado_proveedor: r.total_pagado_proveedor == null ? null : Number(r.total_pagado_proveedor),
       total_ganado: r.total_ganado == null ? null : Number(r.total_ganado),
-
       estado: r.estado ?? null,
       comentario: r.comentario ?? null,
-
       correo: r.cuentascompartidas?.correo ?? null,
       plataforma_id:
         r.cuentascompartidas?.plataforma_id == null ? null : Number(r.cuentascompartidas.plataforma_id),
@@ -199,28 +189,21 @@ export async function GET(req: Request) {
 
 /* ========================================================================
  * POST /api/pantallas
- *  - Parser de fechas tolerante (YYYY-MM-DD, ISO, DD/MM/YYYY, YYYY/MM/DD, timestamp)
- *  - Guarda fechas como medianoche UTC para evitar corrimientos
- *  - Upsert usuario (actualiza nombre) + reusa/crea cuenta y actualiza contraseña/proveedor si cambian
- *  - ✅ Fix TS: sin importar `Prisma`; usamos tipos inferidos de `prisma`
+ *  - `cuenta_id` es OBLIGATORIO (tu schema lo exige). Si no se puede resolver, 400.
+ *  - Lee con include tras crear para devolver aplanado y tipado.
  * ======================================================================== */
 export async function POST(req: Request) {
   try {
     const body = await req.json();
 
     let {
-      // usuarios
       contacto,
       nombre,
-
-      // cuentascompartidas (opcionales si ya llega cuenta_id)
       cuenta_id,
       plataforma_id,
       correo,
       contrasena,
       proveedor,
-
-      // pantallas
       nro_pantalla,
       fecha_compra,
       fecha_vencimiento,
@@ -228,8 +211,6 @@ export async function POST(req: Request) {
       total_pagado,
       estado,
       comentario,
-
-      // alias totales admitidos
       total_pagado_proveedor,
       pago_total_proveedor,
       pagado_proveedor,
@@ -270,7 +251,6 @@ export async function POST(req: Request) {
         : Number(totalPagadoVal) - Number(totalPagadoProvVal));
     const totalGanadoVal = toDecStr(totalGanadoRaw);
 
-    // Fechas (tolerantes) → Date en medianoche UTC
     const fechaCompraDate = parseDateLooseToUTC(fecha_compra);
     const fechaVenceDate = parseDateLooseToUTC(fecha_vencimiento);
     if (!fechaCompraDate || !fechaVenceDate) {
@@ -284,21 +264,12 @@ export async function POST(req: Request) {
       );
     }
 
-    // Si tu columna pantallas.cuenta_id es NOT NULL, cámbialo a true
-    const CUENTA_ID_ES_OBLIGATORIO = false;
-    if (CUENTA_ID_ES_OBLIGATORIO && !cuenta_id && !(correoNorm && plataforma_id)) {
-      return NextResponse.json(
-        { error: 'missing_cuenta', detail: 'Se requiere cuenta_id o (correo + plataforma_id).' },
-        { status: 400 }
-      );
-    }
-
     const created = await prisma.$transaction(async (tx) => {
-      /* 1) Usuario (upsert por contacto) - si envías nombre, lo actualiza */
+      // 1) Usuario (upsert)
       const nombreNorm =
-      Object.prototype.hasOwnProperty.call(body ?? {}, 'nombre')
-        ? ((nombre ?? '').toString().trim() || null)
-        : undefined;
+        Object.prototype.hasOwnProperty.call(body ?? {}, 'nombre')
+          ? ((nombre ?? '').toString().trim() || null)
+          : undefined;
 
       await tx.usuarios.upsert({
         where: { contacto: contactoNorm },
@@ -306,7 +277,7 @@ export async function POST(req: Request) {
         create: { contacto: contactoNorm, nombre: nombreNorm ?? null },
       });
 
-      /* 2) Resolver/Asegurar cuenta compartida y actualizar si cambian datos */
+      // 2) Resolver/Asegurar cuenta compartida -> DEBEMOS salir con un número válido
       let cuentaIdFinal: number | undefined = Number.isFinite(Number(cuenta_id))
         ? Number(cuenta_id)
         : undefined;
@@ -325,7 +296,6 @@ export async function POST(req: Request) {
         if (existing?.id) {
           cuentaIdFinal = existing.id;
 
-          // Si el usuario editó la contraseña o proveedor, actualizamos
           const updateCC: Record<string, any> = {};
           if (contrasenaNorm !== undefined && contrasenaNorm !== existing.contrasena) {
             updateCC.contrasena = contrasenaNorm;
@@ -344,7 +314,7 @@ export async function POST(req: Request) {
             data: {
               plataforma_id: Number(plataforma_id),
               correo: correoNorm,
-              contrasena: String(contrasena ?? ''), // si no mandas, se guarda ''
+              contrasena: String(contrasena ?? ''),
               proveedor: (proveedor ?? null) == null ? null : (String(proveedor).trim() || null),
             },
             select: { id: true },
@@ -352,7 +322,6 @@ export async function POST(req: Request) {
           cuentaIdFinal = cc.id;
         }
       } else if (cuentaIdFinal && (contrasenaNorm !== undefined || proveedorNorm !== undefined)) {
-        // Llega cuenta_id explícito: permite actualizar contraseña/proveedor si fueron editados
         const updateCC: Record<string, any> = {};
         if (contrasenaNorm !== undefined) updateCC.contrasena = contrasenaNorm;
         if (proveedorNorm !== undefined) updateCC.proveedor = proveedorNorm;
@@ -364,61 +333,50 @@ export async function POST(req: Request) {
         }
       }
 
-      /* 3) Crear pantalla
-            Importante:
-            - Si hay cuenta_id => incluimos la FK (no puede ser null).
-            - Si NO hay cuenta_id y tu schema lo permite, NO ponemos el campo.
-      */
-      type CreateArgs = Parameters<typeof tx.pantallas.create>[0];
-      type CreateData = CreateArgs['data'];
-
-      const baseData = {
-        contacto: contactoNorm,
-        nro_pantalla: String(nro_pantalla ?? '').trim(),
-        fecha_compra: fechaCompraDate,
-        fecha_vencimiento: fechaVenceDate,
-        meses_pagados: mesesPagadosVal,
-        total_pagado: totalPagadoVal as any,               // DECIMAL
-        total_pagado_proveedor: totalPagadoProvVal as any, // DECIMAL
-        total_ganado: totalGanadoVal as any,               // DECIMAL
-        estado: String(estado).trim(),
-        comentario: (comentario ?? null) == null ? null : String(comentario),
-      } satisfies Omit<CreateData, 'cuenta_id'>;
-
-      let data: CreateData;
-      if (typeof cuentaIdFinal === 'number' && Number.isFinite(cuentaIdFinal)) {
-        data = { ...baseData, cuenta_id: cuentaIdFinal } as CreateData;
-      } else {
-        // si tu schema requiere cuenta_id NOT NULL, no entrar aquí
-        data = baseData as CreateData;
+      // 🔴 Si tu schema exige NOT NULL en cuenta_id, aquí validamos:
+      if (!(typeof cuentaIdFinal === 'number' && Number.isFinite(cuentaIdFinal))) {
+        // Abortamos la transacción lanzando un error controlado
+        throw new Error('missing_cuenta_resuelta');
       }
 
-      const res = await tx.pantallas.create({
-        data,
-        select: {
-          id: true,
-          cuenta_id: true,
-          contacto: true,
-          nro_pantalla: true,
-          fecha_compra: true,
-          fecha_vencimiento: true,
-          meses_pagados: true,
-          total_pagado: true,
-          total_pagado_proveedor: true,
-          total_ganado: true,
-          estado: true,
-          comentario: true,
+      // 3) Crear pantalla (con cuenta_id obligatorio)
+      const base = await tx.pantallas.create({
+        data: {
+          cuenta_id: cuentaIdFinal,               // <— requerido por tu schema
+          contacto: contactoNorm,
+          nro_pantalla: String(nro_pantalla ?? '').trim(),
+          fecha_compra: fechaCompraDate,
+          fecha_vencimiento: fechaVenceDate,
+          meses_pagados: mesesPagadosVal,
+          total_pagado: totalPagadoVal as any,
+          total_pagado_proveedor: totalPagadoProvVal as any,
+          total_ganado: totalGanadoVal as any,
+          estado: String(estado).trim(),
+          comentario: (comentario ?? null) == null ? null : String(comentario),
+        },
+        select: { id: true },
+      });
+
+      // 4) Leer con include para devolver aplanado
+      const full = await tx.pantallas.findUniqueOrThrow({
+        where: { id: base.id },
+        include: {
+          cuentascompartidas: {
+            select: { id: true, correo: true, plataforma_id: true, contrasena: true, proveedor: true },
+          },
+          usuarios: { select: { nombre: true, contacto: true } },
         },
       });
 
-      return res;
+      return full;
     });
 
     // Normalizamos salida para el front
     const out = {
-      ...created,
       id: Number(created.id),
       cuenta_id: created.cuenta_id == null ? null : Number(created.cuenta_id),
+      contacto: created.contacto,
+      nro_pantalla: String(created.nro_pantalla ?? ''),
       fecha_compra: toYMDUTC(created.fecha_compra),
       fecha_vencimiento: toYMDUTC(created.fecha_vencimiento),
       meses_pagados: created.meses_pagados == null ? null : Number(created.meses_pagados),
@@ -426,13 +384,24 @@ export async function POST(req: Request) {
       total_pagado_proveedor:
         created.total_pagado_proveedor == null ? null : Number(created.total_pagado_proveedor),
       total_ganado: created.total_ganado == null ? null : Number(created.total_ganado),
+      estado: created.estado ?? null,
+      comentario: created.comentario ?? null,
+
+      correo: created.cuentascompartidas?.correo ?? null,
+      plataforma_id:
+        created.cuentascompartidas?.plataforma_id == null
+          ? null
+          : Number(created.cuentascompartidas.plataforma_id),
+      contrasena: created.cuentascompartidas?.contrasena ?? null,
+      proveedor: created.cuentascompartidas?.proveedor ?? null,
+      nombre: created.usuarios?.nombre ?? null,
     };
 
     return NextResponse.json(out, { status: 201 });
   } catch (e: any) {
-    if (e?.message === 'missing_cuenta_id_en_schema') {
+    if (e?.message === 'missing_cuenta_resuelta') {
       return NextResponse.json(
-        { error: 'missing_cuenta', detail: 'El schema requiere cuenta_id y no se pudo resolver.' },
+        { error: 'missing_cuenta', detail: 'No se pudo resolver cuenta_id para la pantalla.' },
         { status: 400 }
       );
     }

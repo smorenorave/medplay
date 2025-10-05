@@ -9,6 +9,12 @@ import TextArea from '@/components/ui/TextArea';
 import { fetchPantallasCountByCuentaId } from '@/lib/pantallas';
 import type { Usuario, Cuenta, FormState } from '@/types/pantallas';
 
+// ⬇ Ajusta la ruta si guardaste estos helpers en otro lado
+import {
+  mergePantallaIntoCache,
+  notifyPantallasChanged,
+} from '@/lib/pantallasMutationBus';
+
 /* ===================== Fecha ===================== */
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const toLocalDateStr = (d: Date) =>
@@ -69,7 +75,6 @@ async function fetchListSafe(urls: string[]): Promise<any[]> {
   return [];
 }
 
-/** Conteo robusto por correo (filtra client-side) y por plataforma si se provee */
 async function fetchPantallasCountByEmailPlat(
   email: string,
   plataformaId?: number
@@ -91,7 +96,6 @@ async function fetchPantallasCountByEmailPlat(
   return arr.filter((r: any) => String(r?.correo ?? '').toLowerCase() === key).length;
 }
 
-/** Conteo “inteligente”: prioriza cuenta_id; si no hay, correo+plataforma */
 async function countPantallasSmart(
   email: string,
   cuentaId?: number,
@@ -175,7 +179,7 @@ export default function FormPantallas() {
     return [fav, ...rest];
   }, [plataformas, lastPlatformId]);
 
-  /* ====== Autoselección inicial (usa última plataforma si hay) ====== */
+  /* ===== Autoselección inicial (usa última plataforma si hay) ===== */
   useEffect(() => {
     if (platLoading || platError || !plataformasOrdered.length) return;
     if (form.plataforma_id === 0) {
@@ -526,7 +530,7 @@ export default function FormPantallas() {
     if (form.total_ganado !== txt) setForm((s) => ({ ...s, total_ganado: txt }));
   }, [form.total_pagado, form.total_pagado_proveedor]);
 
-  /* ===== Validación ===== */
+  /* ===== Validación (correo y contraseña obligatorios) ===== */
   const canSubmit = useMemo(() => {
     const plataformaOk = Number.isInteger(form.plataforma_id) && form.plataforma_id > 0;
     const contactoOk = form.contacto.trim() !== '';
@@ -541,56 +545,81 @@ export default function FormPantallas() {
       !form.total_pagado_proveedor ||
       (!Number.isNaN(Number(form.total_pagado_proveedor)) &&
         Number(form.total_pagado_proveedor) >= 0);
-    return plataformaOk && contactoOk && fechasOk && estadoOk && mesesOk && totalOk && totalProvOk;
+
+    // ✅ Nuevos requeridos
+    const correoOk =
+      form.correo.trim() !== '' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo.trim());
+    const passOk = (form.contrasena ?? '').trim() !== '';
+
+    return (
+      plataformaOk &&
+      contactoOk &&
+      fechasOk &&
+      estadoOk &&
+      mesesOk &&
+      totalOk &&
+      totalProvOk &&
+      correoOk &&
+      passOk
+    );
   }, [form]);
 
   /* ===== Payload & submit (abre modal) ===== */
-const buildPayload = () => {
-  const totalPag = toNumOrNull(form.total_pagado);
-  const totalProv = toNumOrNull(form.total_pagado_proveedor);
-  const totalGan = totalPag == null ? null : totalProv == null ? totalPag : totalPag - totalProv;
+  const buildPayload = () => {
+    const totalPag = toNumOrNull(form.total_pagado);
+    const totalProv = toNumOrNull(form.total_pagado_proveedor);
+    const totalGan = totalPag == null ? null : totalProv == null ? totalPag : totalPag - totalProv;
 
-  return {
-    cuenta_id: form.cuenta_id ?? null,
-    contacto: normalizeContacto(form.contacto.trim()),
-    nombre: (form.nombre ?? '').trim() || null, // ⬅️  NUEVO: manda el nombre
-    nro_pantalla: String(form.nro_pantalla ?? '').trim() || null,
-    plataforma_id: form.plataforma_id,
-    correo: form.correo.trim().toLowerCase() || null,
-    contrasena: form.contrasena || null,
-    proveedor: form.proveedor.trim() || null,
-    fecha_compra: form.fecha_compra ? new Date(form.fecha_compra).toISOString() : null,
-    fecha_vencimiento: form.fecha_vencimiento
-      ? new Date(form.fecha_vencimiento).toISOString()
-      : null,
-    meses_pagados: form.meses_pagados,
-    total_pagado: totalPag == null ? null : Number(totalPag.toFixed(2)),
-    total_pagado_proveedor: totalProv == null ? null : Number(totalProv.toFixed(2)),
-    pago_total_proveedor: totalProv == null ? null : Number(totalProv.toFixed(2)),
-    pagado_proveedor: totalProv == null ? null : Number(totalProv.toFixed(2)),
-    total_ganado: totalGan == null ? null : Number(totalGan.toFixed(2)),
-    ganado: totalGan == null ? null : Number(totalGan.toFixed(2)),
-    estado: form.estado.trim(),
-    comentario: form.comentario.trim() || null,
+    return {
+      cuenta_id: form.cuenta_id ?? null,
+      contacto: normalizeContacto(form.contacto.trim()),
+      nombre: (form.nombre ?? '').trim() || null,
+      nro_pantalla: String(form.nro_pantalla ?? '').trim() || null,
+      plataforma_id: form.plataforma_id,
+      correo: form.correo.trim().toLowerCase() || null,
+      contrasena: form.contrasena || null,
+      proveedor: form.proveedor.trim() || null,
+      fecha_compra: form.fecha_compra ? new Date(form.fecha_compra).toISOString() : null,
+      fecha_vencimiento: form.fecha_vencimiento
+        ? new Date(form.fecha_vencimiento).toISOString()
+        : null,
+      meses_pagados: form.meses_pagados,
+      total_pagado: totalPag == null ? null : Number(totalPag.toFixed(2)),
+      total_pagado_proveedor: totalProv == null ? null : Number(totalProv.toFixed(2)),
+      pago_total_proveedor: totalProv == null ? null : Number(totalProv.toFixed(2)),
+      pagado_proveedor: totalProv == null ? null : Number(totalProv.toFixed(2)),
+      total_ganado: totalGan == null ? null : Number(totalGan.toFixed(2)),
+      ganado: totalGan == null ? null : Number(totalGan.toFixed(2)),
+      estado: form.estado.trim(),
+      comentario: form.comentario.trim() || null,
+    };
   };
-};
-
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setOkMsg(null);
     setErrMsg(null);
+
+    // 🔐 Doble seguridad: correo + contraseña requeridos y válidos
+    const correoTrim = form.correo.trim();
+    if (!correoTrim || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoTrim)) {
+      setErrMsg('El correo es obligatorio y debe ser válido.');
+      return;
+    }
+    if (!form.contrasena?.trim()) {
+      setErrMsg('La contraseña es obligatoria.');
+      return;
+    }
     if (!canSubmit) {
       setErrMsg('Revisa los campos obligatorios y formatos numéricos.');
       return;
     }
 
     try {
-      // Garantizar usuario y cuenta si aplica (previo a confirmar)
       await ensureUsuario(form.contacto, form.nombre || null);
 
       let cuentaId: number | null = form.cuenta_id ?? null;
-      const correo = form.correo.trim();
+      const correo = correoTrim;
       if (correo && form.plataforma_id > 0) {
         const { id } = await ensureCuentaCompartida(correo, form.plataforma_id);
         cuentaId = id;
@@ -607,87 +636,90 @@ const buildPayload = () => {
     }
   }
 
-  /* ===== Confirmar y guardar (sin checkbox, contraseña visible) ===== */
- async function confirmAndSave() {
-  if (!confirmPayload) return;
-  setLoading(true);
-  setErrMsg(null);
-  try {
-    let toSend = confirmPayload;
+  /* ===== Confirmar y guardar ===== */
+  async function confirmAndSave() {
+    if (!confirmPayload) return;
+    setLoading(true);
+    setErrMsg(null);
     try {
-      toSend = JSON.parse(confirmText);
-    } catch {}
+      let toSend = confirmPayload;
+      try {
+        toSend = JSON.parse(confirmText);
+      } catch {}
 
-    const res = await fetch('/api/pantallas', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(toSend),
-    });
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      throw new Error(j?.error ?? 'No se pudo guardar');
-    }
-    const saved = await res.json().catch(() => ({}));
-    setOkMsg(`Guardado correctamente (id: ${saved?.id ?? '—'}).`);
-    setConfirmOpen(false);
+      const res = await fetch('/api/pantallas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(toSend),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error ?? 'No se pudo guardar');
+      }
 
-    // ⬇⬇⬇ NUEVO: limpiar caches para que nombre/clave actualizados se reflejen al instante
-    try {
-      // cache del autocompletado de usuario (nombre)
-      userCache.current?.clear?.();
-      // caches y contadores de correos (cuentas/inventario)
-      setAcctIdMap({});
-      setAcctPassMap({});
-      setInvPassMap({});
+      const saved = await res.json().catch(() => ({}));
+
+      // ✅ Actualiza caché local y notifica al viewer
+      try {
+        mergePantallaIntoCache(saved);
+        notifyPantallasChanged();
+      } catch {}
+
+      setOkMsg(`Guardado correctamente (id: ${saved?.id ?? '—'}).`);
+      setConfirmOpen(false);
+
+      // limpiar caches auxiliares
+      try {
+        userCache.current?.clear?.();
+        setAcctIdMap({});
+        setAcctPassMap({});
+        setInvPassMap({});
+        setEmailCounts({});
+      } catch {}
+
+      // Recordar última plataforma
+      try {
+        window.localStorage.setItem(LAST_PLATFORM_KEY, String(toSend.plataforma_id));
+      } catch {}
+
+      // Reset con plataforma priorizada
+      const base = todayStr();
+      const stored =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem(LAST_PLATFORM_KEY)
+          : null;
+      const lastId = stored ? Number(stored) : NaN;
+      const nextPlat =
+        Number.isFinite(lastId) && lastId > 0
+          ? lastId
+          : plataformasOrdered[0]?.id ?? 0;
+
+      setForm({
+        contacto: '',
+        nombre: '',
+        plataforma_id: nextPlat,
+        cuenta_id: null,
+        nro_pantalla: '',
+        correo: '',
+        contrasena: '',
+        proveedor: '',
+        fecha_compra: base,
+        fecha_vencimiento: addMonthsLocal(base, 1),
+        meses_pagados: 1,
+        total_pagado: '',
+        total_pagado_proveedor: '',
+        total_ganado: '',
+        estado: 'ACTIVA',
+        comentario: '',
+      });
+      setOptions([]);
       setEmailCounts({});
-    } catch {}
-
-    // Recordar última plataforma
-    try {
-      window.localStorage.setItem(LAST_PLATFORM_KEY, String(toSend.plataforma_id));
-    } catch {}
-
-    // Reset con plataforma priorizada
-    const base = todayStr();
-    const stored = typeof window !== 'undefined'
-      ? window.localStorage.getItem(LAST_PLATFORM_KEY)
-      : null;
-    const lastId = stored ? Number(stored) : NaN;
-    const nextPlat =
-      Number.isFinite(lastId) && lastId > 0
-        ? lastId
-        : plataformasOrdered[0]?.id ?? 0;
-
-    setForm({
-      contacto: '',
-      nombre: '',
-      plataforma_id: nextPlat,
-      cuenta_id: null,
-      nro_pantalla: '',
-      correo: '',
-      contrasena: '',
-      proveedor: '',
-      fecha_compra: base,
-      fecha_vencimiento: addMonthsLocal(base, 1),
-      meses_pagados: 1,
-      total_pagado: '',
-      total_pagado_proveedor: '',
-      total_ganado: '',
-      estado: 'ACTIVA',
-      comentario: '',
-    });
-    setOptions([]);
-
-    // (opcional) este setEmailCounts({}) de abajo puedes quitarlo
-    // porque ya lo limpiamos arriba en el bloque nuevo.
-    // Lo dejo aquí por si prefieres mantenerlo; no rompe nada.
-    setEmailCounts({});
-  } catch (err: any) {
-    setErrMsg(err?.message ?? 'Error desconocido');
-  } finally {
-    setLoading(false);
+    } catch (err: any) {
+      setErrMsg(err?.message ?? 'Error desconocido');
+    } finally {
+      setLoading(false);
+    }
   }
-}
 
   /* ===================== UI ===================== */
   const badge = (() => {
@@ -785,16 +817,19 @@ const buildPayload = () => {
               </select>
             </div>
 
-            {/* Correo + sugerencias unificadas */}
+            {/* Correo + sugerencias unificadas (OBLIGATORIO) */}
             <div className="relative" ref={boxRef}>
               <FieldPantallas
-                label="Correo (opcional)"
+                label="Correo *"
                 labelRight={badge}
                 type="email"
                 placeholder="correo@dominio.com"
                 value={form.correo}
                 onChange={(v: string) => setForm((s) => ({ ...s, correo: v }))}
                 onFocus={onFocusCorreo}
+                required
+                onInvalid={(e: any) => e.currentTarget.setCustomValidity('Ingresa un correo válido')}
+                onInput={(e: any) => e.currentTarget.setCustomValidity('')}
                 inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
               />
 
@@ -852,13 +887,16 @@ const buildPayload = () => {
               inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
             />
 
-            {/* Contraseña */}
+            {/* Contraseña (OBLIGATORIA) */}
             <FieldPantallas
-              label="Contraseña (si es nueva o para actualizar)"
-              type="text"
-              placeholder="Opcional"
+              label="Contraseña *"
+              type="password"
+              placeholder="Requerida"
               value={form.contrasena}
               onChange={(v: string) => setForm((s) => ({ ...s, contrasena: v }))}
+              required
+              onInvalid={(e: any) => e.currentTarget.setCustomValidity('La contraseña es obligatoria')}
+              onInput={(e: any) => e.currentTarget.setCustomValidity('')}
               inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
             />
 
@@ -1023,7 +1061,7 @@ const buildPayload = () => {
         {errMsg && <p className="text-red-600 text-sm">Error: {errMsg}</p>}
       </form>
 
-      {/* ===== Modal de confirmación (sin checkbox; contraseña visible) ===== */}
+      {/* ===== Modal de confirmación ===== */}
       {confirmOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
@@ -1168,13 +1206,9 @@ const buildPayload = () => {
                     <h4 className="font-medium text-sm text-neutral-300 mb-2">Fechas</h4>
                     <dl className="grid grid-cols-[140px_1fr] text-sm gap-y-2">
                       <dt className="text-neutral-400">Compra</dt>
-                      <dd className="font-medium">
-                        {form.fecha_compra || '—'}
-                      </dd>
+                      <dd className="font-medium">{form.fecha_compra || '—'}</dd>
                       <dt className="text-neutral-400">Vencimiento</dt>
-                      <dd className="font-medium">
-                        {form.fecha_vencimiento || '—'}
-                      </dd>
+                      <dd className="font-medium">{form.fecha_vencimiento || '—'}</dd>
                       <dt className="text-neutral-400">Meses pagados</dt>
                       <dd className="font-medium">{form.meses_pagados ?? '—'}</dd>
                     </dl>

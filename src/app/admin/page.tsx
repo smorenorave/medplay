@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { usePlataformas } from '@/hooks/usePlataformas';
 
-
 /* ======================================================================
    Recharts (solo cliente) — helpers dinámicos
    ====================================================================== */
@@ -20,7 +19,6 @@ const CartesianGrid       = D('CartesianGrid');
 const Tooltip             = D('Tooltip');
 const PieChart            = D('PieChart');
 const Pie                 = D('Pie');
-
 
 /* ======================================================================
    Tipos
@@ -112,6 +110,8 @@ const isFutureOrToday = (iso?: string | null) => {
 const toMoney = (v: number | string | null | undefined) =>
   v == null || v === '' || Number.isNaN(Number(v)) ? 0 : Number(v);
 
+const fmtDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString('es-CO') : '');
+
 /* Paleta por plataforma + helpers */
 const PLATFORM_COLORS = [
   '#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6',
@@ -149,8 +149,8 @@ async function fetchCuentaById(id: number) {
   let res = await fetch(`/api/cuentascompartidas/${id}`, { cache: 'no-store' });
   if (!res.ok) res = await fetch(`/api/cuentascompartidas?id=${id}`, { cache: 'no-store' });
   if (!res.ok) return null;
-  const data = await res.json().catch(() => null);
-  const obj = Array.isArray(data) ? data[0] : data;
+  const data = await res.json().catch(() => null as any);
+  const obj = Array.isArray(data) ? data[0] : (data?.data?.[0] ?? data);
   if (!obj) return null;
   return { plataforma_id: obj?.plataforma_id ?? null, correo: obj?.correo ?? null, contrasena: obj?.contrasena ?? null } as CuentaLite;
 }
@@ -166,7 +166,7 @@ export default function Page() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const [tab, setTab] = useState<'resumen' | 'detalle'>('resumen');
+  const [tab, setTab] = useState<'resumen' | 'detalle' | 'registros'>('resumen');
 
   const now = new Date();
   const [year, setYear] = useState<number>(now.getFullYear());
@@ -198,7 +198,7 @@ export default function Page() {
     return m;
   }, [plataformas]);
 
-  /* Carga y normaliza */
+  /* Carga y normaliza (ROBUSTO: acepta [] o {data: []}) */
   useEffect(() => {
     let cancel = false;
     (async () => {
@@ -210,10 +210,13 @@ export default function Page() {
         ]);
         if (!pRes.ok || !cRes.ok) throw new Error('No se pudieron cargar datos');
 
-        const pRaw: any[] = await pRes.json();
-        const cRaw: any[] = await cRes.json();
+        const pJ = await pRes.json().catch(() => ([] as any[]));
+        const cJ = await cRes.json().catch(() => ([] as any[]));
 
-        let pantNorm: Pantalla[] = (Array.isArray(pRaw) ? pRaw : []).map(normalizePantallaRow);
+        const pRaw: any[] = Array.isArray(pJ) ? pJ : (Array.isArray(pJ?.data) ? pJ.data : []);
+        const cRaw: any[] = Array.isArray(cJ) ? cJ : (Array.isArray(cJ?.data) ? cJ.data : []);
+
+        let pantNorm: Pantalla[] = pRaw.map(normalizePantallaRow);
 
         // Completar datos desde cuenta si faltan
         const need = pantNorm.filter((r) => r.cuenta_id && (r.plataforma_id == null || r.correo == null || r.contrasena == null));
@@ -228,7 +231,7 @@ export default function Page() {
           });
         }
 
-        const compNorm: CuentaCompleta[] = (Array.isArray(cRaw) ? cRaw : []).map((r: any) => ({
+        const compNorm: CuentaCompleta[] = cRaw.map((r: any) => ({
           ...r, plataforma_id: r?.plataforma_id == null ? null : Number(r?.plataforma_id),
         }));
 
@@ -520,6 +523,28 @@ export default function Page() {
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(serieDiaRows), 'Ventas_dia_total');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(perDayPlatRows), 'Ventas_dia_plataforma');
 
+      // También exporto TODAS las filas crudas para tu auditoría:
+      XLSX.utils.book_append_sheet(
+        wb,
+        XLSX.utils.json_to_sheet(pantallas.map(p => ({
+          ...p,
+          total_ganado: toMoney(p.total_ganado),
+          fecha_compra: p.fecha_compra ?? '',
+          fecha_vencimiento: p.fecha_vencimiento ?? ''
+        }))),
+        'Pantallas_raw'
+      );
+      XLSX.utils.book_append_sheet(
+        wb,
+        XLSX.utils.json_to_sheet(completas.map(c => ({
+          ...c,
+          total_ganado: toMoney(c.total_ganado),
+          fecha_compra: c.fecha_compra ?? '',
+          fecha_vencimiento: c.fecha_vencimiento ?? ''
+        }))),
+        'Completas_raw'
+      );
+
       const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       await saveBlob(blob, `panel-${fuente}-${period}.xlsx`);
@@ -529,20 +554,15 @@ export default function Page() {
     } finally {
       setExporting(false);
     }
-  }, [year, month, snapshotMatch, totalMes, totalMesPantallas, totalMesCompletas, totalActivos, totalVentasMesCount, rankingPlataformas, porDia, perDayPerPlatform, monthPlatformKeys, platformMap, saveBlob]);
+  }, [year, month, snapshotMatch, totalMes, totalMesPantallas, totalMesCompletas, totalActivos, totalVentasMesCount, rankingPlataformas, porDia, perDayPerPlatform, monthPlatformKeys, platformMap, pantallas, completas, saveBlob]);
 
   /* ===================== Exportar a Excel (con gráficas) ===================== */
   const exportExcelConGraficas = useCallback(async () => {
     try {
       setExporting(true);
 
-      // ExcelJS en navegador (fallback a bundle min si el principal falla)
-      let Excel: any;
-      try {
-        Excel = await import('exceljs');
-      } catch {
-        const Excel = await import('exceljs');
-      }
+      // ExcelJS en navegador (import robusto)
+      const Excel: any = await import('exceljs');
       const WorkbookCtor = Excel?.Workbook ?? Excel?.default?.Workbook;
       if (!WorkbookCtor) throw new Error('No se pudo cargar ExcelJS (Workbook).');
 
@@ -590,12 +610,26 @@ export default function Page() {
         });
       });
 
+      /* ===== Incluye todas las filas crudas ===== */
+      const wsPraw = wb.addWorksheet('Pantallas_raw');
+      wsPraw.addRows([['id','cuenta_id','contacto','nro_pantalla','fecha_compra','fecha_vencimiento','meses_pagados','total_ganado','estado','plataforma_id','correo','contrasena']]);
+      pantallas.forEach(p => wsPraw.addRow([
+        p.id, p.cuenta_id, p.contacto, p.nro_pantalla, p.fecha_compra ?? '', p.fecha_vencimiento ?? '',
+        p.meses_pagados ?? '', toMoney(p.total_ganado), p.estado ?? '', p.plataforma_id ?? '', p.correo ?? '', p.contrasena ?? ''
+      ]));
+
+      const wsCraw = wb.addWorksheet('Completas_raw');
+      wsCraw.addRows([['id','contacto','nombre','correo','contrasena','fecha_compra','fecha_vencimiento','meses_pagados','total_ganado','estado','plataforma_id']]);
+      completas.forEach(c => wsCraw.addRow([
+        c.id, c.contacto, c.nombre ?? '', c.correo ?? '', c.contrasena ?? '', c.fecha_compra ?? '', c.fecha_vencimiento ?? '',
+        c.meses_pagados ?? '', toMoney(c.total_ganado), c.estado ?? '', c.plataforma_id ?? ''
+      ]));
+
       /* ===== Hoja Gráficas ===== */
       const wsImgs = wb.addWorksheet('Gráficas');
 
       const capture = async (node: HTMLElement | null, width = 1000, height = 450) => {
         if (!node) return null;
-        // Si un chart está oculto (p.ej. en otra tab), saldrá null
         return await toPng(node, { cacheBust: true, width, height, style: { background: '#ffffff' } });
       };
       const strip = (dataUrl: string | null) => (dataUrl ? dataUrl.split(',')[1] ?? null : null);
@@ -643,7 +677,7 @@ export default function Page() {
     } finally {
       setExporting(false);
     }
-  }, [year, month, snapshotMatch, totalMes, totalMesPantallas, totalMesCompletas, totalActivos, totalVentasMesCount, rankingPlataformas, porDia, perDayPerPlatform, monthPlatformKeys, platformMap, saveBlob]);
+  }, [year, month, snapshotMatch, totalMes, totalMesPantallas, totalMesCompletas, totalActivos, totalVentasMesCount, rankingPlataformas, porDia, perDayPerPlatform, monthPlatformKeys, platformMap, pantallas, completas, saveBlob]);
 
   /* ===================== Serie Detalle por día (filtro plataforma) ===================== */
   const detalleDia = useMemo<DayPoint[]>(() => {
@@ -680,7 +714,9 @@ export default function Page() {
 
   const fmt = (n: number) => new Intl.NumberFormat('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n);
 
-  /* ===================== UI ===================== */
+  /* ======================================================================
+     UI
+     ====================================================================== */
   return (
     <div className="mx-auto max-w-[1400px] p-6 space-y-6">
       <header className="flex flex-wrap items-center gap-3 justify-between">
@@ -773,6 +809,7 @@ export default function Page() {
       <div className="flex gap-2">
         <button className={`rounded-md px-3 py-2 text-sm border ${tab === 'resumen' ? 'bg-neutral-800 border-neutral-600' : 'bg-neutral-900 border-neutral-700 hover:bg-neutral-800'}`} onClick={() => setTab('resumen')}>Resumen</button>
         <button className={`rounded-md px-3 py-2 text-sm border ${tab === 'detalle' ? 'bg-neutral-800 border-neutral-600' : 'bg-neutral-900 border-neutral-700 hover:bg-neutral-800'}`} onClick={() => setTab('detalle')}>Total vendido por día</button>
+        <button className={`rounded-md px-3 py-2 text-sm border ${tab === 'registros' ? 'bg-neutral-800 border-neutral-600' : 'bg-neutral-900 border-neutral-700 hover:bg-neutral-800'}`} onClick={() => setTab('registros')}>Registros</button>
       </div>
 
       {/* ==================== TAB RESUMEN ==================== */}
@@ -969,6 +1006,108 @@ export default function Page() {
           </div>
         </section>
       )}
+
+      {/* ==================== TAB REGISTROS (TODAS LAS FILAS) ==================== */}
+      {!loading && !err && tab === 'registros' && (
+        <section className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-4 space-y-6">
+          <h3 className="text-sm font-semibold text-neutral-200">Todas las filas de base de datos</h3>
+
+          {/* PANTALLAS */}
+          <div className="space-y-2">
+            <div className="flex items-end justify-between">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-neutral-400">Pantallas</div>
+                <div className="text-sm text-neutral-300">{pantallas.length} filas</div>
+              </div>
+            </div>
+
+            <div className="overflow-auto rounded-lg border border-neutral-800">
+              <table className="min-w-[1100px] w-full text-sm">
+                <thead className="bg-neutral-900/70 sticky top-0 z-10">
+                  <tr className="text-xs uppercase text-neutral-400">
+                    <Th>Id</Th><Th>Cuenta ID</Th><Th>Contacto</Th><Th>Nro Pantalla</Th><Th>Plataforma</Th>
+                    <Th>Correo</Th><Th>Contraseña</Th><Th>Fecha compra</Th><Th>Fecha venc.</Th>
+                    <Th>Meses pag.</Th><Th>Estado</Th><Th>Total ganado</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pantallas.map((p) => (
+                    <tr key={`p-${p.id}`} className="border-t border-neutral-800 hover:bg-neutral-900/30">
+                      <Td>{p.id}</Td>
+                      <Td>{p.cuenta_id ?? ''}</Td>
+                      <Td>{p.contacto}</Td>
+                      <Td>{p.nro_pantalla}</Td>
+                      <Td>
+                        <span className="inline-flex items-center gap-2">
+                          <span className="inline-block h-2 w-2 rounded-full" style={{ background: colorForPid(p.plataforma_id) }} />
+                          {platformMap.get(Number(p.plataforma_id)) ?? p.plataforma_id ?? '—'}
+                        </span>
+                      </Td>
+                      <Td className="font-mono">{p.correo ?? ''}</Td>
+                      <Td className="font-mono">{p.contrasena ?? ''}</Td>
+                      <Td>{fmtDate(p.fecha_compra)}</Td>
+                      <Td>{fmtDate(p.fecha_vencimiento)}</Td>
+                      <Td className="text-right">{p.meses_pagados ?? ''}</Td>
+                      <Td>{p.estado ?? ''}</Td>
+                      <Td className="text-right">$ {fmt(toMoney(p.total_ganado))}</Td>
+                    </tr>
+                  ))}
+                  {pantallas.length === 0 && (
+                    <tr><Td colSpan={12} className="text-center py-6 text-neutral-400">No hay filas.</Td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* COMPLETAS */}
+          <div className="space-y-2">
+            <div className="flex items-end justify-between">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-neutral-400">Cuentas completas</div>
+                <div className="text-sm text-neutral-300">{completas.length} filas</div>
+              </div>
+            </div>
+
+            <div className="overflow-auto rounded-lg border border-neutral-800">
+              <table className="min-w-[1000px] w-full text-sm">
+                <thead className="bg-neutral-900/70 sticky top-0 z-10">
+                  <tr className="text-xs uppercase text-neutral-400">
+                    <Th>Id</Th><Th>Contacto</Th><Th>Nombre</Th><Th>Plataforma</Th>
+                    <Th>Correo</Th><Th>Contraseña</Th><Th>Fecha compra</Th><Th>Fecha venc.</Th>
+                    <Th>Meses pag.</Th><Th>Estado</Th><Th>Total ganado</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {completas.map((c) => (
+                    <tr key={`c-${c.id}`} className="border-t border-neutral-800 hover:bg-neutral-900/30">
+                      <Td>{c.id}</Td>
+                      <Td>{c.contacto}</Td>
+                      <Td>{c.nombre ?? ''}</Td>
+                      <Td>
+                        <span className="inline-flex items-center gap-2">
+                          <span className="inline-block h-2 w-2 rounded-full" style={{ background: colorForPid(c.plataforma_id) }} />
+                          {platformMap.get(Number(c.plataforma_id)) ?? c.plataforma_id ?? '—'}
+                        </span>
+                      </Td>
+                      <Td className="font-mono">{c.correo ?? ''}</Td>
+                      <Td className="font-mono">{c.contrasena ?? ''}</Td>
+                      <Td>{fmtDate(c.fecha_compra)}</Td>
+                      <Td>{fmtDate(c.fecha_vencimiento)}</Td>
+                      <Td className="text-right">{c.meses_pagados ?? ''}</Td>
+                      <Td>{c.estado ?? ''}</Td>
+                      <Td className="text-right">$ {fmt(toMoney(c.total_ganado))}</Td>
+                    </tr>
+                  ))}
+                  {completas.length === 0 && (
+                    <tr><Td colSpan={11} className="text-center py-6 text-neutral-400">No hay filas.</Td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
@@ -984,4 +1123,14 @@ function KPI({ title, value, sub }: { title: string; value: string | number; sub
       {sub && <div className="mt-1 text-xs text-neutral-400">{sub}</div>}
     </div>
   );
+}
+
+/* ======================================================================
+   Helpers Tabla
+   ====================================================================== */
+function Th({ children }: { children: React.ReactNode }) {
+  return <th className="text-left px-3 py-2">{children}</th>;
+}
+function Td({ children, className = '', colSpan }: { children?: React.ReactNode; className?: string; colSpan?: number }) {
+  return <td className={`px-3 py-2 ${className}`} colSpan={colSpan}>{children}</td>;
 }
