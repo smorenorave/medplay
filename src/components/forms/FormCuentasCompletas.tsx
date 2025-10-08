@@ -8,9 +8,9 @@ import { normalizeContacto } from '@/lib/strings';
 import { todayStr } from '@/lib/dates';
 import { usePlataformas } from '@/hooks/usePlataformas';
 
-/* 🔁 NUEVO: helpers para caché + bus */
+/* 🔁 Cache/bus existentes para cuentas completas */
 import { mergeCuentaCompletaIntoCache } from '@/lib/cuentasAll';
-import { notifyCuentasChanged } from '@/lib/cuentasMutationBus';
+import { notifyCuentasChanged, subscribeCuentasChanges } from '@/lib/cuentasMutationBus';
 
 /* ===================== Tipos ===================== */
 type Usuario = { contacto: string; nombre: string | null };
@@ -42,14 +42,24 @@ type EmailSuggestion = {
 };
 
 /* ===================== Constantes ===================== */
-const CACHE_TTL_MS = 60_000;
-const CACHE_MAX = 100;
 const CONTACTO_MIN_LEN = 5;
 const EMAIL_MIN_LEN = 5;
 const SUGGEST_LIMIT = 20;
 const LAST_PLATFORM_KEY = 'cuentascompletas:lastPlatformId';
 
-/* ===================== Utils de fecha ===================== */
+/* TTLs y claves de LS */
+const USERS_ALL_CACHE_TTL = 30 * 60_000; // 30 min
+const LIST_CACHE_TTL = 5 * 60_000;       // 5 min listas de correo/clave
+const COUNT_CACHE_TTL = 5 * 60_000;      // 5 min conteos por email
+const STAMP_POLL_MS = 30_000;
+
+const LS_USERS_ALL = '__usuarios_all_cache_v1';                // { map, ts }
+const LS_CC_PREFIX = '__cc_cache_v1:';                         // por plataforma { map, ts, stamp }
+const LS_INV_PREFIX = '__cc_inv_cache_v1:';                    // por plataforma { map, ts, stamp }
+const LS_COUNTS_PREFIX = '__cc_counts_v1:';                    // por plataforma { map: {email:{count,ts,stamp}} }
+const STAMP_KEY_CC = '__stamp_cuentas_all';                    // guarda último stamp de /api/cuentascompletas/stamp
+
+/* ===================== Utils ===================== */
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const toLocalDateStr = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 const parseLocalDateStr = (s: string) => {
@@ -68,6 +78,130 @@ function addMonthsLocal(dateStr: string, months: number): string {
   const out = new Date(tmp.getFullYear(), tmp.getMonth(), day);
   return toLocalDateStr(out);
 }
+const isEmpty = (v: any) => v == null || v === '';
+const toMoney = (n: number | null) => (n == null || Number.isNaN(n) ? '—' : new Intl.NumberFormat().format(n));
+const normalizeEmail = (s: string) => s.trim().toLowerCase();
+const hasWindow = () => typeof window !== 'undefined';
+
+/* ===================== LS helpers ===================== */
+function readLS<T = any>(key: string): T | null {
+  if (!hasWindow()) return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+function writeLS(key: string, val: any) {
+  if (!hasWindow()) return;
+  try { window.localStorage.setItem(key, JSON.stringify(val)); } catch {}
+}
+
+/* ===================== STAMP (/api/cuentascompletas/stamp) ===================== */
+function getCurrentCuentasStamp(): number {
+  if (!hasWindow()) return 0;
+  const s = window.localStorage.getItem(STAMP_KEY_CC);
+  return s ? Number(s) || 0 : 0;
+}
+async function refreshCuentasStampOnce(): Promise<number> {
+  try {
+    const r = await fetch('/api/cuentascompletas/stamp', { cache: 'no-store' });
+    const j = await r.json().catch(() => ({ stamp: 0 }));
+    const n = Number(j?.stamp) || 0;
+    try { window.localStorage.setItem(STAMP_KEY_CC, String(n)); } catch {}
+    return n;
+  } catch {
+    return getCurrentCuentasStamp();
+  }
+}
+
+/* ===================== Usuarios: catálogo completo (una sola vez) ===================== */
+type UsersAllCache = { map: Record<string, Usuario>; ts: number };
+function readUsersAll(): UsersAllCache | null { return readLS<UsersAllCache>(LS_USERS_ALL); }
+function usersAllFresh(c: UsersAllCache | null): boolean {
+  if (!c) return false;
+  return Date.now() - c.ts <= USERS_ALL_CACHE_TTL;
+}
+/** Devuelve Usuario | null | undefined */
+function getUserFromAllCache(norm: string): Usuario | null | undefined {
+  const c = readUsersAll();
+  if (!usersAllFresh(c)) return undefined;
+  const u = c!.map[norm];
+  return u ?? null;
+}
+async function ensureUsersAllLoaded() {
+  const c = readUsersAll();
+  if (usersAllFresh(c)) return;
+  const urls = ['/api/usuarios?limit=100000', '/api/usuarios?limit=50000', '/api/usuarios'];
+  let arr: Usuario[] = [];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+      if (list?.length) { arr = list; break; }
+    } catch {}
+  }
+  const map: Record<string, Usuario> = {};
+  for (const u of arr) {
+    const k = normalizeContacto(String(u.contacto ?? ''));
+    if (!k) continue;
+    map[k] = u;
+  }
+  writeLS(LS_USERS_ALL, { map, ts: Date.now() } as UsersAllCache);
+}
+
+/* ===================== Cache: cuentascompletas por plataforma ===================== */
+type CCEntry = { pass: string | null; count: number };
+type CCCacheShape = { map: Record<string, CCEntry>; ts: number; stamp: number };
+function ccKey(pid: number) { return `${LS_CC_PREFIX}${pid}`; }
+function readCCCache(pid: number): CCCacheShape | null { return readLS<CCCacheShape>(ccKey(pid)); }
+function writeCCCache(pid: number, map: Record<string, CCEntry>) {
+  writeLS(ccKey(pid), { map, ts: Date.now(), stamp: getCurrentCuentasStamp() } as CCCacheShape);
+}
+function getCCMap(pid: number): Record<string, CCEntry> | null {
+  const c = readCCCache(pid);
+  if (!c) return null;
+  const sameStamp = c.stamp === getCurrentCuentasStamp();
+  const fresh = Date.now() - c.ts <= LIST_CACHE_TTL;
+  return sameStamp && fresh ? c.map : null;
+}
+
+/* ===================== Cache: inventario por plataforma ===================== */
+type InvEntry = { pass: string | null; id?: number };
+type InvCacheShape = { map: Record<string, InvEntry>; ts: number; stamp: number };
+function invKey(pid: number) { return `${LS_INV_PREFIX}${pid}`; }
+function readInvCache(pid: number): InvCacheShape | null { return readLS<InvCacheShape>(invKey(pid)); }
+function writeInvCache(pid: number, map: Record<string, InvEntry>) {
+  writeLS(invKey(pid), { map, ts: Date.now(), stamp: getCurrentCuentasStamp() } as InvCacheShape);
+}
+function getInvMap(pid: number): Record<string, InvEntry> | null {
+  const c = readInvCache(pid);
+  if (!c) return null;
+  const sameStamp = c.stamp === getCurrentCuentasStamp();
+  const fresh = Date.now() - c.ts <= LIST_CACHE_TTL;
+  return sameStamp && fresh ? c.map : null;
+}
+
+/* ===================== Cache: conteos por email ===================== */
+type CountEntry = { count: number; ts: number; stamp: number };
+type CountCacheShape = { map: Record<string, CountEntry> };
+function countsKey(pid: number) { return `${LS_COUNTS_PREFIX}${pid}`; }
+function getCountFromCache(pid: number, email: string): number | undefined {
+  const all = readLS<CountCacheShape>(countsKey(pid)) || { map: {} };
+  const entry = all.map[email];
+  if (!entry) return undefined;
+  const sameStamp = entry.stamp === getCurrentCuentasStamp();
+  const fresh = Date.now() - entry.ts <= COUNT_CACHE_TTL;
+  return sameStamp && fresh ? entry.count : undefined;
+}
+function setCountInCache(pid: number, email: string, count: number) {
+  const all = readLS<CountCacheShape>(countsKey(pid)) || { map: {} };
+  all.map[email] = { count, ts: Date.now(), stamp: getCurrentCuentasStamp() };
+  writeLS(countsKey(pid), all);
+}
 
 /* ===================== Parser de respuestas ===================== */
 async function parseListResponse(res: Response): Promise<any[]> {
@@ -76,27 +210,6 @@ async function parseListResponse(res: Response): Promise<any[]> {
   if (Array.isArray(data)) return data;
   if (Array.isArray((data as any).items)) return (data as any).items;
   return [];
-}
-
-/* ===================== Helpers UI (modal) ===================== */
-const isEmpty = (v: any) => v == null || v === '';
-const toMoney = (n: number | null) =>
-  n == null || Number.isNaN(n) ? '—' : new Intl.NumberFormat().format(n);
-
-function copyToClipboard(text: string) {
-  try { navigator.clipboard.writeText(text); } catch {}
-}
-function downloadJson(filename: string, obj: any) {
-  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
-}
-function badge(required = false) {
-  return required
-    ? 'text-[10px] px-2 py-[2px] rounded-full border border-emerald-400 text-emerald-300'
-    : 'text-[10px] px-2 py-[2px] rounded-full border border-neutral-500 text-neutral-300';
 }
 
 /* ===================== Componente ===================== */
@@ -120,14 +233,13 @@ export default function FormCuentaCompletas() {
 
   const { plataformas, loading: platLoading, error: platError } = usePlataformas();
 
-  /* map id->nombre */
+  /* ===== Plataforma: map y orden ===== */
   const plataformaMap = useMemo(() => {
     const m = new Map<number, string>();
     for (const p of plataformas) m.set(p.id, (p as any).nombre ?? String(p.id));
     return m;
   }, [plataformas]);
 
-  /* ordenar priorizando última usada */
   const lastPlatformId = useMemo<number | null>(() => {
     const raw = typeof window !== 'undefined' ? window.localStorage.getItem(LAST_PLATFORM_KEY) : null;
     const n = raw ? Number(raw) : NaN;
@@ -142,7 +254,7 @@ export default function FormCuentaCompletas() {
     return [fav, ...rest];
   }, [plataformas, lastPlatformId]);
 
-  /* autoselección inicial */
+  /* Autoselección inicial */
   useEffect(() => {
     if (platLoading || platError || !plataformasOrdered.length) return;
     if (form.plataforma_id === 0) {
@@ -150,7 +262,7 @@ export default function FormCuentaCompletas() {
     }
   }, [plataformasOrdered, platLoading, platError, form.plataforma_id]);
 
-  /* default contraseña "youtube" cuando plataforma sea YouTube y esté vacío */
+  /* Default contraseña 'youtube' si aplica */
   const isYouTube = (id?: number) => {
     const name = (id ? plataformaMap.get(id) : '') || '';
     return /youtube/i.test(name);
@@ -159,9 +271,57 @@ export default function FormCuentaCompletas() {
     if (!form.contrasena && isYouTube(form.plataforma_id)) {
       setForm((s) => ({ ...s, contrasena: 'youtube' }));
     }
-  }, [form.plataforma_id, form.contrasena]);
+  }, [form.plataforma_id, form.contrasena]); // eslint-disable-line
 
-  /* mensajería + modal */
+  /* ===== Stamp polling & suscripción a cambios ===== */
+  useEffect(() => {
+    let unsub: (() => void) | null = null;
+    refreshCuentasStampOnce(); // primer refresh
+    try {
+      unsub = subscribeCuentasChanges(() => { refreshCuentasStampOnce(); });
+    } catch {}
+    const onFocus = () => refreshCuentasStampOnce();
+    window.addEventListener('focus', onFocus);
+    const id = window.setInterval(() => { refreshCuentasStampOnce(); }, STAMP_POLL_MS);
+    return () => {
+      unsub?.();
+      window.removeEventListener('focus', onFocus);
+      clearInterval(id);
+    };
+  }, []);
+
+  /* ===== Nombre: control de edición manual y autocompletado por catálogo ===== */
+  const [nombreDirty, setNombreDirty] = useState(false);
+  const lastContactoRef = useRef<string>('');
+
+  useEffect(() => {
+    const raw = form.contacto.trim();
+    const norm = normalizeContacto(raw);
+
+    // contacto cambió → habilitar nuevo autocompletado
+    if ((norm || '') !== lastContactoRef.current) {
+      lastContactoRef.current = norm || '';
+      setNombreDirty(false);
+      setForm((s) => ({ ...s, nombre: '' }));
+    }
+
+    if (!norm || norm.length < CONTACTO_MIN_LEN) return;
+
+    let canceled = false;
+    const run = async () => {
+      if (getUserFromAllCache(norm) === undefined) {
+        await ensureUsersAllLoaded();
+      }
+      const u = getUserFromAllCache(norm);
+      if (!canceled && u && !nombreDirty) {
+        setForm((s) => ({ ...s, nombre: u.nombre ?? '' }));
+      }
+    };
+    const id = window.setTimeout(run, 150);
+    return () => { canceled = true; clearTimeout(id); };
+  }, [form.contacto, nombreDirty]);
+
+  /* ===== Mensajería + modal ===== */
   const [loading, setLoading] = useState(false);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [errMsg, setErrMsg] = useState<string | null>(null);
@@ -171,144 +331,67 @@ export default function FormCuentaCompletas() {
   const [confirmText, setConfirmText] = useState<string>('');
   const [confirmView, setConfirmView] = useState<'resumen' | 'json'>('resumen');
 
-  /* caches y timers */
-  const contactTimer = useRef<number | null>(null);
-  const userCache = useRef<Map<string, { data: Usuario | null; ts: number }>>(new Map());
-
-  const getUserFromCache = (key: string) => {
-    const hit = userCache.current.get(key);
-    if (!hit) return undefined;
-    if (Date.now() - hit.ts > CACHE_TTL_MS) { userCache.current.delete(key); return undefined; }
-    return hit.data;
-  };
-  const setUserInCache = (key: string, data: Usuario | null) => {
-    if (userCache.current.size >= CACHE_MAX) {
-      const firstKey = userCache.current.keys().next().value;
-      if (firstKey) userCache.current.delete(firstKey);
-    }
-    userCache.current.set(key, { data, ts: Date.now() });
-  };
-
-  /* autocompletar nombre */
-  useEffect(() => {
-    const raw = form.contacto.trim();
-    const norm = normalizeContacto(raw);
-    if (contactTimer.current) window.clearTimeout(contactTimer.current);
-
-    if (!norm || norm.length < CONTACTO_MIN_LEN) {
-      setForm((s) => ({ ...s, nombre: s.nombre ?? '' }));
-      return;
-    }
-
-    const cached = getUserFromCache(norm);
-    if (cached !== undefined) {
-      if (cached) setForm((s) => ({ ...s, nombre: cached.nombre ?? '' }));
-      return;
-    }
-
-    contactTimer.current = window.setTimeout(async () => {
-      try {
-        const urls = [
-          `/api/usuarios?q=${encodeURIComponent(raw)}`,
-          norm !== raw ? `/api/usuarios?q=${encodeURIComponent(norm)}` : '',
-        ].filter(Boolean) as string[];
-
-        let arr: Usuario[] = [];
-        for (const url of urls) {
-          const res = await fetch(url, { cache: 'no-store' });
-          if (!res.ok) continue;
-          const list = await parseListResponse(res);
-          arr = arr.concat(list);
-        }
-        const seen = new Set<string>();
-        const merged = arr.filter((u) => {
-          const k = normalizeContacto(u.contacto);
-          if (seen.has(k)) return false;
-          seen.add(k);
-          return true;
-        });
-        const exact = merged.find((u) => normalizeContacto(u.contacto) === norm) ?? null;
-        setUserInCache(norm, exact);
-        if (exact) setForm((s) => ({ ...s, nombre: exact.nombre ?? '' }));
-      } catch {}
-    }, 350);
-
-    return () => { if (contactTimer.current) window.clearTimeout(contactTimer.current); };
-  }, [form.contacto]);
-
-  /* correo: sugerencias/contador/clave */
-  const emailCache = useRef<Map<string, { data: CorreoInfo | null; ts: number }>>(new Map());
-  const emailKey = (correo: string, plataformaId: number) => `${plataformaId}|${correo.toLowerCase()}`;
-  const getEmailFromCache = (key: string) => {
-    const hit = emailCache.current.get(key);
-    if (!hit) return undefined;
-    if (Date.now() - hit.ts > CACHE_TTL_MS) { emailCache.current.delete(key); return undefined; }
-    return hit.data;
-  };
-  const setEmailInCache = (key: string, data: CorreoInfo | null) => {
-    if (emailCache.current.size >= CACHE_MAX) {
-      const firstKey = emailCache.current.keys().next().value;
-      if (firstKey) emailCache.current.delete(firstKey);
-    }
-    emailCache.current.set(key, { data, ts: Date.now() });
-  };
-
+  /* ===== Sugerencias y cache de correos/contraseñas ===== */
   const [emailOpen, setEmailOpen] = useState(false);
   const [emailOpts, setEmailOpts] = useState<EmailSuggestion[]>([]);
   const [emailCounts, setEmailCounts] = useState<Record<string, number>>({});
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailFound, setEmailFound] = useState(false);
-  const emailTimer = useRef<number | null>(null);
-  const suggestionsAbort = useRef<AbortController | null>(null);
   const [correoCount, setCorreoCount] = useState(0);
   const [selectedInvId, setSelectedInvId] = useState<number | null>(null);
 
+  // cargar sugerencias (usa caches persistentes primero)
   async function fetchEmailsByPlatform(plataformaId: number) {
     if (!plataformaId) return;
-    suggestionsAbort.current?.abort();
-    const ac = new AbortController();
-    suggestionsAbort.current = ac;
-
     try {
-      const resDb = await fetch(
-        `/api/cuentascompletas?plataforma_id=${plataformaId}&limit=${SUGGEST_LIMIT * 5}`,
-        { cache: 'no-store', signal: ac.signal }
-      );
-      const rowsDb = resDb.ok ? await parseListResponse(resDb) : [];
+      let ccMap = getCCMap(plataformaId);
+      let invMap = getInvMap(plataformaId);
 
-      const counts: Record<string, number> = {};
-      for (const r of rowsDb) {
-        const c = String(r?.correo ?? '').trim().toLowerCase();
-        if (!c) continue;
-        counts[c] = (counts[c] ?? 0) + 1;
+      if (!ccMap) {
+        // cargar cuentascompletas para plataforma (muchas filas, pero limit razonable)
+        const resDb = await fetch(`/api/cuentascompletas?plataforma_id=${plataformaId}&limit=${SUGGEST_LIMIT * 5}`, { cache: 'no-store' });
+        const rowsDb = resDb.ok ? await parseListResponse(resDb) : [];
+        const m: Record<string, CCEntry> = {};
+        for (const r of rowsDb) {
+          const c = normalizeEmail(r?.correo ?? '');
+          if (!c) continue;
+          const prev = m[c]?.count ?? 0;
+          const pass = (r as any)?.contrasena ?? m[c]?.pass ?? null;
+          m[c] = { count: prev + 1, pass };
+        }
+        writeCCCache(plataformaId, m);
+        ccMap = m;
       }
 
-      const resInv = await fetch(
-        `/api/inventario?plataforma_id=${plataformaId}&limit=${SUGGEST_LIMIT * 3}`,
-        { cache: 'no-store', signal: ac.signal }
-      );
-      const rowsInv: InventarioRow[] = resInv.ok ? (await parseListResponse(resInv)) as any[] : [];
+      if (!invMap) {
+        const resInv = await fetch(`/api/inventario?plataforma_id=${plataformaId}&limit=${SUGGEST_LIMIT * 3}`, { cache: 'no-store' });
+        const rowsInv: InventarioRow[] = resInv.ok ? (await parseListResponse(resInv)) as any[] : [];
+        const m: Record<string, InvEntry> = {};
+        for (const it of rowsInv) {
+          const c = normalizeEmail(it?.correo ?? '');
+          if (!c) continue;
+          m[c] = { pass: (it as any)?.clave ?? null, id: Number(it?.id) };
+        }
+        writeInvCache(plataformaId, m);
+        invMap = m;
+      }
+
+      // construir sugerencias (primero inventario)
+      const counts: Record<string, number> = {};
+      for (const [email, entry] of Object.entries(ccMap)) counts[email] = entry.count;
 
       const seen = new Set<string>();
       const list: EmailSuggestion[] = [];
 
-      for (const it of rowsInv) {
-        const email = String(it?.correo ?? '').trim().toLowerCase();
-        if (!email || seen.has(email)) continue;
+      for (const [email, inv] of Object.entries(invMap)) {
+        if (seen.has(email)) continue;
         seen.add(email);
-        list.push({
-          email,
-          count: counts[email] ?? 0,
-          source: 'inv',
-          invId: Number(it?.id),
-          invClave: (it as any)?.clave ?? null,
-        });
+        list.push({ email, count: counts[email] ?? 0, source: 'inv', invId: inv.id, invClave: inv.pass ?? null });
         if (list.length >= SUGGEST_LIMIT) break;
       }
-
       if (list.length < SUGGEST_LIMIT) {
-        const popular = Object.entries(counts).sort((a, b) => (b[1] - a[1]));
+        const popular = Object.entries(counts).sort((a, b) => b[1] - a[1]);
         for (const [email, count] of popular) {
           if (seen.has(email)) continue;
           seen.add(email);
@@ -327,66 +410,98 @@ export default function FormCuentaCompletas() {
     }
   }
 
-  const onEmailFocus = () => { setEmailOpen(true); if (form.plataforma_id) fetchEmailsByPlatform(form.plataforma_id); };
+  const onEmailFocus = () => {
+    setEmailOpen(true);
+    if (form.plataforma_id) fetchEmailsByPlatform(form.plataforma_id);
+  };
   const onEmailBlur = () => setTimeout(() => setEmailOpen(false), 120);
 
   useEffect(() => {
-    setEmailFound(false); setEmailError(null); setEmailOpts([]); setEmailCounts({});
-    emailCache.current.clear(); setSelectedInvId(null);
+    setEmailError(null);
+    setEmailOpts([]);
+    setEmailCounts({});
+    setSelectedInvId(null);
+    setCorreoCount(0);
     if (emailOpen && form.plataforma_id) fetchEmailsByPlatform(form.plataforma_id);
-  }, [form.plataforma_id]); // eslint-disable-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.plataforma_id]);
 
   useEffect(() => { setSelectedInvId(null); }, [form.correo]);
 
+  // al escribir correo: intenta completar desde cache; si no, busca puntual y cachea
+  const emailTimer = useRef<number | null>(null);
   useEffect(() => {
     const correo = form.correo.trim();
     if (emailTimer.current) window.clearTimeout(emailTimer.current);
 
     if (!correo || !form.plataforma_id || correo.length < EMAIL_MIN_LEN) {
-      setEmailLoading(false); setEmailError(null); setEmailFound(false); setCorreoCount(0); return;
+      setEmailLoading(false);
+      setEmailError(null);
+      setEmailFound(false);
+      setCorreoCount(0);
+      return;
     }
 
-    const key = emailKey(correo, form.plataforma_id);
-    const cached = getEmailFromCache(key);
-    if (cached !== undefined) {
-      setEmailFound(!!cached);
-      if (cached?.contrasena && !form.contrasena) {
-        setForm((s) => ({ ...s, contrasena: cached.contrasena || s.contrasena }));
+    const pid = form.plataforma_id;
+    const key = normalizeEmail(correo);
+
+    // 1) desde caches persistentes
+    const ccHit = getCCMap(pid)?.[key];
+    const invHit = getInvMap(pid)?.[key];
+
+    if (ccHit) {
+      setEmailFound(true);
+      setCorreoCount(ccHit.count ?? 0);
+      if (ccHit.pass && !form.contrasena) {
+        setForm((s) => ({ ...s, contrasena: ccHit.pass || s.contrasena }));
       }
-    }
+      setCountInCache(pid, key, ccHit.count ?? 0);
+    } else if (invHit) {
+      setEmailFound(false);
+      setCorreoCount(0);
+      if (invHit.pass && !form.contrasena) {
+        setForm((s) => ({ ...s, contrasena: invHit.pass || s.contrasena }));
+      }
+    } else {
+      // 2) fetch puntual (debounced)
+      emailTimer.current = window.setTimeout(async () => {
+        setEmailLoading(true); setEmailError(null); setEmailFound(false);
+        try {
+          const url = `/api/cuentascompletas?q=${encodeURIComponent(key)}&plataforma_id=${pid}`;
+          const res = await fetch(url, { cache: 'no-store' });
+          if (!res.ok) throw new Error('No se pudo buscar el correo');
+          const rows = await parseListResponse(res);
+          const filtered = rows.filter((r) => (r?.plataforma_id == null ? true : Number(r.plataforma_id) === pid));
 
-    emailTimer.current = window.setTimeout(async () => {
-      setEmailLoading(true); setEmailError(null); setEmailFound(false);
-      try {
-        const url = `/api/cuentascompletas?q=${encodeURIComponent(correo)}&plataforma_id=${form.plataforma_id}`;
-        const res = await fetch(url, { cache: 'no-store' });
-        if (!res.ok) throw new Error('No se pudo buscar el correo');
-        const rows = await parseListResponse(res);
+          const exact = filtered.find((u: any) => normalizeEmail(u?.correo ?? '') === key) as CorreoInfo | undefined;
+          const count = filtered.map((r: any) => normalizeEmail(r?.correo ?? '')).filter((c: string) => !!c && c === key).length;
 
-        const filtered = rows.filter((r) =>
-          r?.plataforma_id == null ? true : Number(r.plataforma_id) === form.plataforma_id
-        );
+          // Actualizar cache CC si hay info
+          if (count > 0 || exact?.contrasena != null) {
+            const base = getCCMap(pid) || {};
+            base[key] = { count, pass: (exact?.contrasena ?? base[key]?.pass ?? null) };
+            writeCCCache(pid, base);
+          }
 
-        const exact = (filtered.find((u: any) => (u?.correo ?? '').toLowerCase() === correo.toLowerCase()) as CorreoInfo) ?? null;
+          setEmailFound(!!exact);
+          setCorreoCount(count);
+          setCountInCache(pid, key, count);
 
-        setEmailInCache(key, exact);
-        setEmailFound(!!exact);
-
-        if (exact?.contrasena && !form.contrasena) {
-          setForm((s) => ({ ...s, contrasena: exact.contrasena || s.contrasena }));
+          if (exact?.contrasena && !form.contrasena) {
+            setForm((s) => ({ ...s, contrasena: exact.contrasena || s.contrasena }));
+          }
+        } catch (e: any) {
+          setEmailError(e?.message ?? 'Error al buscar correo');
+          setCorreoCount(0);
+        } finally {
+          setEmailLoading(false);
         }
-
-        const count = filtered
-          .map((r: any) => (r?.correo ?? '').trim().toLowerCase())
-          .filter((c: string) => !!c && c === correo.toLowerCase()).length;
-        setCorreoCount(count);
-      } catch (e: any) {
-        setEmailError(e?.message ?? 'Error al buscar correo'); setCorreoCount(0);
-      } finally { setEmailLoading(false); }
-    }, 350);
+      }, 300);
+    }
 
     return () => { if (emailTimer.current) window.clearTimeout(emailTimer.current); };
-  }, [form.correo, form.contrasena, form.plataforma_id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.correo, form.plataforma_id, form.contrasena]);
 
   /* ===================== Recalcular fecha de vencimiento ===================== */
   useEffect(() => {
@@ -395,7 +510,6 @@ export default function FormCuentaCompletas() {
     if (!compra || !Number.isFinite(meses) || meses < 1) return;
 
     const nueva = addMonthsLocal(compra, meses);
-    // Evitar renders innecesarios
     setForm((s) => (s.fecha_vencimiento === nueva ? s : { ...s, fecha_vencimiento: nueva }));
   }, [form.fecha_compra, form.meses_pagados]);
 
@@ -480,19 +594,17 @@ export default function FormCuentaCompletas() {
         throw new Error(j?.error ?? 'No se pudo guardar');
       }
 
-      // La API puede devolver {cuenta:{...}} o el objeto directo
       const raw = await res.json();
       const saved = raw?.cuenta ?? raw;
 
-      // ✅ 1) Persistir preferencia de plataforma
+      // preferencia de plataforma
       try { window.localStorage.setItem(LAST_PLATFORM_KEY, String(toSend.plataforma_id)); } catch {}
 
-      // ✅ 2) Si venía de inventario, eliminarlo
+      // si venía de inventario, intenta eliminarlo
       if (selectedInvId != null) { try { await fetch(`/api/inventario/${selectedInvId}`, { method: 'DELETE' }); } catch {} }
 
-      // ✅ 3) Actualizar caché local (mem + localStorage) con el nuevo registro
+      // cache local del nuevo registro
       try {
-        // Build robust row para el cache (completa con toSend si faltan campos en la respuesta)
         const rowForCache = {
           id: Number(saved?.id),
           contacto: String(saved?.contacto ?? toSend.contacto ?? ''),
@@ -513,10 +625,13 @@ export default function FormCuentaCompletas() {
         mergeCuentaCompletaIntoCache(rowForCache as any);
       } catch {}
 
-      // ✅ 4) Notificar a otros viewers/pestañas
-      try { notifyCuentasChanged({ action: 'insert', id: Number(saved?.id), plataforma_id: Number(saved?.plataforma_id ?? toSend.plataforma_id) }); } catch {}
+      // invalidar caches dependientes (stamp) y notificar
+      try {
+        notifyCuentasChanged({ action: 'insert', id: Number(saved?.id), plataforma_id: Number(saved?.plataforma_id ?? toSend.plataforma_id) });
+        await refreshCuentasStampOnce();
+      } catch {}
 
-      // ✅ 5) UI OK + reset del form
+      // UI OK + reset
       setOkMsg('Guardado correctamente. ID: ' + (saved?.id ?? ''));
       setConfirmOpen(false);
 
@@ -543,6 +658,8 @@ export default function FormCuentaCompletas() {
       setSelectedInvId(null);
       setEmailOpts([]);
       setCorreoCount(0);
+      setNombreDirty(false);
+      lastContactoRef.current = '';
     } catch (err: any) {
       setErrMsg(err?.message ?? 'Error desconocido');
     } finally {
@@ -574,9 +691,9 @@ export default function FormCuentaCompletas() {
             />
             <Field
               label="Nombre"
-              placeholder="Nombre del usuario"
+              placeholder="Se autocompleta si el contacto existe (desde cache)"
               value={form.nombre}
-              onChange={(v) => setForm((s) => ({ ...s, nombre: v }))}
+              onChange={(v) => { setNombreDirty(true); setForm((s) => ({ ...s, nombre: v })); }}
               inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
             />
           </div>
@@ -633,8 +750,7 @@ export default function FormCuentaCompletas() {
                   <span className={[
                     'text-xs rounded-full px-2 py-[2px] border',
                     correoCount > 0 ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-emerald-300 bg-emerald-50 text-emerald-700',
-                  ].join(' ')}
-                  >
+                  ].join(' ')}>
                     {correoCount > 0 ? `coincidencias: ${correoCount}` : 'sin coincidencias'}
                   </span>
                 }
@@ -687,6 +803,7 @@ export default function FormCuentaCompletas() {
               </div>
             </div>
 
+            {/* Contraseña SIEMPRE VISIBLE */}
             <Field
               label="Contraseña *"
               type="text"
@@ -822,6 +939,10 @@ export default function FormCuentaCompletas() {
                 comentario: '',
               });
               setSelectedInvId(null);
+              setEmailOpts([]);
+              setCorreoCount(0);
+              setNombreDirty(false);
+              lastContactoRef.current = '';
             }}
             className="px-4 py-2 rounded-xl border"
           >
@@ -833,7 +954,7 @@ export default function FormCuentaCompletas() {
         {errMsg && <p className="text-red-600 text-sm">Error: {errMsg}</p>}
       </form>
 
-      {/* ===== Modal (sin máscara y sin checkbox) ===== */}
+      {/* ===== Modal ===== */}
       {confirmOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
@@ -865,8 +986,22 @@ export default function FormCuentaCompletas() {
                 <button type="button" className={`px-3 py-1.5 text-sm ${confirmView === 'json' ? 'bg-neutral-800' : 'bg-neutral-900 hover:bg-neutral-800'}`} onClick={() => setConfirmView('json')}>JSON</button>
               </div>
               <div className="flex items-center gap-2">
-                <button type="button" className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800" onClick={() => copyToClipboard(confirmText)}>Copiar JSON</button>
-                <button type="button" className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800" onClick={() => { let obj = confirmPayload; try { obj = JSON.parse(confirmText); } catch {} downloadJson('cuenta.json', obj); }}>Descargar</button>
+                <button type="button" className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800" onClick={() => navigator.clipboard?.writeText?.(confirmText)}>Copiar JSON</button>
+                <button
+                  type="button"
+                  className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800"
+                  onClick={() => {
+                    let obj = confirmPayload;
+                    try { obj = JSON.parse(confirmText); } catch {}
+                    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = 'cuenta.json'; a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  Descargar
+                </button>
               </div>
             </div>
 
@@ -879,8 +1014,13 @@ export default function FormCuentaCompletas() {
                     <h4 className="font-medium text-sm text-neutral-300 mb-1">Datos del usuario</h4>
                     <dl className="grid grid-cols-[140px_1fr] text-sm gap-y-2">
                       <dt className="text-neutral-400">Contacto</dt><dd className="font-medium">{confirmPayload?.contacto || '—'}</dd>
-                      <dt className="text-neutral-400">Nombre</dt><dd className="font-medium">{confirmPayload?.nombre || '—'} {isEmpty(confirmPayload?.nombre) && <span className={badge(false)}>opcional</span>}</dd>
-                      <dt className="text-neutral-400">Estado</dt><dd className="font-medium">{confirmPayload?.estado || '—'} {isEmpty(confirmPayload?.estado) && <span className={badge(false)}>opcional</span>}</dd>
+                      <dt className="text-neutral-400">Nombre</dt>
+                      <dd className="font-medium">
+                        {confirmPayload?.nombre || '—'} {isEmpty(confirmPayload?.nombre) && (
+                          <span className="text-[10px] px-2 py-[2px] rounded-full border border-neutral-500 text-neutral-300">opcional</span>
+                        )}
+                      </dd>
+                      <dt className="text-neutral-400">Estado</dt><dd className="font-medium">{confirmPayload?.estado || '—'}</dd>
                     </dl>
                   </div>
 
@@ -892,7 +1032,7 @@ export default function FormCuentaCompletas() {
                       <dd className="font-semibold">{plataformaMap.get(confirmPayload?.plataforma_id) ?? `#${confirmPayload?.plataforma_id ?? '—'}`}</dd>
                       <dt className="text-neutral-400">Correo</dt><dd className="font-medium">{confirmPayload?.correo || '—'}</dd>
                       <dt className="text-neutral-400">Contraseña</dt><dd className="font-mono">{confirmPayload?.contrasena || '—'}</dd>
-                      <dt className="text-neutral-400">Proveedor</dt><dd className="font-medium">{confirmPayload?.proveedor || '—'} {isEmpty(confirmPayload?.proveedor) && <span className={badge(false)}>opcional</span>}</dd>
+                      <dt className="text-neutral-400">Proveedor</dt><dd className="font-medium">{confirmPayload?.proveedor || '—'}</dd>
                       <dt className="text-neutral-400">Compra</dt><dd className="font-medium">{confirmPayload?.fecha_compra || '—'}</dd>
                       <dt className="text-neutral-400">Vencimiento</dt><dd className="font-medium">{confirmPayload?.fecha_vencimiento || '—'}</dd>
                       <dt className="text-neutral-400">Meses pagados</dt><dd className="font-medium">{confirmPayload?.meses_pagados ?? '—'}</dd>
@@ -936,7 +1076,7 @@ export default function FormCuentaCompletas() {
               )}
             </div>
 
-            {/* Footer (solo botones) */}
+            {/* Footer */}
             <div className="px-5 py-4 border-t border-neutral-800 flex items-center justify-end gap-2">
               <button className="px-3 py-2 rounded-lg border border-neutral-600 hover:bg-neutral-800" onClick={() => setConfirmOpen(false)} disabled={loading}>Volver a editar</button>
               <button className="px-3 py-2 rounded-lg border border-emerald-700 bg-emerald-800/40 hover:bg-emerald-800/60 disabled:opacity-60" onClick={confirmAndSave} disabled={loading}>

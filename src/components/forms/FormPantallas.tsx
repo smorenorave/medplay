@@ -9,10 +9,12 @@ import TextArea from '@/components/ui/TextArea';
 import { fetchPantallasCountByCuentaId } from '@/lib/pantallas';
 import type { Usuario, Cuenta, FormState } from '@/types/pantallas';
 
-// ⬇ Ajusta la ruta si guardaste estos helpers en otro lado
+// Reutiliza tu bus de mutaciones / cache
 import {
   mergePantallaIntoCache,
   notifyPantallasChanged,
+  LS_STAMP_P,
+  BC_NAME,
 } from '@/lib/pantallasMutationBus';
 
 /* ===================== Fecha ===================== */
@@ -46,7 +48,19 @@ const toMoney = (n: number | null) =>
 
 /* ===================== Constantes ===================== */
 const LAST_PLATFORM_KEY = 'pantallas:lastPlatformId';
-const USER_CACHE_TTL = 60_000;
+
+// TTLs
+const USERS_ALL_CACHE_TTL = 30 * 60_000; // 30 min catálogo completo de usuarios
+const LIST_CACHE_TTL = 5 * 60_000;       // 5 min para cuentas/inventario
+const COUNT_CACHE_TTL = 5 * 60_000;      // 5 min para conteos por email
+const STAMP_POLL_MS = 30_000;
+
+// Stamps & LS keys
+const STAMP_KEY_ALL = '__stamp_all_combined';
+const LS_USERS_ALL = '__usuarios_all_cache_v1';          // { map, ts, stamp }
+const LS_ACCT_PREFIX = '__cuentas_cache_v2:';            // por plataforma: { map, ts, stamp }
+const LS_INV_PREFIX = '__inventario_cache_v2:';          // por plataforma: { map, ts, stamp }
+const LS_COUNTS_PREFIX = '__email_counts_v2:';           // por plataforma: { map }
 
 /* ===================== Tipos extras ===================== */
 type FormStateEx = FormState & {
@@ -60,9 +74,45 @@ type InventarioItem = {
   clave?: string | null;
 };
 
-/* ===================== Helpers fetch ===================== */
+/* ===================== Helpers LS/Stamp ===================== */
+const hasWindow = () => typeof window !== 'undefined';
 const normalizeEmail = (s: string) => s.trim().toLowerCase();
 
+function readLS<T = any>(key: string): T | null {
+  if (!hasWindow()) return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+function writeLS(key: string, val: any) {
+  if (!hasWindow()) return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(val));
+  } catch {}
+}
+function getCurrentStamp(): number {
+  if (!hasWindow()) return 0;
+  const s = window.localStorage.getItem(STAMP_KEY_ALL);
+  return s ? Number(s) || 0 : 0;
+}
+async function refreshStampOnce(): Promise<number> {
+  try {
+    const r = await fetch('/api/pantallas/stamp', { cache: 'no-store' });
+    const j = await r.json().catch(() => ({ stamp: 0 }));
+    const n = Number(j?.stamp) || 0;
+    try {
+      window.localStorage.setItem(STAMP_KEY_ALL, String(n));
+    } catch {}
+    return n;
+  } catch {
+    return getCurrentStamp();
+  }
+}
+
+/* ===================== Fetch helpers ===================== */
 async function fetchListSafe(urls: string[]): Promise<any[]> {
   for (const url of urls) {
     try {
@@ -113,7 +163,118 @@ async function countPantallasSmart(
   }
 }
 
-/* ===================== Helpers UI (modal) ===================== */
+/* ===================== CACHE: Usuarios (catálogo completo) ===================== */
+type UsersAllCache = {
+  map: Record<string, Usuario>; // key: normalizeContacto(u.contacto)
+  ts: number;
+  stamp: number;
+};
+
+function readUsersAll(): UsersAllCache | null {
+  return readLS<UsersAllCache>(LS_USERS_ALL);
+}
+function writeUsersAll(map: Record<string, Usuario>) {
+  writeLS(LS_USERS_ALL, { map, ts: Date.now(), stamp: getCurrentStamp() } as UsersAllCache);
+}
+function usersAllFresh(c: UsersAllCache | null): boolean {
+  if (!c) return false;
+  const sameStamp = c.stamp === getCurrentStamp();
+  const fresh = Date.now() - c.ts <= USERS_ALL_CACHE_TTL;
+  return sameStamp && fresh;
+}
+
+/** Devuelve:
+ *  - Usuario si está en cache,
+ *  - null si el cache dice que no existe,
+ *  - undefined si aún no hay cache o está vencido.
+ */
+function getUserFromAllCache(norm: string): Usuario | null | undefined {
+  const c = readUsersAll();
+  if (!usersAllFresh(c)) return undefined;
+  const u = c!.map[norm];
+  return u ?? null;
+}
+
+async function ensureUsersAllLoaded() {
+  const c = readUsersAll();
+  if (usersAllFresh(c)) return;
+
+  const arr: Usuario[] = (await fetchListSafe([
+    '/api/usuarios?limit=100000',
+    '/api/usuarios?limit=50000',
+    '/api/usuarios',
+  ])) as Usuario[];
+
+  const map: Record<string, Usuario> = {};
+  for (const u of arr) {
+    const k = normalizeContacto(String(u.contacto ?? ''));
+    if (!k) continue;
+    map[k] = u; // último gana
+  }
+  writeUsersAll(map);
+}
+
+/* ===================== CACHE: Cuentas compartidas ===================== */
+type AcctEntry = { id: number; pass: string | null };
+type AcctCacheShape = { map: Record<string, AcctEntry>; ts: number; stamp: number };
+function acctKey(pid: number) {
+  return `${LS_ACCT_PREFIX}${pid}`;
+}
+function readAcctCache(pid: number): AcctCacheShape | null {
+  return readLS<AcctCacheShape>(acctKey(pid));
+}
+function writeAcctCache(pid: number, map: Record<string, AcctEntry>) {
+  writeLS(acctKey(pid), { map, ts: Date.now(), stamp: getCurrentStamp() } as AcctCacheShape);
+}
+function getAcctMap(pid: number): Record<string, AcctEntry> | null {
+  const c = readAcctCache(pid);
+  if (!c) return null;
+  const sameStamp = c.stamp === getCurrentStamp();
+  const fresh = Date.now() - c.ts <= LIST_CACHE_TTL;
+  return sameStamp && fresh ? c.map : null;
+}
+
+/* ===================== CACHE: Inventario ===================== */
+type InvEntry = { pass: string | null };
+type InvCacheShape = { map: Record<string, InvEntry>; ts: number; stamp: number };
+function invKey(pid: number) {
+  return `${LS_INV_PREFIX}${pid}`;
+}
+function readInvCache(pid: number): InvCacheShape | null {
+  return readLS<InvCacheShape>(invKey(pid));
+}
+function writeInvCache(pid: number, map: Record<string, InvEntry>) {
+  writeLS(invKey(pid), { map, ts: Date.now(), stamp: getCurrentStamp() } as InvCacheShape);
+}
+function getInvMap(pid: number): Record<string, InvEntry> | null {
+  const c = readInvCache(pid);
+  if (!c) return null;
+  const sameStamp = c.stamp === getCurrentStamp();
+  const fresh = Date.now() - c.ts <= LIST_CACHE_TTL;
+  return sameStamp && fresh ? c.map : null;
+}
+
+/* ===================== CACHE: Conteos por email ===================== */
+type CountEntry = { count: number; ts: number; stamp: number };
+type CountCacheShape = { map: Record<string, CountEntry> };
+function countsKey(pid: number) {
+  return `${LS_COUNTS_PREFIX}${pid}`;
+}
+function getCountFromCache(pid: number, email: string): number | undefined {
+  const all = readLS<CountCacheShape>(countsKey(pid)) || { map: {} };
+  const entry = all.map[email];
+  if (!entry) return undefined;
+  const sameStamp = entry.stamp === getCurrentStamp();
+  const fresh = Date.now() - entry.ts <= COUNT_CACHE_TTL;
+  return sameStamp && fresh ? entry.count : undefined;
+}
+function setCountInCache(pid: number, email: string, count: number) {
+  const all = readLS<CountCacheShape>(countsKey(pid)) || { map: {} };
+  all.map[email] = { count, ts: Date.now(), stamp: getCurrentStamp() };
+  writeLS(countsKey(pid), all);
+}
+
+/* ===================== UI helpers ===================== */
 const isEmpty = (v: any) => v == null || v === '';
 function copyToClipboard(text: string) {
   try {
@@ -153,6 +314,89 @@ export default function FormPantallas() {
   });
 
   const { plataformas, loading: platLoading, error: platError } = usePlataformas();
+
+  // ⬇ NUEVO: controla si el nombre fue editado manualmente
+  const [nombreDirty, setNombreDirty] = useState(false);
+  // ⬇ NUEVO: recuerda el último contacto normalizado para detectar cambios reales
+  const lastContactoRef = useRef<string>('');
+
+  /* ====== Stamp polling + invalidación pasiva ====== */
+  useEffect(() => {
+    let alive = true;
+    refreshStampOnce(); // primer fetch
+
+    const onStorage = (e: StorageEvent) => {
+      if (!alive) return;
+      if (e.key === LS_STAMP_P || e.key === STAMP_KEY_ALL) {
+        // El sello en LS hace expirar entradas en lectura.
+      }
+    };
+    window.addEventListener('storage', onStorage);
+
+    // BroadcastChannel del bus existente
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel(BC_NAME);
+      bc.onmessage = (ev) => {
+        if (ev?.data?.type === 'invalidate-pantallas') {
+          refreshStampOnce();
+        }
+      };
+    } catch {}
+
+    const onFocus = () => refreshStampOnce();
+    window.addEventListener('focus', onFocus);
+
+    const id = window.setInterval(() => {
+      refreshStampOnce();
+    }, STAMP_POLL_MS);
+
+    return () => {
+      alive = false;
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', onFocus);
+      if (id) clearInterval(id);
+      try {
+        bc?.close();
+      } catch {}
+    };
+  }, []);
+
+  /* ====== Autocompletar NOMBRE con cache de usuarios ====== */
+  useEffect(() => {
+    const raw = form.contacto.trim();
+    const norm = normalizeContacto(raw);
+
+    // Si el contacto cambió (comparando normalizado), reseteamos estado de nombre
+    if ((norm || '') !== lastContactoRef.current) {
+      lastContactoRef.current = norm || '';
+      // permitimos que el nuevo contacto vuelva a autocompletar
+      setNombreDirty(false);
+      // limpiamos el nombre anterior para que no quede pegado
+      setForm((s) => ({ ...s, nombre: '' }));
+    }
+
+    if (!norm || norm.length < 5) return;
+
+    let canceled = false;
+    const run = async () => {
+      // Si no hay cache listo, cargamos catálogo completo
+      if (getUserFromAllCache(norm) === undefined) {
+        await ensureUsersAllLoaded();
+      }
+      const u = getUserFromAllCache(norm);
+      // Solo autocompletamos si el usuario NO modificó el nombre manualmente
+      if (!canceled && u && !nombreDirty) {
+        setForm((s) => ({ ...s, nombre: u.nombre ?? '' }));
+      }
+    };
+
+    const id = window.setTimeout(run, 150);
+    return () => {
+      canceled = true;
+      clearTimeout(id);
+    };
+  }, [form.contacto, nombreDirty]);
 
   /* ====== Map id->nombre y orden priorizando último usado ====== */
   const plataformaMap = useMemo(() => {
@@ -197,60 +441,7 @@ export default function FormPantallas() {
   const [confirmText, setConfirmText] = useState<string>('');
   const [confirmView, setConfirmView] = useState<'resumen' | 'json'>('resumen');
 
-  /* ===== Autocompletar nombre (usuario) ===== */
-  const userTimer = useRef<number | null>(null);
-  const userCache = useRef<Map<string, { data: Usuario | null; ts: number }>>(new Map());
-  const getUserCache = (k: string) => {
-    const hit = userCache.current.get(k);
-    if (!hit) return undefined;
-    if (Date.now() - hit.ts > USER_CACHE_TTL) {
-      userCache.current.delete(k);
-      return undefined;
-    }
-    return hit.data;
-  };
-  const setUserCache = (k: string, data: Usuario | null) =>
-    userCache.current.set(k, { data, ts: Date.now() });
-
-  useEffect(() => {
-    const raw = form.contacto.trim();
-    const norm = normalizeContacto(raw);
-    if (userTimer.current) {
-      clearTimeout(userTimer.current);
-      userTimer.current = null;
-    }
-    if (!norm || norm.length < 5) return;
-
-    const cached = getUserCache(norm);
-    if (cached !== undefined) {
-      if (cached) setForm((s) => ({ ...s, nombre: cached.nombre ?? '' }));
-      return;
-    }
-
-    userTimer.current = window.setTimeout(async () => {
-      try {
-        const urls = [
-          `/api/usuarios?q=${encodeURIComponent(raw)}`,
-          norm !== raw ? `/api/usuarios?q=${encodeURIComponent(norm)}` : '',
-        ].filter(Boolean) as string[];
-        let arr: Usuario[] = [];
-        for (const url of urls) {
-          const r = await fetch(url, { cache: 'no-store' });
-          if (!r.ok) continue;
-          arr = arr.concat(await r.json());
-        }
-        const exact = arr.find((u) => normalizeContacto(u.contacto) === norm) ?? null;
-        setUserCache(norm, exact);
-        if (exact) setForm((s) => ({ ...s, nombre: exact.nombre ?? '' }));
-      } catch {}
-    }, 350);
-
-    return () => {
-      if (userTimer.current) clearTimeout(userTimer.current);
-    };
-  }, [form.contacto]);
-
-  /* ===== Sugerencias de CORREO (inventario + cuentas) ===== */
+  /* ===== Sugerencias de CORREO (cuentas compartidas + inventario) con cache ===== */
   const [open, setOpen] = useState(false);
   const [loadingEmails, setLoadingEmails] = useState(false);
   const [errEmails, setErrEmails] = useState<string | null>(null);
@@ -288,56 +479,93 @@ export default function FormPantallas() {
     try {
       const pid = form.plataforma_id;
 
-      // 1) cuentas compartidas
-      const rAcct = await fetch(`/api/cuentascompartidas?plataforma_id=${pid}`, {
-        cache: 'no-store',
-      });
-      if (!rAcct.ok) throw new Error('No se pudieron cargar correos');
-      const acctRows: Cuenta[] = await rAcct.json();
+      // 0) Intento usar caches persistentes
+      let acctMap = getAcctMap(pid); // { [email]: {id, pass} }
+      let invMap = getInvMap(pid);   // { [email]: {pass} }
+
+      // 1) Si falta alguno, fetch y persiste
+      if (!acctMap) {
+        const rAcct = await fetch(`/api/cuentascompartidas?plataforma_id=${pid}`, {
+          cache: 'no-store',
+        });
+        if (!rAcct.ok) throw new Error('No se pudieron cargar correos');
+        const acctRows: Cuenta[] = await rAcct.json();
+        const m: Record<string, AcctEntry> = {};
+        for (const r of acctRows) {
+          const c = normalizeEmail(r?.correo ?? '');
+          if (!c) continue;
+          m[c] = {
+            id: m[c]?.id != null ? Math.max(m[c].id, r.id) : r.id,
+            pass: (r as any).contrasena ?? null,
+          };
+        }
+        writeAcctCache(pid, m);
+        acctMap = m;
+      }
+      if (!invMap) {
+        const rInv = await fetch(`/api/inventario?plataforma_id=${pid}&limit=100`, {
+          cache: 'no-store',
+        });
+        const m: Record<string, InvEntry> = {};
+        if (rInv.ok) {
+          const invRows: InventarioItem[] = await rInv.json();
+          for (const it of invRows) {
+            const c = normalizeEmail(it?.correo ?? '');
+            if (!c) continue;
+            m[c] = { pass: (it as any).clave ?? null };
+          }
+        }
+        writeInvCache(pid, m);
+        invMap = m;
+      }
+
+      // 2) Construir opciones (hasta 20, priorizando cuentas compartidas)
       const seen = new Set<string>();
       const nextOptions: Array<{ email: string; source: 'acct' | 'inv' }> = [];
 
-      const nextAcctId: Record<string, number> = {};
-      const nextAcctPass: Record<string, string | null> = {};
-
-      for (const r of acctRows) {
-        const c = normalizeEmail(r?.correo ?? '');
-        if (!c || seen.has(c)) continue;
-        seen.add(c);
-        nextOptions.push({ email: c, source: 'acct' });
-        nextAcctId[c] = nextAcctId[c] != null ? Math.max(nextAcctId[c], r.id) : r.id;
-        if ((r as any).contrasena !== undefined) nextAcctPass[c] = (r as any).contrasena ?? null;
+      for (const email of Object.keys(acctMap)) {
+        if (seen.has(email)) continue;
+        seen.add(email);
+        nextOptions.push({ email, source: 'acct' });
         if (nextOptions.length >= 20) break;
       }
-
-      // 2) inventario (completa hasta 20, sin duplicar)
-      const rInv = await fetch(`/api/inventario?plataforma_id=${pid}&limit=100`, {
-        cache: 'no-store',
-      });
-      if (rInv.ok) {
-        const invRows: InventarioItem[] = await rInv.json();
-        const invPasses: Record<string, string | null> = {};
-        for (const it of invRows) {
-          const c = normalizeEmail(it?.correo ?? '');
-          if (!c || seen.has(c)) continue;
-          seen.add(c);
-          nextOptions.push({ email: c, source: 'inv' });
-          invPasses[c] = (it as any).clave ?? null;
+      if (nextOptions.length < 20) {
+        for (const email of Object.keys(invMap)) {
+          if (seen.has(email)) continue;
+          seen.add(email);
+          nextOptions.push({ email, source: 'inv' });
           if (nextOptions.length >= 20) break;
         }
-        setInvPassMap((m) => ({ ...m, ...invPasses }));
       }
 
+      // 3) Setear maps locales
+      const nextAcctId: Record<string, number> = {};
+      const nextAcctPass: Record<string, string | null> = {};
+      for (const [email, entry] of Object.entries(acctMap)) {
+        nextAcctId[email] = entry.id;
+        nextAcctPass[email] = entry.pass ?? null;
+      }
+      const nextInvPass: Record<string, string | null> = {};
+      for (const [email, entry] of Object.entries(invMap)) {
+        nextInvPass[email] = entry.pass ?? null;
+      }
       setAcctIdMap(nextAcctId);
       setAcctPassMap(nextAcctPass);
+      setInvPassMap(nextInvPass);
       setOptions(nextOptions);
 
-      // 3) conteo de pantallas por opción (smart)
+      // 4) Conteos smart (con cache por email+plataforma)
       await Promise.all(
-        nextOptions.slice(0, 20).map(async ({ email, source }) => {
+        nextOptions.map(async ({ email, source }) => {
+          const cached = getCountFromCache(pid, email);
+          if (cached !== undefined) {
+            setEmailCounts((m) => ({ ...m, [email]: cached }));
+            return;
+          }
           const cid = source === 'acct' ? nextAcctId[email] : undefined;
           const n = await countPantallasSmart(email, cid, pid);
           setEmailCounts((m) => ({ ...m, [email]: n }));
+          setCountInCache(pid, email, n);
         })
       );
     } catch (e: any) {
@@ -379,25 +607,37 @@ export default function FormPantallas() {
     setOpen(false);
   };
 
-  // Al escribir correo manualmente, intenta completar desde cuentas/inventario y actualizar contador
+  // Al escribir correo manualmente, intenta completar desde cache cuentas/inventario y actualizar contador
   const emailDetailTimer = useRef<number | null>(null);
   useEffect(() => {
     const key = normalizeEmail(form.correo);
     if (!key || !form.plataforma_id) return;
 
-    const cid = acctIdMap[key];
-    const passAcct = acctPassMap[key];
-    const passInv = invPassMap[key];
+    const pid = form.plataforma_id;
 
-    if (cid && form.cuenta_id == null) setForm((s) => ({ ...s, cuenta_id: cid }));
-    if (!form.contrasena && (passAcct || passInv))
-      setForm((s) => ({ ...s, contrasena: passAcct || passInv || '' }));
+    // Completar desde cache persistente si existe
+    const acct = getAcctMap(pid)?.[key];
+    const inv = getInvMap(pid)?.[key];
+    if (acct?.id && form.cuenta_id == null) setForm((s) => ({ ...s, cuenta_id: acct.id }));
+    const candidatePass = acct?.pass ?? inv?.pass ?? null;
+    if (!form.contrasena && candidatePass)
+      setForm((s) => ({ ...s, contrasena: candidatePass || '' }));
 
-    countPantallasSmart(key, cid, form.plataforma_id).then((n) =>
-      setEmailCounts((m) => ({ ...m, [key]: n }))
-    );
+    // Conteo desde cache o servidor
+    const cachedCount = getCountFromCache(pid, key);
+    if (cachedCount !== undefined) {
+      setEmailCounts((m) => ({ ...m, [key]: cachedCount }));
+    } else {
+      countPantallasSmart(key, acct?.id, pid).then((n) => {
+        setEmailCounts((m) => ({ ...m, [key]: n }));
+        setCountInCache(pid, key, n);
+      });
+    }
 
-    if ((cid && passAcct != null) || passInv != null) return;
+    // Si no existía en caches, intentamos fetch puntual (debounced) y cacheamos
+    const needAcct = !acct;
+    const needInv = !inv;
+    if (!needAcct && !needInv) return;
 
     if (emailDetailTimer.current) {
       clearTimeout(emailDetailTimer.current);
@@ -405,41 +645,61 @@ export default function FormPantallas() {
     }
     emailDetailTimer.current = window.setTimeout(async () => {
       try {
-        const r1 = await fetch(
-          `/api/cuentascompartidas?q=${encodeURIComponent(key)}&plataforma_id=${form.plataforma_id}`,
-          { cache: 'no-store' }
-        );
-        if (r1.ok) {
-          const arr: Cuenta[] = await r1.json();
-          const exact = arr.find((r) => normalizeEmail(r?.correo ?? '') === key);
-          if (exact) {
-            setAcctIdMap((m) => ({ ...m, [key]: exact.id }));
-            if ((exact as any).contrasena !== undefined) {
-              setAcctPassMap((m) => ({ ...m, [key]: (exact as any).contrasena ?? null }));
+        if (needAcct) {
+          const r1 = await fetch(
+            `/api/cuentascompartidas?q=${encodeURIComponent(key)}&plataforma_id=${pid}`,
+            { cache: 'no-store' }
+          );
+          if (r1.ok) {
+            const arr: Cuenta[] = await r1.json();
+            const exact = arr.find((r) => normalizeEmail(r?.correo ?? '') === key);
+            if (exact) {
+              // actualizar cache persistente de cuentas
+              const base = getAcctMap(pid) || {};
+              base[key] = {
+                id: exact.id,
+                pass: (exact as any).contrasena ?? null,
+              };
+              writeAcctCache(pid, base);
+
+              setAcctIdMap((m) => ({ ...m, [key]: exact.id }));
+              if ((exact as any).contrasena !== undefined) {
+                setAcctPassMap((m) => ({ ...m, [key]: (exact as any).contrasena ?? null }));
+              }
+              setForm((s) => ({
+                ...s,
+                cuenta_id: s.cuenta_id ?? exact.id,
+                contrasena: s.contrasena || (exact as any).contrasena || '',
+              }));
+              const n = await countPantallasSmart(key, exact.id, pid);
+              setEmailCounts((m) => ({ ...m, [key]: n }));
+              setCountInCache(pid, key, n);
+              return;
             }
-            setForm((s) => ({
-              ...s,
-              cuenta_id: s.cuenta_id ?? exact.id,
-              contrasena: s.contrasena || (exact as any).contrasena || '',
-            }));
-            const n = await countPantallasSmart(key, exact.id, form.plataforma_id);
-            setEmailCounts((m) => ({ ...m, [key]: n }));
-            return;
           }
         }
-        const r2 = await fetch(
-          `/api/inventario?q=${encodeURIComponent(key)}&plataforma_id=${form.plataforma_id}`,
-          { cache: 'no-store' }
-        );
-        if (r2.ok) {
-          const arr: InventarioItem[] = await r2.json();
-          const exact = arr.find((it) => normalizeEmail(it?.correo ?? '') === key);
-          if (exact && (exact as any).clave != null && !form.contrasena) {
-            setInvPassMap((m) => ({ ...m, [key]: (exact as any).clave ?? null }));
-            setForm((s) => ({ ...s, contrasena: (exact as any).clave || '' }));
+        if (needInv) {
+          const r2 = await fetch(
+            `/api/inventario?q=${encodeURIComponent(key)}&plataforma_id=${pid}`,
+            { cache: 'no-store' }
+          );
+          if (r2.ok) {
+            const arr: InventarioItem[] = await r2.json();
+            const exact = arr.find((it) => normalizeEmail(it?.correo ?? '') === key);
+            if (exact) {
+              const base = getInvMap(pid) || {};
+              base[key] = { pass: (exact as any).clave ?? null };
+              writeInvCache(pid, base);
+
+              if ((exact as any).clave != null && !form.contrasena) {
+                setInvPassMap((m) => ({ ...m, [key]: (exact as any).clave ?? null }));
+                setForm((s) => ({ ...s, contrasena: (exact as any).clave || '' }));
+              }
+              const n = await countPantallasSmart(key, undefined, pid);
+              setEmailCounts((m) => ({ ...m, [key]: n }));
+              setCountInCache(pid, key, n);
+            }
           }
-          const n = await countPantallasSmart(key, undefined, form.plataforma_id);
-          setEmailCounts((m) => ({ ...m, [key]: n }));
         }
       } catch {}
     }, 350);
@@ -456,40 +716,46 @@ export default function FormPantallas() {
     const norm = normalizeContacto(raw);
     if (!norm) return;
     try {
-      const urls = [
-        `/api/usuarios?q=${encodeURIComponent(raw)}`,
-        norm !== raw ? `/api/usuarios?q=${encodeURIComponent(norm)}` : '',
-      ].filter(Boolean) as string[];
-      let arr: Usuario[] = [];
-      for (const url of urls) {
-        const r = await fetch(url, { cache: 'no-store' });
-        if (!r.ok) continue;
-        arr = arr.concat(await r.json());
-        if (arr.length > 0 && url !== '/api/usuarios') break;
-      }
-      const exists = arr.some((u) => normalizeContacto(u.contacto) === norm);
+      await ensureUsersAllLoaded(); // aseguramos catálogo en cache
+      const current = readUsersAll();
+      const exists = !!current?.map?.[norm];
       if (exists) return;
 
-      await fetch('/api/usuarios', {
+      // No existe: crearlo y actualizar cache local sin pedir todo de nuevo
+      const res = await fetch('/api/usuarios', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contacto: raw, nombre: nombre || null }),
       });
+      if (res.ok) {
+        const created: Usuario = await res.json();
+        const next = readUsersAll();
+        const map = next?.map ?? {};
+        map[norm] = created;
+        writeUsersAll(map);
+        await refreshStampOnce(); // para invalidar caches en otras pestañas
+      }
     } catch {}
   }
 
   async function ensureCuentaCompartida(correo: string, plataformaId: number) {
     const key = normalizeEmail(correo);
-    if (acctIdMap[key]) {
-      const count = await countPantallasSmart(key, acctIdMap[key], plataformaId);
+    const pid = plataformaId;
+
+    // cache primero
+    const cached = getAcctMap(pid)?.[key];
+    if (cached?.id) {
+      const count = await countPantallasSmart(key, cached.id, pid);
       setEmailCounts((m) => ({ ...m, [key]: count }));
-      return { id: acctIdMap[key], countAfter: count };
+      setCountInCache(pid, key, count);
+      return { id: cached.id, countAfter: count };
     }
+
     const res = await fetch('/api/cuentascompartidas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        plataforma_id: plataformaId,
+        plataforma_id: pid,
         correo,
         contrasena: form.contrasena || null,
         proveedor: form.proveedor || null,
@@ -500,10 +766,19 @@ export default function FormPantallas() {
       throw new Error(j?.error ?? 'No se pudo crear la cuenta compartida');
     }
     const saved: Cuenta = await res.json();
-    setAcctIdMap((m) => ({ ...m, [key]: saved.id }));
-    setAcctPassMap((m) => ({ ...m, [key]: form.contrasena || null }));
-    const count = await countPantallasSmart(key, saved.id, plataformaId);
+
+    // Actualizar cache persistente
+    const base = getAcctMap(pid) || {};
+    base[key] = { id: saved.id, pass: form.contrasena || null };
+    writeAcctCache(pid, base);
+
+    const count = await countPantallasSmart(key, saved.id, pid);
     setEmailCounts((m) => ({ ...m, [key]: count }));
+    setCountInCache(pid, key, count);
+
+    // sello
+    await refreshStampOnce();
+
     return { id: saved.id, countAfter: count };
   }
 
@@ -546,7 +821,6 @@ export default function FormPantallas() {
       (!Number.isNaN(Number(form.total_pagado_proveedor)) &&
         Number(form.total_pagado_proveedor) >= 0);
 
-    // ✅ Nuevos requeridos
     const correoOk =
       form.correo.trim() !== '' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo.trim());
     const passOk = (form.contrasena ?? '').trim() !== '';
@@ -600,7 +874,6 @@ export default function FormPantallas() {
     setOkMsg(null);
     setErrMsg(null);
 
-    // 🔐 Doble seguridad: correo + contraseña requeridos y válidos
     const correoTrim = form.correo.trim();
     if (!correoTrim || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoTrim)) {
       setErrMsg('El correo es obligatorio y debe ser válido.');
@@ -616,6 +889,7 @@ export default function FormPantallas() {
     }
 
     try {
+      await ensureUsersAllLoaded(); // cache de usuarios listo
       await ensureUsuario(form.contacto, form.nombre || null);
 
       let cuentaId: number | null = form.cuenta_id ?? null;
@@ -665,12 +939,14 @@ export default function FormPantallas() {
         notifyPantallasChanged();
       } catch {}
 
+      // sello combinado (expira caches dependientes)
+      await refreshStampOnce();
+
       setOkMsg(`Guardado correctamente (id: ${saved?.id ?? '—'}).`);
       setConfirmOpen(false);
 
-      // limpiar caches auxiliares
+      // limpiar maps auxiliares
       try {
-        userCache.current?.clear?.();
         setAcctIdMap({});
         setAcctPassMap({});
         setInvPassMap({});
@@ -763,9 +1039,12 @@ export default function FormPantallas() {
             />
             <FieldPantallas
               label="Nombre"
-              placeholder="Se autocompleta si el contacto existe"
+              placeholder="Se autocompleta si el contacto existe (desde cache)"
               value={form.nombre}
-              onChange={(v: string) => setForm((s) => ({ ...s, nombre: v }))}
+              onChange={(v: string) => {
+                setNombreDirty(true); // <— marcado manual
+                setForm((s) => ({ ...s, nombre: v }));
+              }}
               inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
             />
           </div>
@@ -776,7 +1055,7 @@ export default function FormPantallas() {
           <h3 className="font-semibold mb-3">Pantalla</h3>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            {/* Plataforma (prioriza última usada) */}
+            {/* Plataforma */}
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <label className="block text-sm text-neutral-300">
@@ -817,7 +1096,7 @@ export default function FormPantallas() {
               </select>
             </div>
 
-            {/* Correo + sugerencias unificadas (OBLIGATORIO) */}
+            {/* Correo + sugerencias */}
             <div className="relative" ref={boxRef}>
               <FieldPantallas
                 label="Correo *"
@@ -887,10 +1166,10 @@ export default function FormPantallas() {
               inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
             />
 
-            {/* Contraseña (OBLIGATORIA) */}
+            {/* Contraseña SIEMPRE VISIBLE */}
             <FieldPantallas
               label="Contraseña *"
-              type="password"
+              type="text"               // 👈 siempre visible
               placeholder="Requerida"
               value={form.contrasena}
               onChange={(v: string) => setForm((s) => ({ ...s, contrasena: v }))}
@@ -1050,6 +1329,8 @@ export default function FormPantallas() {
               });
               setOptions([]);
               setEmailCounts({});
+              setNombreDirty(false);
+              lastContactoRef.current = '';
             }}
             className="px-4 py-2 rounded-xl border"
           >
