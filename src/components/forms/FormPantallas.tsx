@@ -125,6 +125,71 @@ async function fetchListSafe(urls: string[]): Promise<any[]> {
   return [];
 }
 
+async function fetchPantallasByEmailOrCuenta(
+  email: string,
+  cuentaId?: number,
+  plataformaId?: number
+): Promise<Array<{ nro_pantalla: any }>> {
+  const key = normalizeEmail(email);
+  const base = '/api/pantallas';
+  const urls = plataformaId
+    ? [
+        `${base}?plataforma_id=${plataformaId}&correo=${encodeURIComponent(key)}&limit=5000`,
+        `${base}?plataforma_id=${plataformaId}&q=${encodeURIComponent(key)}&limit=5000`,
+        `${base}?plataforma_id=${plataformaId}&limit=5000`,
+      ]
+    : [
+        `${base}?correo=${encodeURIComponent(key)}&limit=5000`,
+        `${base}?q=${encodeURIComponent(key)}&limit=5000`,
+        `${base}?limit=5000`,
+      ];
+
+  // Si tenemos cuentaId, priorizamos esa consulta
+  const urlsWithCuenta = cuentaId
+    ? [
+        `${base}?cuenta_id=${cuentaId}&limit=5000`,
+        ...urls,
+      ]
+    : urls;
+
+  const arr = await fetchListSafe(urlsWithCuenta);
+  return Array.isArray(arr) ? arr : [];
+}
+
+/** Detecta el campo correcto de “pantallas permitidas” en la plataforma. */
+function resolveMaxPantallas(p: any): number {
+  const toNum = (x: any) => {
+    const n = Number(x);
+    return Number.isFinite(n) ? n : undefined;
+  };
+
+  // 👉 incluye tu nombre de columna real: cantidad_pantallas
+  const candidates = [
+    toNum(p?.cantidad_pantallas),
+    toNum(p?.cantidadPantallas),
+    toNum(p?.max_pantallas),
+    toNum(p?.pantallas_permitidas),
+    toNum(p?.perfiles),
+    toNum(p?.max_perfiles),
+    toNum(p?.pantallas),
+    toNum(p?.capacidad_pantallas),
+  ];
+
+  const val = candidates.find((n) => typeof n === 'number' && n > 0);
+  // ⚠️ Evita el fallback a 6; usa 1 si no hay dato para no sobre-asignar
+  return val ?? 1;
+}
+
+async function fetchPlataformaById(pid: number): Promise<any | null> {
+  try {
+    const r = await fetch(`/api/plataformas/${pid}`, { cache: 'no-store' });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
+
 async function fetchPantallasCountByEmailPlat(
   email: string,
   plataformaId?: number
@@ -313,6 +378,9 @@ export default function FormPantallas() {
     comentario: '',
   });
 
+  const [availableSlots, setAvailableSlots] = useState<number[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [slotsError, setSlotsError] = useState<string | null>(null);
   const { plataformas, loading: platLoading, error: platError } = usePlataformas();
 
   // ⬇ NUEVO: controla si el nombre fue editado manualmente
@@ -461,6 +529,80 @@ export default function FormPantallas() {
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
+
+  useEffect(() => {
+  let cancelled = false;
+
+  async function computeSlots() {
+    setSlotsError(null);
+    setAvailableSlots([]);
+
+    const pid = form.plataforma_id;
+    const email = normalizeEmail(form.correo);
+    if (!pid || !email) return; // Falta info básica
+
+    setLoadingSlots(true);
+    try {
+      // 1) Lee la plataforma y determina el máximo permitido
+      let p: any = plataformas.find((x) => x.id === pid);
+      let maxAllowed = resolveMaxPantallas(p);
+
+      // Si el hook no trae cantidad_pantallas (o maxAllowed <= 1 por falta de dato), intenta fetch directo
+      if (!p || maxAllowed <= 1) {
+        const pFull = await fetchPlataformaById(pid);
+        if (pFull) {
+          p = { ...p, ...pFull }; // merge suave
+          maxAllowed = resolveMaxPantallas(p);
+        }
+      }
+
+      // 2) Pantallas ocupadas por esa cuenta/correo en esa plataforma
+      const rows = await fetchPantallasByEmailOrCuenta(
+        email,
+        form.cuenta_id ?? undefined,
+        pid
+      );
+
+      const taken = new Set<number>();
+      for (const r of rows) {
+        const raw = (r?.nro_pantalla ?? '').toString().trim();
+        const n = Number(raw);
+        if (Number.isInteger(n) && n >= 1) taken.add(n);
+      }
+
+      // 3) Libres = [1..maxAllowed] \ taken
+      const free: number[] = [];
+      for (let i = 1; i <= maxAllowed; i++) {
+        if (!taken.has(i)) free.push(i);
+      }
+
+      if (!cancelled) {
+        setAvailableSlots(free);
+        // Si la selección actual ya no es válida, limpiar
+        if (
+          form.nro_pantalla &&
+          (!free.includes(Number(form.nro_pantalla)) || !Number(form.nro_pantalla))
+        ) {
+          setForm((s) => ({ ...s, nro_pantalla: '' }));
+        }
+      }
+    } catch (e: any) {
+      if (!cancelled) {
+        setSlotsError(e?.message ?? 'No se pudieron calcular las pantallas disponibles');
+      }
+    } finally {
+      if (!cancelled) setLoadingSlots(false);
+    }
+  }
+
+  computeSlots();
+  return () => {
+    cancelled = true;
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [form.plataforma_id, form.correo, form.cuenta_id, plataformas]);
+
+
 
   useEffect(() => {
     // reset al cambiar plataforma
@@ -805,8 +947,14 @@ export default function FormPantallas() {
     if (form.total_ganado !== txt) setForm((s) => ({ ...s, total_ganado: txt }));
   }, [form.total_pagado, form.total_pagado_proveedor]);
 
+  const isValidPantalla = (val: string, available: number[]) => {
+  const n = Number(val);
+  return Number.isInteger(n) && available.includes(n);
+  };
+
   /* ===== Validación (correo y contraseña obligatorios) ===== */
   const canSubmit = useMemo(() => {
+    const pantallaOk = isValidPantalla(String(form.nro_pantalla || ''), availableSlots);
     const plataformaOk = Number.isInteger(form.plataforma_id) && form.plataforma_id > 0;
     const contactoOk = form.contacto.trim() !== '';
     const fechasOk = !!form.fecha_compra && !!form.fecha_vencimiento;
@@ -834,7 +982,8 @@ export default function FormPantallas() {
       totalOk &&
       totalProvOk &&
       correoOk &&
-      passOk
+      passOk &&
+      pantallaOk
     );
   }, [form]);
 
@@ -1104,7 +1253,7 @@ export default function FormPantallas() {
                 type="email"
                 placeholder="correo@dominio.com"
                 value={form.correo}
-                onChange={(v: string) => setForm((s) => ({ ...s, correo: v }))}
+                onChange={(v: string) => setForm((s) => ({ ...s, correo: v, nro_pantalla: '' }))}
                 onFocus={onFocusCorreo}
                 required
                 onInvalid={(e: any) => e.currentTarget.setCustomValidity('Ingresa un correo válido')}
@@ -1179,15 +1328,57 @@ export default function FormPantallas() {
               inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
             />
 
-            {/* Nro. pantalla */}
-            <FieldPantallas
-              label="Nro. pantalla"
-              type="text"
-              placeholder="Ej. 1, A1, PERFIL-2…"
-              value={form.nro_pantalla}
-              onChange={(v: string) => setForm((s) => ({ ...s, nro_pantalla: v }))}
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-            />
+            {/* Nro. pantalla (select de disponibles) */}
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <label className="block text-sm text-neutral-300">
+                  Nro. pantalla <span className="text-red-600">*</span>
+                </label>
+                {form.plataforma_id > 0 && (
+                  <span className="text-xs text-neutral-400">
+                    {loadingSlots
+                      ? 'Calculando…'
+                      : slotsError
+                      ? 'Error al calcular'
+                      : `Disponibles: ${availableSlots.length}`}
+                  </span>
+                )}
+              </div>
+
+              <select
+                className="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
+                value={form.nro_pantalla ? String(form.nro_pantalla) : ''}
+                onChange={(e) => setForm((s) => ({ ...s, nro_pantalla: e.target.value }))}
+                required
+                disabled={
+                  !form.plataforma_id ||
+                  !form.correo.trim() ||
+                  !!slotsError ||
+                  loadingSlots ||
+                  availableSlots.length === 0
+                }
+              >
+                <option value="" disabled>
+                  {!form.plataforma_id
+                    ? 'Selecciona una plataforma'
+                    : !form.correo.trim()
+                    ? 'Ingresa o selecciona un correo'
+                    : loadingSlots
+                    ? 'Calculando…'
+                    : slotsError
+                    ? 'Error al calcular'
+                    : availableSlots.length === 0
+                    ? 'Sin cupos disponibles'
+                    : 'Selecciona una pantalla disponible'}
+                </option>
+
+                {availableSlots.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             {/* Fechas */}
             <FieldPantallas

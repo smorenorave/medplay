@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ThHTMLAttributes, TdHTMLAttributes, ReactNode, FormEvent } from 'react';
 
 /* ---------------------------- Tipos ---------------------------- */
-type Plataforma = { id: number; nombre: string };
+type Plataforma = { id: number; nombre: string; cantidad_pantallas: number };
 type Contacto = { id: number; contacto: string; nombre?: string | null };
 type Inventario = { id: number; plataforma_id: number; correo: string; clave: string | null };
 
@@ -11,7 +12,7 @@ type Inventario = { id: number; plataforma_id: number; correo: string; clave: st
 const norm = (s: string) =>
   s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
-function Th(props: React.ThHTMLAttributes<HTMLTableHeaderCellElement>) {
+function Th(props: ThHTMLAttributes<HTMLTableHeaderCellElement>) {
   const { className = '', children, ...rest } = props;
   return (
     <th
@@ -26,11 +27,18 @@ function Th(props: React.ThHTMLAttributes<HTMLTableHeaderCellElement>) {
     </th>
   );
 }
-function Td(props: React.TdHTMLAttributes<HTMLTableCellElement>) {
+function Td(props: TdHTMLAttributes<HTMLTableCellElement>) {
   const { className = '', children, ...rest } = props;
-  return <td {...rest} className={['px-3 py-2 text-sm text-neutral-100 whitespace-nowrap', className].join(' ')}>{children}</td>;
+  return (
+    <td
+      {...rest}
+      className={['px-3 py-2 text-sm text-neutral-100 whitespace-nowrap', className].join(' ')}
+    >
+      {children}
+    </td>
+  );
 }
-function Card({ children }: { children: React.ReactNode }) {
+function Card({ children }: { children: ReactNode }) {
   return <div className="rounded-2xl border border-neutral-800 bg-neutral-950/40 overflow-hidden">{children}</div>;
 }
 function HeaderRow({
@@ -70,16 +78,26 @@ function PlataformasPane() {
 
   const [q, setQ] = useState('');
   const [nombre, setNombre] = useState('');
+  const [cant, setCant] = useState<number | ''>(''); // alta
   const [creating, setCreating] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draftName, setDraftName] = useState('');
+  const [draftCant, setDraftCant] = useState<number | ''>(''); // edición
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
 
   const tblInput =
     'w-full rounded-md px-2 py-1 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500';
+
+  const mapPlatform = (p:any):Plataforma => ({
+    id: Number(p.id),
+    nombre: String(p.nombre ?? ''),
+    cantidad_pantallas: Number(
+      p.cantidad_pantallas ?? p.cantidadPantallas ?? p.cant_pantallas ?? 0
+    ),
+  });
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -87,7 +105,7 @@ function PlataformasPane() {
       const res = await fetch('/api/plataformas', { cache: 'no-store' });
       if (!res.ok) throw new Error('No se pudieron cargar las plataformas');
       const data = await res.json();
-      const list: Plataforma[] = (Array.isArray(data) ? data : []).map((p:any)=>({ id:Number(p.id), nombre:String(p.nombre ?? '') }));
+      const list: Plataforma[] = (Array.isArray(data) ? data : []).map(mapPlatform);
       list.sort((a,b)=>a.nombre.localeCompare(b.nombre, undefined, {sensitivity:'base'}));
       setRows(list);
     } catch (e:any) { setErr(e?.message ?? 'Error al cargar'); setRows([]); }
@@ -95,37 +113,67 @@ function PlataformasPane() {
   }, []);
   useEffect(()=>{ load(); },[load]);
 
-  const onCreate = async (e:React.FormEvent) => {
+  const onCreate = async (e:FormEvent) => {
     e.preventDefault();
     const nom = nombre.trim();
+    const nCant = cant === '' ? 0 : Number(cant);
     if (!nom) return setFormErr('Escribe un nombre.');
     if (nom.length>100) return setFormErr('Máximo 100 caracteres.');
+    if (!Number.isInteger(nCant) || nCant < 0) return setFormErr('Cantidad de pantallas debe ser entero ≥ 0.');
     setFormErr(null); setCreating(true);
     try {
-      const res = await fetch('/api/plataformas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre:nom})});
-      if (!res.ok){ const j=await res.json().catch(()=>({})); if((j?.error||'').includes('unique')) throw new Error('Ya existe una plataforma con ese nombre.'); throw new Error(j?.error ?? 'No se pudo crear');}
-      const saved = await res.json();
-      setRows(rs=>[...rs,{id:Number(saved.id),nombre:String(saved.nombre)}].sort((a,b)=>a.nombre.localeCompare(b.nombre,undefined,{sensitivity:'base'})));
-      setNombre('');
+      const res = await fetch('/api/plataformas',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ nombre:nom, cantidad_pantallas:nCant }),
+      });
+      if (!res.ok){
+        const j=await res.json().catch(()=>({} as any));
+        if((j?.error||'').includes('unique')) throw new Error('Ya existe una plataforma con ese nombre.');
+        throw new Error(j?.error ?? 'No se pudo crear');
+      }
+      const saved = mapPlatform(await res.json());
+      setRows(rs=>[...rs, saved].sort((a,b)=>a.nombre.localeCompare(b.nombre,undefined,{sensitivity:'base'})));
+      setNombre(''); setCant('');
     } catch(e:any){ setFormErr(e?.message ?? 'Error al crear'); }
     finally{ setCreating(false); }
   };
 
-  const beginEdit=(row:Plataforma)=>{ setEditingId(row.id); setDraftName(row.nombre); setSaveErr(null); };
-  const cancelEdit=()=>{ setEditingId(null); setDraftName(''); setSaveErr(null); };
+  const beginEdit=(row:Plataforma)=>{ 
+    setEditingId(row.id); 
+    setDraftName(row.nombre); 
+    setDraftCant(row.cantidad_pantallas);
+    setSaveErr(null); 
+  };
+  const cancelEdit=()=>{ setEditingId(null); setDraftName(''); setDraftCant(''); setSaveErr(null); };
+
   const saveEdit=async()=>{
     if(editingId==null) return;
     const nom=draftName.trim();
+    const nCant = draftCant === '' ? 0 : Number(draftCant);
     if(!nom) return setSaveErr('El nombre no puede estar vacío.');
     if(nom.length>100) return setSaveErr('Máximo 100 caracteres.');
+    if(!Number.isInteger(nCant) || nCant < 0) return setSaveErr('Cantidad de pantallas debe ser entero ≥ 0.');
     setSaving(true); setSaveErr(null);
     try{
-      const res=await fetch(`/api/plataformas/${editingId}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre:nom})});
-      if(!res.ok){const j=await res.json().catch(()=>({})); if((j?.error||'').includes('unique')) throw new Error('Ese nombre ya existe.'); throw new Error(j?.error ?? 'No se pudo guardar');}
-      const upd=await res.json();
-      setRows(rs=>rs.map(r=>r.id===editingId?{...r,nombre:String(upd?.nombre ?? nom)}:r).sort((a,b)=>a.nombre.localeCompare(b.nombre,undefined,{sensitivity:'base'})));
+      const res=await fetch(`/api/plataformas/${editingId}`,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ nombre:nom, cantidad_pantallas:nCant }),
+      });
+      if(!res.ok){
+        const j=await res.json().catch(()=>({} as any));
+        if((j?.error||'').includes('unique')) throw new Error('Ese nombre ya existe.');
+        throw new Error(j?.error ?? 'No se pudo guardar');
+      }
+      const upd = mapPlatform(await res.json());
+      setRows(rs=>rs
+        .map(r=>r.id===editingId? { ...r, nombre:upd.nombre, cantidad_pantallas:upd.cantidad_pantallas } : r)
+        .sort((a,b)=>a.nombre.localeCompare(b.nombre,undefined,{sensitivity:'base'}))
+      );
       cancelEdit();
-    }catch(e:any){ setSaveErr(e?.message ?? 'Error al guardar'); } finally{ setSaving(false); }
+    }catch(e:any){ setSaveErr(e?.message ?? 'Error al guardar'); } 
+    finally{ setSaving(false); }
   };
 
   const onDelete=async(row:Plataforma)=>{
@@ -133,7 +181,7 @@ function PlataformasPane() {
     try{
       const res=await fetch(`/api/plataformas/${row.id}`,{method:'DELETE'});
       if(res.ok){ setRows(rs=>rs.filter(r=>r.id!==row.id)); return; }
-      const j=await res.json().catch(()=>({}));
+      const j=await res.json().catch(()=>({} as any));
       if(res.status===409){ alert(j?.message || 'No se puede eliminar: la plataforma tiene registros asociados.'); return; }
       throw new Error(j?.error ?? 'No se pudo eliminar');
     }catch(e:any){ alert(e?.message ?? 'Error al eliminar'); }
@@ -142,22 +190,47 @@ function PlataformasPane() {
   const filtered=useMemo(()=>{
     const tokens = norm(q).split(' ').filter(Boolean);
     if(!tokens.length) return rows;
-    return rows.filter(r=>tokens.every(t=>norm(r.nombre).includes(t)));
+    return rows.filter(r=>tokens.every(t=>norm(`${r.nombre} ${r.cantidad_pantallas}`).includes(t)));
   },[rows,q]);
 
   useEffect(()=>{
     const onKey=(e:KeyboardEvent)=>{ if(editingId==null) return; if(e.key==='Enter'){e.preventDefault(); saveEdit();} if(e.key==='Escape'){e.preventDefault(); cancelEdit();}};
     window.addEventListener('keydown',onKey); return ()=>window.removeEventListener('keydown',onKey);
-  },[editingId,draftName]); // eslint-disable-line
+  },[editingId,draftName,draftCant]); // eslint-disable-line
 
   return (
     <Card>
       <HeaderRow title="Plataformas" onRefresh={load} refreshing={loading}/>
       <div className="px-3 pt-3 sm:px-4">
         <form onSubmit={onCreate} className="rounded-xl border border-neutral-800 bg-neutral-950/40 p-3 space-y-2">
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-            <input className="h-10 w-full rounded-lg px-3 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500" placeholder="Nombre de la plataforma" value={nombre} onChange={e=>setNombre(e.target.value)} maxLength={100}/>
-            <button type="submit" disabled={creating} className="h-10 rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-neutral-100 hover:bg-neutral-800 disabled:opacity-50">{creating?'Guardando…':'Agregar'}</button>
+          <div className="grid gap-2 sm:grid-cols-[1fr_160px_auto]">
+            <input
+              className="h-10 w-full rounded-lg px-3 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+              placeholder="Nombre de la plataforma"
+              value={nombre}
+              onChange={e=>setNombre(e.target.value)}
+              maxLength={100}
+            />
+            <input
+              className="h-10 w-full rounded-lg px-3 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+              placeholder="Cant. pantallas (opcional)"
+              inputMode="numeric"
+              pattern="\d*"
+              value={cant === '' ? '' : String(cant)}
+              onChange={e=>{
+                const v = e.target.value;
+                if (v === '') return setCant('');
+                const n = Number(v);
+                if (Number.isInteger(n) && n >= 0) setCant(n);
+              }}
+            />
+            <button
+              type="submit"
+              disabled={creating}
+              className="h-10 rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-neutral-100 hover:bg-neutral-800 disabled:opacity-50"
+            >
+              {creating?'Guardando…':'Agregar'}
+            </button>
           </div>
           {formErr && <div className="text-sm text-red-300">{formErr}</div>}
         </form>
@@ -169,11 +242,12 @@ function PlataformasPane() {
       <div className="max-h-[56vh] overflow-auto custom-scroll">
         {err && <div className="p-3 text-sm text-red-300">Error: {err}</div>}
         {!err && (
-          <table className="min-w-[520px] w-full table-fixed">
+          <table className="min-w-[640px] w-full table-fixed">
             <thead>
               <tr className="border-b border-neutral-800">
                 <Th className="w-24 text-center">Acciones</Th>
                 <Th>Nombre</Th>
+                <Th className="w-40 text-right">Cant. pantallas</Th>
               </tr>
             </thead>
             <tbody>
@@ -194,19 +268,48 @@ function PlataformasPane() {
                         </div>
                       )}
                     </Td>
+
+                    {/* Nombre */}
                     <Td>
                       {!isEditing ? row.nombre : (
                         <>
-                          <input className={tblInput} value={draftName} onChange={e=>setDraftName(e.target.value)} maxLength={100} placeholder="Nombre"/>
+                          <input
+                            className={tblInput}
+                            value={draftName}
+                            onChange={e=>setDraftName(e.target.value)}
+                            maxLength={100}
+                            placeholder="Nombre"
+                          />
                           {saveErr && <div className="mt-1 text-xs text-red-300">{saveErr}</div>}
                         </>
+                      )}
+                    </Td>
+
+                    {/* Cantidad de pantallas */}
+                    <Td className="text-right">
+                      {!isEditing ? (
+                        row.cantidad_pantallas
+                      ) : (
+                        <input
+                          className={[tblInput,'text-right'].join(' ')}
+                          inputMode="numeric"
+                          pattern="\d*"
+                          value={draftCant === '' ? '' : String(draftCant)}
+                          onChange={e=>{
+                            const v = e.target.value;
+                            if (v === '') return setDraftCant('');
+                            const n = Number(v);
+                            if (Number.isInteger(n) && n >= 0) setDraftCant(n);
+                          }}
+                          placeholder="0"
+                        />
                       )}
                     </Td>
                   </tr>
                 );
               })}
               {filtered.length===0 && (
-                <tr><Td colSpan={2} className="text-neutral-300 text-sm py-4">No hay resultados.</Td></tr>
+                <tr><Td colSpan={3} className="text-neutral-300 text-sm py-4">No hay resultados.</Td></tr>
               )}
             </tbody>
           </table>
@@ -251,7 +354,7 @@ function ContactosPane() {
   }, []);
   useEffect(()=>{ load(); },[load]);
 
-  const onCreate = async (e:React.FormEvent)=>{
+  const onCreate = async (e:FormEvent)=>{
     e.preventDefault();
     const c=nuevoContacto.trim(), n=nuevoNombre.trim();
     if(!c) return setFormErr('Escribe un contacto.');
@@ -259,7 +362,7 @@ function ContactosPane() {
     try{
       const payload:any = { contacto:c }; if(n.length>0) payload.nombre=n;
       const res = await fetch('/api/usuarios',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-      if(!res.ok){ const j=await res.json().catch(()=>({})); throw new Error(j?.error ?? 'No se pudo crear');}
+      if(!res.ok){ const j=await res.json().catch(()=>({} as any)); throw new Error(j?.error ?? 'No se pudo crear');}
       const saved=await res.json();
       setRows(rs=>[...rs,{id:Number(saved.id ?? Date.now()), contacto:String(saved.contacto), nombre:saved.nombre ?? null }]);
       setNuevoContacto(''); setNuevoNombre('');
@@ -269,24 +372,44 @@ function ContactosPane() {
 
   const beginEdit=(row:Contacto)=>{ setEditingId(row.id); setDraft({...row, nombre: row.nombre ?? ''}); setSaveErr(null); };
   const cancelEdit=()=>{ setEditingId(null); setDraft({}); setSaveErr(null); };
-  const saveEdit=async()=>{
-    if(editingId==null) return;
-    const current = rows.find(r=>r.id===editingId);
-    if(!current) return;
 
-    const c=(draft.contacto ?? '').toString().trim();
-    const nRaw=((draft.nombre ?? '') as string).trim();
-    if(!c) return setSaveErr('El contacto no puede estar vacío.');
+  // ✅ saveEdit correcto para Contactos
+  const saveEdit = async () => {
+    if (editingId == null) return;
+    const current = rows.find(r => r.id === editingId);
+    if (!current) return;
+
+    const c = (draft.contacto ?? '').toString().trim();
+    const nRaw = ((draft.nombre ?? '') as string).trim();
+    if (!c) return setSaveErr('El contacto no puede estar vacío.');
 
     setSaving(true); setSaveErr(null);
-    try{
-      const payload:any={}; if(c) payload.contacto=c; if(nRaw.length>0) payload.nombre=nRaw;
-      const res=await fetch(`/api/usuarios/${encodeURIComponent(current.contacto)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-      const upd=await res.json().catch(()=>({}));
-      if(!res.ok){ if(res.status===409 && upd?.error==='contacto_duplicado') throw new Error('Ese contacto ya existe.'); throw new Error(upd?.error ?? 'No se pudo guardar');}
-      setRows(rs=>rs.map(r=>r.id===editingId?{...r, contacto:String(upd?.contacto ?? c), nombre:(upd?.nombre ?? nRaw) || null }:r));
+    try {
+      const payload:any = {};
+      if (c) payload.contacto = c;
+      if (nRaw.length > 0) payload.nombre = nRaw;
+
+      const res = await fetch(`/api/usuarios/${encodeURIComponent(current.contacto)}`,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload),
+      });
+      const upd = await res.json().catch(()=>({} as any));
+      if (!res.ok) {
+        if (res.status===409 && upd?.error==='contacto_duplicado') throw new Error('Ese contacto ya existe.');
+        throw new Error(upd?.error ?? 'No se pudo guardar');
+      }
+      setRows(rs => rs.map(r =>
+        r.id === editingId
+          ? { ...r, contacto: String(upd?.contacto ?? c), nombre: (upd?.nombre ?? nRaw) || null }
+          : r
+      ));
       cancelEdit();
-    }catch(e:any){ setSaveErr(e?.message ?? 'Error al guardar'); } finally{ setSaving(false); }
+    } catch (e:any) {
+      setSaveErr(e?.message ?? 'Error al guardar');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const onDelete=async(row:Contacto)=>{
@@ -294,7 +417,7 @@ function ContactosPane() {
     try{
       const res=await fetch(`/api/usuarios/${encodeURIComponent(row.contacto)}`,{method:'DELETE'});
       if(res.ok){ setRows(rs=>rs.filter(r=>r.contacto!==row.contacto)); return;}
-      const j=await res.json().catch(()=>({}));
+      const j=await res.json().catch(()=>({} as any));
       if(res.status===409){ alert(j?.message || 'No se puede eliminar: el contacto tiene registros asociados.'); return; }
       throw new Error(j?.error ?? 'No se pudo eliminar');
     }catch(e:any){ alert(e?.message ?? 'Error al eliminar'); }
@@ -420,7 +543,11 @@ function InventarioPane() {
         if (!r.ok) throw new Error('No se pudieron cargar las plataformas');
         const data = await r.json();
         const list: Plataforma[] = (Array.isArray(data) ? data : [])
-          .map((p:any)=>({ id:Number(p.id), nombre:String(p.nombre ?? '') }))
+          .map((p:any)=>({
+            id:Number(p.id),
+            nombre:String(p.nombre ?? ''),
+            cantidad_pantallas: Number(p.cantidad_pantallas ?? p.cantidadPantallas ?? p.cant_pantallas ?? 0),
+          }))
           .sort((a,b)=>a.nombre.localeCompare(b.nombre, undefined, {sensitivity:'base'}));
         setPlataformas(list);
         if (!plataformaId && list.length) setPlataformaId(list[0].id);
@@ -455,7 +582,7 @@ function InventarioPane() {
 
   /* -------- crear -------- */
   const canSubmit = plataformaId!=='' && correo.trim().length>4 && !creating && !loadingPlat;
-  async function onCreate(e:React.FormEvent){
+  async function onCreate(e:FormEvent){
     e.preventDefault();
     setCreateErr(null); setOkMsg(null);
     if(!canSubmit) return;
@@ -466,8 +593,8 @@ function InventarioPane() {
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({ plataforma_id:Number(plataformaId), correo:correo.trim().toLowerCase(), clave:clave.trim() || null }),
       });
-      if(!res.ok){ const j=await res.json().catch(()=>({})); throw new Error(j?.error ?? 'No se pudo guardar'); }
-      const saved=await res.json().catch(()=>({}));
+      if(!res.ok){ const j=await res.json().catch(()=>({} as any)); throw new Error(j?.error ?? 'No se pudo guardar'); }
+      const saved=await res.json().catch(()=>({} as any));
       setOkMsg(`Guardado: #${saved?.id ?? '—'}`);
       setCorreo(''); setClave('');
       load();
@@ -493,7 +620,7 @@ function InventarioPane() {
       const res=await fetch(`/api/inventario/${editingId}`,{
         method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload),
       });
-      if(!res.ok){ const j=await res.json().catch(()=>({})); throw new Error(j?.error ?? 'No se pudo guardar'); }
+      if(!res.ok){ const j=await res.json().catch(()=>({} as any)); throw new Error(j?.error ?? 'No se pudo guardar'); }
       const upd=await res.json().catch(()=>payload);
       setRows(rs=>rs.map(r=>r.id===editingId?{...r, ...upd}:r));
       cancelEdit();
@@ -504,7 +631,7 @@ function InventarioPane() {
     try{
       const res=await fetch(`/api/inventario/${row.id}`,{method:'DELETE'});
       if(res.ok){ setRows(rs=>rs.filter(r=>r.id!==row.id)); return;}
-      const j=await res.json().catch(()=>({}));
+      const j=await res.json().catch(()=>({} as any));
       if(res.status===409){ alert(j?.message || 'No se puede eliminar.'); return; }
       throw new Error(j?.error ?? 'No se pudo eliminar');
     }catch(e:any){ alert(e?.message ?? 'Error al eliminar'); }
@@ -555,7 +682,7 @@ function InventarioPane() {
             <label className="block text-sm mb-1 text-neutral-300">Correo</label>
             <input type="email" className={input} placeholder="correo@dominio.com" value={correo} onChange={e=>setCorreo(e.target.value)} required/>
           </div>
-          <div>
+            <div>
             <label className="block text-sm mb-1 text-neutral-300">Clave</label>
             <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
               <input type="text" className={input} placeholder="Opcional" value={clave} onChange={e=>setClave(e.target.value)}/>

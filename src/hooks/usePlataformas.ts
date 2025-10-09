@@ -3,32 +3,82 @@
 
 import { useEffect, useState } from 'react';
 
-export type Plataforma = { id: number; nombre: string };
+export type Plataforma = {
+  id: number;
+  nombre: string;
+  cantidad_pantallas: number; // NUEVO
+};
 
 // -------- Caché (memoria + localStorage) --------
 type PlatCache = { rows: Plataforma[]; ts: number };
 
 const MEM: { value: PlatCache | null } = { value: null };
-const LS_KEY = '__plat_cache_v1';
-const TTL_MS = 10 * 60 * 1000; // 10 minutos (ajústalo)
+// nueva versión de la clave (v2) para incluir cantidad_pantallas
+const LS_KEY_V2 = '__plat_cache_v2';
+const LS_KEY_V1 = '__plat_cache_v1'; // por si existe, migramos
+const TTL_MS = 10 * 60 * 1000; // 10 minutos
+
+/** Normaliza el objeto plataforma desde el backend (shape flexible). */
+function mapPlatform(p: any): Plataforma {
+  return {
+    id: Number(p.id),
+    nombre: String(p.nombre ?? p.Nombre ?? p.name ?? p.id),
+    cantidad_pantallas:
+      p.cantidad_pantallas != null
+        ? Number(p.cantidad_pantallas)
+        : p.cantidadPantallas != null
+        ? Number(p.cantidadPantallas)
+        : p.cant_pantallas != null
+        ? Number(p.cant_pantallas)
+        : 0,
+  };
+}
 
 /** Lee caché válida (prioriza memoria, luego localStorage). */
 function readCache(): PlatCache | null {
   // memoria
   if (MEM.value && Date.now() - MEM.value.ts < TTL_MS) return MEM.value;
 
-  // localStorage
+  // localStorage v2
   try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return null;
-    const parsed: PlatCache = JSON.parse(raw);
-    if (Date.now() - parsed.ts < TTL_MS) {
-      MEM.value = parsed;
-      return parsed;
+    const rawV2 = localStorage.getItem(LS_KEY_V2);
+    if (rawV2) {
+      const parsed: PlatCache = JSON.parse(rawV2);
+      if (Date.now() - parsed.ts < TTL_MS) {
+        // por seguridad, re-mapeamos por si el shape varía
+        const rows = (parsed.rows || []).map(mapPlatform);
+        const fixed: PlatCache = { rows, ts: parsed.ts };
+        MEM.value = fixed;
+        return fixed;
+      }
     }
   } catch {
     // ignore
   }
+
+  // migración desde v1 (si existe)
+  try {
+    const rawV1 = localStorage.getItem(LS_KEY_V1);
+    if (rawV1) {
+      const parsed: PlatCache = JSON.parse(rawV1);
+      if (Date.now() - parsed.ts < TTL_MS) {
+        const rows = (parsed.rows || []).map(mapPlatform);
+        const migrated: PlatCache = { rows, ts: Date.now() };
+        MEM.value = migrated;
+        try {
+          localStorage.setItem(LS_KEY_V2, JSON.stringify(migrated));
+          localStorage.removeItem(LS_KEY_V1);
+        } catch {}
+        return migrated;
+      } else {
+        // expirado: limpiamos v1
+        try { localStorage.removeItem(LS_KEY_V1); } catch {}
+      }
+    }
+  } catch {
+    // ignore
+  }
+
   return null;
 }
 
@@ -37,7 +87,7 @@ function writeCache(rows: Plataforma[]) {
   const cache: PlatCache = { rows, ts: Date.now() };
   MEM.value = cache;
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(cache));
+    localStorage.setItem(LS_KEY_V2, JSON.stringify(cache));
   } catch {
     // ignore
   }
@@ -46,7 +96,10 @@ function writeCache(rows: Plataforma[]) {
 /** Permite invalidar la caché desde fuera si alguna vez te hace falta. */
 export function invalidatePlataformasCache() {
   MEM.value = null;
-  try { localStorage.removeItem(LS_KEY); } catch {}
+  try {
+    localStorage.removeItem(LS_KEY_V2);
+    localStorage.removeItem(LS_KEY_V1);
+  } catch {}
 }
 
 /* ===================================================== */
@@ -72,15 +125,10 @@ export function usePlataformas() {
         if (!res.ok) throw new Error('No se pudieron cargar las plataformas');
 
         const j = await res.json();
-        const data: Plataforma[] = Array.isArray(j) ? j : (Array.isArray(j?.items) ? j.items : []);
+        const data: any[] = Array.isArray(j) ? j : (Array.isArray(j?.items) ? j.items : []);
         if (!active) return;
 
-        // Normaliza por si el backend trae otro shape
-        const rows = data.map((p: any) => ({
-          id: Number(p.id),
-          nombre: String(p.nombre ?? p.Nombre ?? p.name ?? p.id),
-        }));
-
+        const rows = data.map(mapPlatform);
         setPlataformas(rows);
         writeCache(rows);
       } catch (e: any) {
@@ -102,11 +150,8 @@ export function usePlataformas() {
       if (!res.ok) throw new Error('No se pudieron cargar las plataformas');
 
       const j = await res.json();
-      const data: Plataforma[] = Array.isArray(j) ? j : (Array.isArray(j?.items) ? j.items : []);
-      const rows = data.map((p: any) => ({
-        id: Number(p.id),
-        nombre: String(p.nombre ?? p.Nombre ?? p.name ?? p.id),
-      }));
+      const data: any[] = Array.isArray(j) ? j : (Array.isArray(j?.items) ? j.items : []);
+      const rows = data.map(mapPlatform);
 
       setPlataformas(rows);
       writeCache(rows);

@@ -21,22 +21,22 @@ model cuentascompartidas {
 }
 
 model cuentascompletas {
-  id                BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
-  contacto          String      @db.VarChar(50)
-  plataforma_id     Int
-  correo        String       @db.VarChar(100)
-  contrasena    String       @map("contrasena") @db.VarChar(100)
-  proveedor         String?     @db.VarChar(64)
-  fecha_compra      DateTime?   @db.Date
-  fecha_vencimiento DateTime?   @db.Date
-  meses_pagados     Int?
-  total_pagado      Decimal?    @db.Decimal(18, 2)
-  total_ganado      Decimal?    @db.Decimal(18, 2)
-  total_pagado_proveedor      Decimal?    @db.Decimal(18, 2)
-  estado            String?     @db.VarChar(20)
-  comentario        String?     @db.Text
-  plataformas       plataformas @relation(fields: [plataforma_id], references: [id], map: "fk_cc_plataformas_id")
-  usuarios          usuarios    @relation(fields: [contacto], references: [contacto], onDelete: Cascade, map: "fk_cc_usuarios_contacto")
+  id                     BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
+  contacto               String      @db.VarChar(50)
+  plataforma_id          Int
+  proveedor              String?     @db.VarChar(64)
+  fecha_compra           DateTime?   @db.Date
+  fecha_vencimiento      DateTime?   @db.Date
+  meses_pagados          Int?
+  total_pagado           Decimal?    @db.Decimal(18, 2)
+  estado                 String?     @db.VarChar(20)
+  comentario             String?     @db.Text
+  contrasena             String      @map("contrasena") @db.VarChar(100)
+  correo                 String      @db.VarChar(100)
+  total_ganado           Decimal?    @db.Decimal(18, 2)
+  total_pagado_proveedor Decimal?    @db.Decimal(18, 2)
+  plataformas            plataformas @relation(fields: [plataforma_id], references: [id], map: "fk_cc_plataformas_id")
+  usuarios               usuarios    @relation(fields: [contacto], references: [contacto], onDelete: Cascade, map: "fk_cc_usuarios_contacto")
 
   @@index([contacto], map: "idx_contacto")
   @@index([plataforma_id], map: "idx_plataforma_id")
@@ -44,20 +44,20 @@ model cuentascompletas {
 }
 
 model pantallas {
-  id                 Int                @id @default(autoincrement())
-  cuenta_id          Int
-  contacto           String             @db.VarChar(50)
-  nro_pantalla       String             @db.VarChar(50)
-  fecha_compra       DateTime           @db.Date
-  fecha_vencimiento  DateTime           @db.Date
-  meses_pagados      Int?               @default(0)
-  total_pagado       Decimal?           @default(0.00) @db.Decimal(10, 2)
-  total_ganado      Decimal?    @db.Decimal(18, 2)
-  total_pagado_proveedor      Decimal?    @db.Decimal(18, 2)
-  estado             String             @db.VarChar(20)
-  comentario         String?            @db.Text
-  usuarios           usuarios           @relation(fields: [contacto], references: [contacto], onDelete: Cascade, map: "fk_pantalla_contacto")
-  cuentascompartidas cuentascompartidas @relation(fields: [cuenta_id], references: [id], onDelete: Cascade, map: "fk_pantalla_cuenta")
+  id                     Int                @id @default(autoincrement())
+  cuenta_id              Int
+  contacto               String             @db.VarChar(50)
+  nro_pantalla           String             @db.VarChar(50)
+  fecha_compra           DateTime           @db.Date
+  fecha_vencimiento      DateTime           @db.Date
+  meses_pagados          Int?               @default(0)
+  total_pagado           Decimal?           @default(0.00) @db.Decimal(10, 2)
+  estado                 String             @db.VarChar(20)
+  comentario             String?            @db.Text
+  total_ganado           Decimal?           @db.Decimal(18, 2)
+  total_pagado_proveedor Decimal?           @db.Decimal(18, 2)
+  usuarios               usuarios           @relation(fields: [contacto], references: [contacto], onDelete: Cascade, map: "fk_pantalla_contacto")
+  cuentascompartidas     cuentascompartidas @relation(fields: [cuenta_id], references: [id], onDelete: Cascade, map: "fk_pantalla_cuenta")
 
   @@index([contacto], map: "fk_pantalla_contacto")
   @@index([cuenta_id], map: "fk_pantalla_cuenta")
@@ -66,9 +66,10 @@ model pantallas {
 model plataformas {
   id                 Int                  @id @default(autoincrement())
   nombre             String               @unique(map: "nombre") @db.VarChar(100)
+  cantidad_pantallas Int                  @default(0)
   cuentascompartidas cuentascompartidas[]
   cuentascompletas   cuentascompletas[]
-  inventario         inventario[] 
+  inventario         inventario[]
 }
 
 model usuarios {
@@ -76,28 +77,6 @@ model usuarios {
   nombre           String?            @db.VarChar(100)
   cuentascompletas cuentascompletas[]
   pantallas        pantallas[]
-}
-
-model MetricasMensuales {
-  id               Int      @id @default(autoincrement())
-  year             Int
-  month            Int       // 1..12
-  periodLabel      String    // "YYYY-MM"
-  // Totales principales
-  totalGeneral     Decimal   @db.Decimal(16,2)
-  totalPantallas   Decimal   @db.Decimal(16,2)
-  totalCuentas     Decimal   @db.Decimal(16,2)
-  ventasCantidad   Int       // cantidad de ventas (unidades)
-  clientesActivos  Int
-  // Agregados detallados del mes
-  ranking          Json      // [{ name, count, total, pid? }]
-  ventasDias       Json      // [{ day:"01", total, pantallas, completas }]
-  payload          Json?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-
-  @@unique([year, month])
-  @@index([periodLabel])
 }
 
 model wa_notificaciones {
@@ -111,29 +90,48 @@ model wa_notificaciones {
 }
 
 model wa_logs {
-  id        BigInt   @id @default(autoincrement())
-  phone     String   @db.VarChar(20)
+  id        BigInt    @id @default(autoincrement())
+  phone     String    @db.VarChar(20)
   status    LogStatus
-  message   String?  @db.Text
-  createdAt DateTime @default(now()) @map("created_at")
+  message   String?   @db.Text
+  createdAt DateTime  @default(now()) @map("created_at")
 
   @@map("wa_logs")
+}
+
+model inventario {
+  id            Int         @id @default(autoincrement())
+  plataforma_id Int
+  correo        String
+  clave         String?
+  plataformas   plataformas @relation(fields: [plataforma_id], references: [id], onDelete: Cascade)
+
+  @@unique([plataforma_id, correo])
+  @@index([plataforma_id])
+}
+
+model metricasmensuales {
+  id              Int      @id @default(autoincrement())
+  year            Int
+  month           Int
+  periodLabel     String
+  totalGeneral    Decimal  @db.Decimal(16, 2)
+  totalPantallas  Decimal  @db.Decimal(16, 2)
+  totalCuentas    Decimal  @db.Decimal(16, 2)
+  ventasCantidad  Int
+  clientesActivos Int
+  ranking         Json
+  ventasDias      Json
+  payload         Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime
+
+  @@unique([year, month], map: "MetricasMensuales_year_month_key")
+  @@index([periodLabel], map: "MetricasMensuales_periodLabel_idx")
 }
 
 enum LogStatus {
   OK
   FALLBACK
   ERROR
-}
-
-model inventario {
-  id            Int          @id @default(autoincrement())
-  plataforma_id Int
-  correo        String
-  clave         String?
-
-  plataformas   plataformas  @relation(fields: [plataforma_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
-
-  @@unique([plataforma_id, correo]) // evita correos duplicados por plataforma
-  @@index([plataforma_id])
 }

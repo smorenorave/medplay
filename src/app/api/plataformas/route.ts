@@ -1,5 +1,6 @@
 // src/app/api/plataformas/route.ts
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
@@ -14,11 +15,13 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get('q') ?? '').trim();
 
-    const where = q ? { nombre: { contains: q, mode: 'insensitive' as const } } : undefined;
+    const where = q
+      ? { nombre: { contains: q, mode: 'insensitive' as const } }
+      : undefined;
 
     const items = await prisma.plataformas.findMany({
       where,
-      select: { id: true, nombre: true },
+      select: { id: true, nombre: true }, // <- SIN cantidad_pantallas
       orderBy: { nombre: 'asc' },
     });
 
@@ -39,9 +42,10 @@ export async function GET(req: Request) {
  */
 export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const raw = (body?.nombre ?? '').toString();
-    const nombre = raw.trim();
+    const body = await req.json().catch(() => ({} as any));
+
+    const rawNombre = (body?.nombre ?? '').toString();
+    const nombre = rawNombre.trim();
 
     if (!nombre) {
       return NextResponse.json(
@@ -58,7 +62,7 @@ export async function POST(req: Request) {
 
     const created = await prisma.plataformas.create({
       data: { nombre },
-      select: { id: true, nombre: true },
+      select: { id: true, nombre: true }, // <- SIN cantidad_pantallas
     });
 
     return NextResponse.json(created, { status: 201 });
