@@ -1385,10 +1385,20 @@ export default function FormPantallas() {
               label="Fecha de compra *"
               type="date"
               value={form.fecha_compra}
-              onChange={(v: string) => setForm((s) => ({ ...s, fecha_compra: v }))}
+              onChange={(v) => setForm((s) => ({ ...s, fecha_compra: v }))}
               required
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+              onMouseDown={(e) => {
+                const el = e.currentTarget;
+                // Solo si el input NO está enfocado aún → abre el picker
+                if (el.showPicker && document.activeElement !== el) {
+                  // No hacemos preventDefault para no bloquear el foco/teclado
+                  // Abrimos justo después de que el input reciba foco
+                  requestAnimationFrame(() => el.showPicker());
+                }
+              }}
+              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-text"
             />
+
             <FieldPantallas
               label="Fecha de vencimiento (auto) *"
               type="date"

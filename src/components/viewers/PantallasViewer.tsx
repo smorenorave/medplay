@@ -42,6 +42,14 @@ const LS_CACHE_KEY     = '__pantallas_cache_v3';
 const LS_REMOTE_STAMP  = '__pantallas_remote_stamp';
 const BC_NAME          = 'pantallas_mutations_bc';
 
+const todayYMDLocal = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+};
+
 type CacheShape = { rows: Pantalla[]; ts: number };
 
 const hasWindow = () => typeof window !== 'undefined';
@@ -157,6 +165,17 @@ const clamp = (val: unknown, min: number) => {
   const num = Number(val);
   return Number.isFinite(num) ? Math.max(min, num) : min;
 };
+
+/** Normaliza texto para búsqueda: minúsculas, sin tildes y sin espacios */
+const normSearch = (s?: string | null) =>
+  (s ?? '')
+    .toString()
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')                 // separa diacríticos
+    .replace(/\p{Diacritic}/gu, '')   // quita tildes
+    .replace(/\s+/g, '');             // quita TODOS los espacios
+
 
 /** YYYY-MM-DD + meses (conserva fin de mes) */
 function addMonthsYYYYMMDD(ymd: string, months: number): string {
@@ -471,23 +490,29 @@ export default function PantallasViewer() {
     }
   }
 
-  // Filtro + búsqueda local
-  const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    const pid: number | null = platFilter === 'all' ? null : Number(platFilter);
-    return rows.filter((r) => {
-      if (pid !== null && r.plataforma_id !== pid) return false;
-      if (!term) return true;
-      const hay =
-        (r.nombre ?? '').toLowerCase().includes(term) ||
-        (r.contacto ?? '').toLowerCase().includes(term) ||
-        (r.correo ?? '').toLowerCase().includes(term) ||
-        (r.estado ?? '').toLowerCase().includes(term) ||
-        (r.comentario ?? '').toLowerCase().includes(term) ||
-        (r.nro_pantalla ?? '').toLowerCase().includes(term);
-      return hay;
-    });
-  }, [rows, q, platFilter]);
+ // Filtro + búsqueda local
+const filtered = useMemo(() => {
+  const term = normSearch(q);
+  const pid: number | null = platFilter === 'all' ? null : Number(platFilter);
+
+  if (!term && pid === null) return rows;
+
+  return rows.filter((r) => {
+    if (pid !== null && r.plataforma_id !== pid) return false;
+    if (!term) return true;
+
+    const hay =
+      normSearch(r.nombre).includes(term) ||
+      normSearch(r.contacto).includes(term) ||
+      normSearch(r.correo).includes(term) ||
+      normSearch(r.estado).includes(term) ||
+      normSearch(r.comentario).includes(term) ||
+      normSearch(r.nro_pantalla).includes(term);
+
+    return hay;
+  });
+}, [rows, q, platFilter]);
+
 
   /* =========================================================
    * Editar / Guardar
@@ -878,7 +903,7 @@ export default function PantallasViewer() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar (nombre, contacto, correo, estado, comentario…) | Shift+rueda = scroll horizontal"
+          placeholder="Buscar nombre, contacto, correo, estado, comentario…"
           className="flex-1 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
         />
         <select
@@ -1134,17 +1159,50 @@ export default function PantallasViewer() {
                       onChange={(e) => setEdit((s) => ({ ...(s as EditState), estado: e.target.value }))}
                     />
                   </label>
-
                   <label className="grid gap-1">
-                    <span className="text-sm text-neutral-300">Fecha compra (YYYY-MM-DD)</span>
+                  <span className="text-sm text-neutral-300">Fecha compra (YYYY-MM-DD)</span>
+                  <div className="flex items-center gap-2">
                     <input
                       type="date"
-                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
+                      className="flex-1 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600"
                       value={edit.fecha_compra ?? ''}
-                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), fecha_compra: e.target.value }))}
+                      onChange={(e) =>
+                        setEdit((s) => ({ ...(s as EditState), fecha_compra: e.target.value }))
+                      }
+                      // 👉 Abre el calendario solo si aún no está enfocado
+                      onMouseDown={(e) => {
+                        const el = e.currentTarget;
+                        if (document.activeElement !== el && el.showPicker) {
+                          requestAnimationFrame(() => el.showPicker());
+                        }
+                      }}
                     />
-                  </label>
 
+                    {/* 📅 Botón para abrir el calendario explícitamente */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const input = document.querySelector('input[type="date"]') as HTMLInputElement;
+                        input?.showPicker?.();
+                      }}
+                      className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
+                      title="Abrir calendario"
+                    >
+                      📅
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEdit((s) => ({ ...(s as EditState), fecha_compra: todayYMDLocal() }))
+                      }
+                      className="whitespace-nowrap rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
+                      title="Poner fecha de compra en hoy"
+                    >
+                      Hoy
+                    </button>
+                  </div>
+                </label>                 
                   <label className="grid gap-1">
                     <span className="text-sm text-neutral-300">Meses pagados</span>
                     <input

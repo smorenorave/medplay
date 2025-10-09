@@ -215,6 +215,8 @@ async function parseListResponse(res: Response): Promise<any[]> {
 /* ===================== Componente ===================== */
 export default function FormCuentaCompletas() {
   const compraHoy = todayStr();
+  const compraDateRef = useRef<HTMLInputElement | null>(null);
+
   const [form, setForm] = useState<FormState>({
     contacto: '',
     nombre: '',
@@ -821,16 +823,23 @@ export default function FormCuentaCompletas() {
               onChange={(v) => setForm((s) => ({ ...s, proveedor: v }))}
               inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
             />
-
-            <Field
+          <Field 
               label="Fecha de compra *"
               type="date"
               value={form.fecha_compra}
               onChange={(v) => setForm((s) => ({ ...s, fecha_compra: v }))}
               required
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+              onMouseDown={(e) => {
+                const el = e.currentTarget;
+                // Solo si el input NO está enfocado aún → abre el picker
+                if (el.showPicker && document.activeElement !== el) {
+                  // No hacemos preventDefault para no bloquear el foco/teclado
+                  // Abrimos justo después de que el input reciba foco
+                  requestAnimationFrame(() => el.showPicker());
+                }
+              }}
+              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-text"
             />
-
             <Field
               label="Fecha de vencimiento (auto) *"
               type="date"

@@ -47,6 +47,16 @@ const CHECK_LAST_CUENTAS_URL = `${CUENTAS_BASE}/check-last`;
 const CHECK_LAST_PANTALLAS_URL = `${PANTALLAS_BASE}/check-last`;
 const INVENTARIO_URL = '/api/inventario';
 
+/** Normaliza texto para búsqueda: minúsculas, sin tildes y sin espacios */
+const normSearch = (s?: string | null) =>
+  (s ?? '')
+    .toString()
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')                 // separa diacríticos
+    .replace(/\p{Diacritic}/gu, '')   // quita tildes
+    .replace(/\s+/g, '');             // elimina TODOS los espacios
+
 /* ====================== Utils ====================== */
 const money = (v: number | null | undefined) =>
   v == null || Number.isNaN(v) ? '—' : '$\u00A0' + new Intl.NumberFormat('es-CO').format(v);
@@ -323,31 +333,44 @@ export default function CuentasPantallasVencidasPage() {
   const platformName = (pid?: number | null) =>
     pid == null ? 'Sin plataforma' : (platformMap.get(pid) ?? `Plataforma ${pid}`);
 
-  /* Filtro + búsqueda */
-  const filtered = useMemo(() => {
-    const base = rows.filter(r => {
-      const fv = r.fecha_vencimiento;
-      if (!isYYYYMMDD(fv)) return false;
-      switch (view) {
-        case 'hoy':        return isToday(fv);
-        case 'manana':     return isTomorrow(fv);
-        case 'anteriores': return fv! < today();
-        case 'todos':      return fv! < today() || isToday(fv) || isTomorrow(fv);
-      }
-    });
-    const term = q.trim().toLowerCase();
-    const pid: number | null = platFilter === 'all' ? null : Number(platFilter);
-    return base.filter((r) => {
-      if (pid !== null && r.plataforma_id !== pid) return false;
-      if (!term) return true;
-      const blob = [
-        r.contacto, r.nombre, r.correo, r.comentario, r.proveedor,
-        r.fecha_compra, r.fecha_vencimiento, platformName(r.plataforma_id),
-        r.tipo === 'pantalla' ? 'pantalla' : 'cuenta completa',
-      ].map(x => (x ?? '').toString().toLowerCase()).join(' ');
-      return blob.includes(term);
-    });
-  }, [rows, view, q, platFilter, platformMap]);
+/* Filtro + búsqueda */
+const filtered = useMemo(() => {
+  // 1) Filtrado por rango (hoy, mañana, anteriores, todos)
+  const base = rows.filter(r => {
+    const fv = r.fecha_vencimiento;
+    if (!isYYYYMMDD(fv)) return false;
+    switch (view) {
+      case 'hoy':        return isToday(fv);
+      case 'manana':     return isTomorrow(fv);
+      case 'anteriores': return fv! < today();
+      case 'todos':      return fv! < today() || isToday(fv) || isTomorrow(fv);
+    }
+  });
+
+  // 2) Normaliza término y filtro de plataforma
+  const term = normSearch(q);
+  const pid: number | null = platFilter === 'all' ? null : Number(platFilter);
+
+  // 3) Si no hay término y no hay filtro de plataforma, regresa base
+  if (!term && pid === null) return base;
+
+  // 4) Aplica filtros
+  return base.filter((r) => {
+    if (pid !== null && r.plataforma_id !== pid) return false;
+    if (!term) return true;
+
+    // Construye un "blob" y normalízalo con normSearch
+    const blobNorm = normSearch([
+      r.contacto, r.nombre, r.correo, r.comentario, r.proveedor,
+      r.fecha_compra, r.fecha_vencimiento,
+      platformName(r.plataforma_id),
+      r.tipo === 'pantalla' ? 'pantalla' : 'cuenta completa',
+    ].map(x => (x ?? '').toString()).join(' '));
+
+    return blobNorm.includes(term);
+  });
+}, [rows, view, q, platFilter, platformMap]);
+
 
   const keyOf = (r: Registro) => `${r.tipo}:${r.id}`;
 
@@ -368,10 +391,10 @@ export default function CuentasPantallasVencidasPage() {
     } catch {
       // Fallback local
       const remainingLocal = rows.filter(x =>
-        x.plataforma_id === plataforma_id &&
-        (x.correo || '').trim() === (correo || '').trim() &&
-        x.tipo === tipo
-      ).length;
+      x.plataforma_id === plataforma_id &&
+      (x.correo || '').trim().toLowerCase() === (correo || '').trim().toLowerCase() &&
+      x.tipo === tipo
+    ).length;
       return { isLast: remainingLocal <= 1, remaining: remainingLocal };
     }
   };
@@ -1044,16 +1067,54 @@ export default function CuentasPantallasVencidasPage() {
               </Field>
 
               <Field label="Fecha de compra">
+              <div className="flex items-center gap-2">
                 <input
                   type="date"
-                  className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
+                  className="flex-1 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600"
                   value={edit.fecha_compra ?? ''}
-                  onChange={(e) => setEdit(s => ({ ...(s as EditState), fecha_compra: e.target.value }))}/>
-              </Field>
+                  onChange={(e) =>
+                    setEdit((s) => ({ ...(s as EditState), fecha_compra: e.target.value }))
+                  }
+                  onMouseDown={(e) => {
+                    const el = e.currentTarget;
+                    // Si no está enfocado todavía → abre el calendario una sola vez
+                    if (document.activeElement !== el && el.showPicker) {
+                      requestAnimationFrame(() => el.showPicker());
+                    }
+                  }}
+                />
+
+                {/* Botón para abrir el calendario nativo manualmente */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const input = document.querySelector('input[type="date"]') as HTMLInputElement;
+                    input?.showPicker?.();
+                  }}
+                  className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
+                  title="Abrir calendario"
+                >
+                  📅
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEdit((s) => ({ ...(s as EditState), fecha_compra: today() }))
+                  }
+                  className="whitespace-nowrap rounded-lg border border-neutral-700 bg-neutral-900 px-2 py-2 text-neutral-100 hover:bg-neutral-800"
+                  title="Poner fecha de compra en hoy"
+                >
+                  Hoy
+                </button>
+              </div>
+            </Field>
+
+
               <Field label="Meses pagados">
                 <input
                   type="number" min={0}
-                  className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
+                  className="rounded-lg px-3 py-2 border border-neutral-00 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
                   value={edit.meses_pagados ?? ''}
                   onChange={(e) => setEdit(s => ({ ...(s as EditState), meses_pagados: Number(e.target.value) }))}/>
               </Field>
