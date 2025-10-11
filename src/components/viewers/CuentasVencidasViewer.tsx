@@ -37,9 +37,10 @@ type EditState = Partial<Registro> & {
 };
 
 type ViewFilter = 'todos' | 'hoy' | 'manana' | 'anteriores';
+type TipoFilter = 'all' | 'cuenta' | 'pantalla';
 
 /* ====================== Constantes (ajusta si necesitas) ====================== */
-const DAILY_KEY = '__vencidas_daily_v5';
+const DAILY_KEY = '__vencidas_daily_v6';
 const NOTIFY_URL = '/api/cuentasvencidas';
 const CUENTAS_BASE = '/api/cuentascompletas';
 const PANTALLAS_BASE = '/api/pantallas';
@@ -80,7 +81,7 @@ const ymdAddMonths = (baseYmd: string, months: number) => {
   dt.setMonth(dt.getMonth() + Number(months || 0));
   const yy = dt.getFullYear();
   const mm = String(dt.getMonth() + 1).padStart(2, '0');
-  const dd = String(dt.getDate()).padStart(2, '0');
+  const dd = String(dt.getDate() + 0).padStart(2, '0');
   return `${yy}-${mm}-${dd}`;
 };
 
@@ -178,6 +179,15 @@ async function pagedFetch(baseUrl: string) {
   return out;
 }
 
+async function fetchCuentasAll(): Promise<Cuenta[]> {
+  const todas = await pagedFetch(`${CUENTAS_BASE}?limit=500`);
+  return (todas as any[]).map(r => ({ ...r, tipo: 'cuenta' as const }));
+}
+async function fetchPantallasAll(): Promise<Pantalla[]> {
+  const todas = await pagedFetch(`${PANTALLAS_BASE}?limit=500`);
+  return (todas as any[]).map(r => ({ ...r, tipo: 'pantalla' as const }));
+}
+
 async function fetchCuentas(): Promise<Cuenta[]> {
   const T = today();
   const T1 = tomorrow();
@@ -249,6 +259,7 @@ export default function CuentasPantallasVencidasPage() {
   const [q, setQ] = useState('');
   const [platFilter, setPlatFilter] = useState<number | 'all'>('all');
   const [view, setView] = useState<ViewFilter>('anteriores'); // default más útil
+  const [tipoFilter, setTipoFilter] = useState<TipoFilter>('all'); // (5) filtro por pantalla / completas
 
   const [selected, setSelected] = useState<Set<string>>(new Set()); // key = tipo:id
 
@@ -260,6 +271,7 @@ export default function CuentasPantallasVencidasPage() {
   const [edit, setEdit] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
   const firstInputRef = useRef<HTMLInputElement | null>(null);
+  const pwInputRef = useRef<HTMLInputElement | null>(null);
 
   // Eliminar simple
   const [delModal, setDelModal] = useState<{ open: boolean; row: Registro | null; busy?: boolean }>({
@@ -268,8 +280,8 @@ export default function CuentasPantallasVencidasPage() {
 
   // Inventario (último)
   const [invModal, setInvModal] = useState<{
-    open: boolean; row: Registro | null; busy?: boolean; remaining?: number;
-  }>({ open: false, row: null, busy: false });
+    open: boolean; row: Registro | null; busy?: boolean; remaining?: number; comment?: string;
+  }>({ open: false, row: null, busy: false, comment: '' });
 
   // Bulk
   const [bulkModal, setBulkModal] = useState<{
@@ -281,7 +293,8 @@ export default function CuentasPantallasVencidasPage() {
     busy?: boolean;
     progress?: number;
     total?: number;
-  }>({ open: false, rows: [], lastKeys: new Set(), normalKeys: new Set(), scope: null, busy: false, progress: 0, total: 0 });
+    invComment?: string; // (3) comentario para inventario en lote
+  }>({ open: false, rows: [], lastKeys: new Set(), normalKeys: new Set(), scope: null, busy: false, progress: 0, total: 0, invComment: '' });
 
   /* Boot con caché */
   useEffect(() => {
@@ -333,48 +346,61 @@ export default function CuentasPantallasVencidasPage() {
   const platformName = (pid?: number | null) =>
     pid == null ? 'Sin plataforma' : (platformMap.get(pid) ?? `Plataforma ${pid}`);
 
-/* Filtro + búsqueda */
-const filtered = useMemo(() => {
-  // 1) Filtrado por rango (hoy, mañana, anteriores, todos)
-  const base = rows.filter(r => {
-    const fv = r.fecha_vencimiento;
-    if (!isYYYYMMDD(fv)) return false;
-    switch (view) {
-      case 'hoy':        return isToday(fv);
-      case 'manana':     return isTomorrow(fv);
-      case 'anteriores': return fv! < today();
-      case 'todos':      return fv! < today() || isToday(fv) || isTomorrow(fv);
-    }
-  });
+  /* Filtro + búsqueda */
+  const filtered = useMemo(() => {
+    // 1) Filtrado por rango (hoy, mañana, anteriores, todos)
+    const base = rows.filter(r => {
+      const fv = r.fecha_vencimiento;
+      if (!isYYYYMMDD(fv)) return false;
+      switch (view) {
+        case 'hoy':        return isToday(fv);
+        case 'manana':     return isTomorrow(fv);
+        case 'anteriores': return fv! < today();
+        case 'todos':      return fv! < today() || isToday(fv) || isTomorrow(fv);
+      }
+    });
 
-  // 2) Normaliza término y filtro de plataforma
-  const term = normSearch(q);
-  const pid: number | null = platFilter === 'all' ? null : Number(platFilter);
+    // 2) Normaliza término y filtro de plataforma
+    const term = normSearch(q);
+    const pid: number | null = platFilter === 'all' ? null : Number(platFilter);
 
-  // 3) Si no hay término y no hay filtro de plataforma, regresa base
-  if (!term && pid === null) return base;
+    // 3) Filtro por tipo (5)
+    const byTipo = base.filter(r => tipoFilter === 'all' ? true : r.tipo === tipoFilter);
 
-  // 4) Aplica filtros
-  return base.filter((r) => {
-    if (pid !== null && r.plataforma_id !== pid) return false;
-    if (!term) return true;
+    // 4) Si no hay término y no hay filtro de plataforma, regresa byTipo
+    if (!term && pid === null) return byTipo;
 
-    // Construye un "blob" y normalízalo con normSearch
-    const blobNorm = normSearch([
-      r.contacto, r.nombre, r.correo, r.comentario, r.proveedor,
-      r.fecha_compra, r.fecha_vencimiento,
-      platformName(r.plataforma_id),
-      r.tipo === 'pantalla' ? 'pantalla' : 'cuenta completa',
-    ].map(x => (x ?? '').toString()).join(' '));
+    // 5) Aplica filtros
+    return byTipo.filter((r) => {
+      if (pid !== null && r.plataforma_id !== pid) return false;
+      if (!term) return true;
 
-    return blobNorm.includes(term);
-  });
-}, [rows, view, q, platFilter, platformMap]);
+      // Construye un "blob" y normalízalo con normSearch
+      const blobNorm = normSearch([
+        r.contacto, r.nombre, r.correo, r.comentario, r.proveedor,
+        r.fecha_compra, r.fecha_vencimiento,
+        platformName(r.plataforma_id),
+        r.tipo === 'pantalla' ? 'pantalla' : 'cuenta completa',
+      ].map(x => (x ?? '').toString()).join(' '));
 
+      return blobNorm.includes(term);
+    });
+  }, [rows, view, q, platFilter, platformMap, tipoFilter]);
 
   const keyOf = (r: Registro) => `${r.tipo}:${r.id}`;
 
   /* ====== Inventario: check + helpers ====== */
+  async function localCheckIsLast(r: Registro) {
+    // Fallback más estricto: descarga TODOS (no solo vencidas) y filtra por plataforma+correo y tipo
+    const [allC, allP] = await Promise.all([fetchCuentasAll(), fetchPantallasAll()]);
+    const pool = r.tipo === 'cuenta' ? allC : allP;
+    const remaining = pool.filter(x =>
+      x.plataforma_id === r.plataforma_id &&
+      (x.correo || '').trim().toLowerCase() === (r.correo || '').trim().toLowerCase()
+    ).length;
+    return { isLast: remaining <= 1, remaining };
+  }
+
   const serverCheckIsLast = async (r: Registro) => {
     const { plataforma_id, correo, tipo } = r;
     if (!plataforma_id || !correo) return { isLast: false, remaining: 9999 };
@@ -389,13 +415,8 @@ const filtered = useMemo(() => {
       const j = await res.json();
       return { isLast: !!j?.isLast, remaining: Number(j?.remaining ?? 0) };
     } catch {
-      // Fallback local
-      const remainingLocal = rows.filter(x =>
-      x.plataforma_id === plataforma_id &&
-      (x.correo || '').trim().toLowerCase() === (correo || '').trim().toLowerCase() &&
-      x.tipo === tipo
-    ).length;
-      return { isLast: remainingLocal <= 1, remaining: remainingLocal };
+      // Fallback: revisar TODAS las filas del tipo
+      return await localCheckIsLast(r);
     }
   };
 
@@ -416,7 +437,8 @@ const filtered = useMemo(() => {
   const onAskDelete = async (r: Registro) => {
     const chk = await serverCheckIsLast(r);
     if (chk.isLast) {
-      setInvModal({ open: true, row: r, remaining: chk.remaining, busy: false });
+      // Si es último → ofrecer inventario (2 y 3: comentario) y también "Eliminar definitivamente" (4)
+      setInvModal({ open: true, row: r, remaining: chk.remaining, busy: false, comment: '' });
     } else {
       setDelModal({ open: true, row: r, busy: false });
     }
@@ -452,6 +474,7 @@ const filtered = useMemo(() => {
       busy: false,
       progress: 0,
       total: list.length,
+      invComment: '',
     });
   };
 
@@ -467,7 +490,7 @@ const filtered = useMemo(() => {
       const r = list[i];
       try {
         if (mode === 'inventory' && lastKeys.has(keyOf(r))) {
-          // Enviar a inventario
+          // Enviar a inventario con comentario común (3)
           const resInv = await fetch(INVENTARIO_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -475,7 +498,8 @@ const filtered = useMemo(() => {
               action: 'send-to-inventory',
               kind: r.tipo,
               plataforma_id: r.plataforma_id,
-              correo: r.correo
+              correo: r.correo,
+              comentario: bulkModal.invComment || undefined,
             }),
           });
           if (!resInv.ok) {
@@ -492,7 +516,7 @@ const filtered = useMemo(() => {
       setBulkModal(m => ({ ...m, progress: i + 1 }));
     }
 
-    setBulkModal({ open: false, rows: [], lastKeys: new Set(), normalKeys: new Set(), scope: null, busy: false, progress: 0, total: 0 });
+    setBulkModal({ open: false, rows: [], lastKeys: new Set(), normalKeys: new Set(), scope: null, busy: false, progress: 0, total: 0, invComment: '' });
     if (fail > 0) {
       alert(`Completado con errores.\nOK: ${ok}\nFallidos: ${fail}\n\n${errs.slice(0, 10).join('\n')}${errs.length > 10 ? '\n…' : ''}`);
     }
@@ -528,14 +552,16 @@ const filtered = useMemo(() => {
   };
 
   /* ====== Editar ====== */
-  const openEdit = (r: Registro) => {
+  const openEdit = (r: Registro, focus: 'contacto' | 'contrasena' = 'contacto') => {
     setEdit({
       ...r,
       id: r.id,
       tipo: r.tipo,
       __original_contrasena: r.contrasena ?? '',
     });
-    setTimeout(() => firstInputRef.current?.focus(), 0);
+    setTimeout(() => {
+      (focus === 'contrasena' ? pwInputRef.current : firstInputRef.current)?.focus();
+    }, 0);
   };
   const closeEdit = () => { setEdit(null); };
 
@@ -669,17 +695,27 @@ const filtered = useMemo(() => {
         <select
           value={platFilter === 'all' ? '' : String(platFilter)}
           onChange={(e) => setPlatFilter(e.target.value ? Number(e.target.value) : 'all')}
-          className="w-64 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
+          className="w-48 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
         >
           <option value="">Todas las plataformas</option>
           {plataformas.map((p) => (
             <option key={p.id} value={p.id}>{(p as any).nombre ?? p.id}</option>
           ))}
         </select>
+        {/* (5) Filtro por tipo */}
+        <select
+          value={tipoFilter}
+          onChange={(e) => setTipoFilter(e.target.value as TipoFilter)}
+          className="w-48 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
+        >
+          <option value="all">Cuentas y Pantallas</option>
+          <option value="cuenta">Solo Cuentas completas</option>
+          <option value="pantalla">Solo Pantallas</option>
+        </select>
         <select
           value={view}
           onChange={(e) => setView(e.target.value as ViewFilter)}
-          className="w-64 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
+          className="w-56 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
         >
           <option value="todos">Todos</option>
           <option value="hoy">Vencen hoy</option>
@@ -796,7 +832,7 @@ const filtered = useMemo(() => {
         </div>
 
         <div className="overflow-auto rounded border border-neutral-800">
-          <table className="min-w-[1250px] w-full text-sm">
+          <table className="min-w-[1400px] w-full text-sm">
             <thead className="bg-neutral-900/70 sticky top-0 z-10">
               <tr className="text-xs uppercase text-neutral-400">
                 <Th className="w-10">
@@ -807,75 +843,82 @@ const filtered = useMemo(() => {
                     aria-label="Seleccionar todos (visibles)"
                   />
                 </Th>
-                <Th className="w-24">Acciones</Th>
+                <Th className="w-28">Acciones</Th>
                 <Th>Plataforma</Th>
                 <Th className="w-28">Tipo</Th>
                 <Th>Contacto</Th>
                 <Th>Nombre</Th>
                 <Th>Correo</Th>
+                <Th className="w-36">Clave</Th>
                 <Th>fecha Compra</Th>
                 <Th>fecha Vencimiento</Th>
                 <Th className="text-right">total pagado</Th>
                 <Th>Comentario</Th>
               </tr>
             </thead>
-            <tbody>
-              {filtered.map((r) => (
-                <tr key={keyOf(r)} className="border-t border-neutral-800 hover:bg-neutral-900/30">
-                  <Td className="align-middle">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(keyOf(r))}
-                      onChange={() => setSelected(prev => {
-                        const n = new Set(prev);
-                        const k = keyOf(r);
-                        n.has(k) ? n.delete(k) : n.add(k);
-                        return n;
-                      })}
-                      aria-label={`Seleccionar fila ${r.id}`}
-                    />
-                  </Td>
+          <tbody>
+            {filtered.map((r) => (
+              <tr
+                key={keyOf(r)}
+                className="border-t border-neutral-800 hover:bg-neutral-900/30 cursor-pointer"
+                onDoubleClick={() => openEdit(r)} // 👉 Nuevo: doble click en cualquier parte de la fila
+              >
+                <Td className="align-middle">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(keyOf(r))}
+                    onChange={() => setSelected(prev => {
+                      const n = new Set(prev);
+                      const k = keyOf(r);
+                      n.has(k) ? n.delete(k) : n.add(k);
+                      return n;
+                    })}
+                    aria-label={`Seleccionar fila ${r.id}`}
+                  />
+                </Td>
+                <Td>
+                  <div className="flex items-center gap-2">
+                    <button
+                      title="Editar"
+                      onClick={() => openEdit(r)}
+                      className="text-neutral-300 hover:text-white inline-flex p-1 rounded-md hover:bg-neutral-800/60"
+                      aria-label="Editar"
+                    >
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                      </svg>
+                    </button>
+                    <button
+                      title="Eliminar"
+                      onClick={() => onAskDelete(r)}
+                      className="text-rose-300 hover:text-rose-200 inline-flex p-1 rounded-md hover:bg-rose-900/30"
+                      aria-label="Eliminar"
+                    >
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                      </svg>
+                    </button>
+                  </div>
+                </Td>
 
-                  <Td>
-                    <div className="flex items-center gap-2">
-                      <button
-                        title="Editar"
-                        onClick={() => openEdit(r)}
-                        className="text-neutral-300 hover:text-white inline-flex p-1 rounded-md hover:bg-neutral-800/60"
-                        aria-label="Editar"
-                      >
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-                        </svg>
-                      </button>
-                      <button
-                        title="Eliminar"
-                        onClick={() => onAskDelete(r)}
-                        className="text-rose-300 hover:text-rose-200 inline-flex p-1 rounded-md hover:bg-rose-900/30"
-                        aria-label="Eliminar"
-                      >
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
-                        </svg>
-                      </button>
-                    </div>
-                  </Td>
+                <Td>{platformName(r.plataforma_id)}</Td>
+                <Td>{r.tipo === 'pantalla' ? 'Pantalla' : 'Cuenta completa'}</Td>
+                <Td>{r.contacto || '—'}</Td>
+                <Td>{r.nombre || '—'}</Td>
+                <Td><span className="inline-block max-w-[260px] truncate align-bottom" title={r.correo ?? ''}>{r.correo || '—'}</span></Td>
 
-                  <Td>{platformName(r.plataforma_id)}</Td>
-                  <Td>{r.tipo === 'pantalla' ? 'Pantalla' : 'Cuenta completa'}</Td>
-                  <Td>{r.contacto || '—'}</Td>
-                  <Td>{r.nombre || '—'}</Td>
-                  <Td><span className="inline-block max-w-[260px] truncate align-bottom" title={r.correo ?? ''}>{r.correo || '—'}</span></Td>
-                  <Td className="text-center whitespace-nowrap">{r.fecha_compra || '—'}</Td>
-                  <Td className="text-center whitespace-nowrap">{r.fecha_vencimiento || '—'}</Td>
-                  <Td className="text-right whitespace-nowrap">{money(r.total_pagado)}</Td>
-                  <Td><span className="inline-block max-w-[300px] truncate align-bottom" title={r.comentario ?? ''}>{r.comentario || '—'}</span></Td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr><Td colSpan={12} className="text-center py-6 text-neutral-400">{loading ? 'Cargando…' : 'Sin resultados.'}</Td></tr>
-              )}
-            </tbody>
+                {/* Clave visible pero sin doble click propio (usa el doble click de la fila) */}
+                <Td className="whitespace-nowrap">
+                  <span>{r.contrasena || '—'}</span>
+                </Td>
+
+                <Td className="text-center whitespace-nowrap">{r.fecha_compra || '—'}</Td>
+                <Td className="text-center whitespace-nowrap">{r.fecha_vencimiento || '—'}</Td>
+                <Td className="text-right whitespace-nowrap">{money(r.total_pagado)}</Td>
+                <Td><span className="inline-block max-w-[300px] truncate align-bottom" title={r.comentario ?? ''}>{r.comentario || '—'}</span></Td>
+              </tr>
+            ))}
+          </tbody>
           </table>
         </div>
         <div className="mt-2 text-sm text-neutral-400">
@@ -933,41 +976,69 @@ const filtered = useMemo(() => {
               {typeof invModal.remaining === 'number' && (
                 <p className="text-neutral-400">Registros restantes (estimado): {invModal.remaining}</p>
               )}
-              <p>¿Deseas <b>enviar al inventario</b> antes de eliminar?</p>
+              {/* (2) y (3) comentario antes de enviar a inventario */}
+              <label className="grid gap-1">
+                <span className="text-sm text-neutral-300">Comentario (opcional) para Inventario</span>
+                <textarea
+                  rows={3}
+                  className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
+                  value={invModal.comment ?? ''}
+                  onChange={(e) => setInvModal(m => ({ ...m, comment: e.target.value }))}
+                  placeholder="Ej: Última pantalla/cuenta. Se archiva por vencimiento."
+                />
+              </label>
+              <p>¿Deseas <b>enviar al inventario</b> antes de eliminar? Si no, puedes <b>eliminar definitivamente</b>.</p>
             </div>
-            <div className="px-5 py-3 border-t border-neutral-800 flex items-center justify-end gap-2">
+            <div className="px-5 py-3 border-t border-neutral-800 flex items-center justify-between gap-2">
               <button className="px-3 py-2 rounded-lg border border-neutral-600 hover:bg-neutral-800"
                       onClick={() => setInvModal({ open:false, row:null })} disabled={!!invModal.busy}>Cancelar</button>
-              <button className="px-3 py-2 rounded-lg border border-amber-700 bg-amber-800/40 hover:bg-amber-800/60 disabled:opacity-60"
-                      onClick={async () => {
-                        if (!invModal.row) return;
-                        setInvModal(m => ({ ...m, busy:true }));
-                        try {
-                          const r = invModal.row;
-                          const res = await fetch(INVENTARIO_URL, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              action: 'send-to-inventory',
-                              kind: r.tipo,
-                              plataforma_id: r.plataforma_id,
-                              correo: r.correo
-                            }),
-                          });
-                          if (!res.ok) {
-                            const j = await res.json().catch(() => ({}));
-                            throw new Error(j?.error || 'Inventario rechazó la operación');
+
+              <div className="flex items-center gap-2">
+                {/* (4) Eliminar definitivamente sin inventario */}
+                <button className="px-3 py-2 rounded-lg border border-rose-800 bg-rose-900/40 hover:bg-rose-900/60 disabled:opacity-60"
+                        onClick={async () => {
+                          if (!invModal.row) return;
+                          setInvModal(m => ({ ...m, busy:true }));
+                          try { await deleteRowDirect(invModal.row); setInvModal({ open:false, row:null }); }
+                          catch (e:any) { alert(e?.message ?? 'Error al eliminar'); setInvModal(m => ({ ...m, busy:false })); }
+                        }}
+                        disabled={!!invModal.busy}>
+                  {invModal.busy ? 'Procesando…' : 'Eliminar definitivamente'}
+                </button>
+
+                {/* Enviar a inventario SOLO si es último (ya estamos aquí por isLast=true) */}
+                <button className="px-3 py-2 rounded-lg border border-amber-700 bg-amber-800/40 hover:bg-amber-800/60 disabled:opacity-60"
+                        onClick={async () => {
+                          if (!invModal.row) return;
+                          setInvModal(m => ({ ...m, busy:true }));
+                          try {
+                            const r = invModal.row;
+                            const res = await fetch(INVENTARIO_URL, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                action: 'send-to-inventory',
+                                kind: r.tipo,
+                                plataforma_id: r.plataforma_id,
+                                correo: r.correo,
+                                comentario: invModal.comment || undefined,
+                              }),
+                            });
+                            if (!res.ok) {
+                              const j = await res.json().catch(() => ({}));
+                              throw new Error(j?.error || 'Inventario rechazó la operación');
+                            }
+                            await deleteRowDirect(r);
+                            setInvModal({ open:false, row:null });
+                          } catch (e:any) {
+                            alert(e?.message ?? 'Error al procesar inventario/eliminar');
+                            setInvModal(m => ({ ...m, busy:false }));
                           }
-                          await deleteRowDirect(r);
-                          setInvModal({ open:false, row:null });
-                        } catch (e:any) {
-                          alert(e?.message ?? 'Error al procesar inventario/eliminar');
-                          setInvModal(m => ({ ...m, busy:false }));
-                        }
-                      }}
-                      disabled={!!invModal.busy}>
-                {invModal.busy ? 'Procesando…' : 'Enviar al inventario y eliminar'}
-              </button>
+                        }}
+                        disabled={!!invModal.busy}>
+                  {invModal.busy ? 'Procesando…' : 'Enviar al inventario y eliminar'}
+                </button>
+              </div>
             </div>
           </div>
         </Modal>
@@ -975,16 +1046,68 @@ const filtered = useMemo(() => {
 
       {/* Modal BULK */}
       {bulkModal.open && (
-        <Modal onClose={() => !bulkModal.busy && setBulkModal({ open:false, rows:[], lastKeys:new Set(), normalKeys:new Set(), scope:null, busy:false, progress:0, total:0 })}>
+        <Modal onClose={() => !bulkModal.busy && setBulkModal({ open:false, rows:[], lastKeys:new Set(), normalKeys:new Set(), scope:null, busy:false, progress:0, total:0, invComment: '' })}>
           <div className="w-full max-w-lg rounded-2xl border border-neutral-800 bg-neutral-900 text-neutral-100 shadow-xl">
             <div className="px-5 py-3 border-b border-neutral-800 flex items-center justify-between">
               <h3 className="font-semibold">Eliminar en lote</h3>
-              <button className="px-2 py-1 hover:text-white" onClick={() => setBulkModal({ open:false, rows:[], lastKeys:new Set(), normalKeys:new Set(), scope:null, busy:false, progress:0, total:0 })} disabled={!!bulkModal.busy}>✕</button>
+              <button className="px-2 py-1 hover:text-white" onClick={() => setBulkModal({ open:false, rows:[], lastKeys:new Set(), normalKeys:new Set(), scope:null, busy:false, progress:0, total:0, invComment: '' })} disabled={!!bulkModal.busy}>✕</button>
             </div>
             <div className="p-5 space-y-3 text-sm">
               <p>Total a procesar: <b>{bulkModal.total}</b></p>
               <p>Registros normales: <b>{bulkModal.normalKeys.size}</b></p>
               <p>Registros “últimos” (correo+plataforma dentro de su tipo): <b>{bulkModal.lastKeys.size}</b></p>
+              {/* Lista de correos que irán a Inventario */}
+              {(() => {
+                const lastForInventory = bulkModal.rows.filter(r => bulkModal.lastKeys.has(`${r.tipo}:${r.id}`));
+                if (lastForInventory.length === 0) return null;
+
+                const copy = async () => {
+                  try {
+                    const text = lastForInventory.map(r => (r.correo || '')).filter(Boolean).join(', ');
+                    await navigator.clipboard.writeText(text);
+                    alert('Correos copiados al portapapeles.');
+                  } catch {
+                    alert('No se pudo copiar al portapapeles.');
+                  }
+                };
+
+                return (
+                  <div className="rounded-md border border-neutral-700 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="font-semibold">Irán a Inventario ({lastForInventory.length})</div>
+                      <button
+                        onClick={copy}
+                        className="rounded-md border border-neutral-700 px-2 py-1 hover:bg-neutral-800"
+                      >
+                        Copiar correos
+                      </button>
+                    </div>
+
+                    <ul className="mt-2 max-h-40 overflow-auto list-disc pl-5 space-y-1">
+                      {lastForInventory.map((r, i) => (
+                        <li key={`${r.tipo}:${r.id}-${i}`}>
+                          <span className="font-medium">{r.correo || '—'}</span>
+                          <span className="text-neutral-400">
+                            {' '}— {platformName(r.plataforma_id)} · {r.tipo === 'pantalla' ? 'Pantalla' : 'Cuenta'}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })()}
+
+              {/* (3) Comentario común para inventario en lote */}
+              <label className="grid gap-1">
+                <span className="text-sm text-neutral-300">Comentario para Inventario (opcional, se aplica a los “últimos”)</span>
+                <textarea
+                  rows={2}
+                  className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
+                  value={bulkModal.invComment ?? ''}
+                  onChange={(e) => setBulkModal(m => ({ ...m, invComment: e.target.value }))}
+                  placeholder="Ej: Se archiva por limpieza de vencidas"
+                />
+              </label>
 
               {bulkModal.busy && (
                 <div className="rounded-md border border-neutral-700 p-3">
@@ -994,7 +1117,7 @@ const filtered = useMemo(() => {
             </div>
             <div className="px-5 py-3 border-t border-neutral-800 flex items-center justify-end gap-2">
               <button className="px-3 py-2 rounded-lg border border-neutral-600 hover:bg-neutral-800"
-                      onClick={() => setBulkModal({ open:false, rows:[], lastKeys:new Set(), normalKeys:new Set(), scope:null, busy:false, progress:0, total:0 })}
+                      onClick={() => setBulkModal({ open:false, rows:[], lastKeys:new Set(), normalKeys:new Set(), scope:null, busy:false, progress:0, total:0, invComment: '' })}
                       disabled={!!bulkModal.busy}>
                 Cancelar
               </button>
@@ -1058,8 +1181,9 @@ const filtered = useMemo(() => {
                   onChange={(e) => setEdit(s => ({ ...(s as EditState), estado: e.target.value }))}/>
               </Field>
 
-              <Field label="Contraseña (cambiar para encolar notificación)" full>
+              <Field label="Contraseña (doble click en la tabla para editar rápido)" full>
                 <input
+                  ref={pwInputRef}
                   type="text"
                   className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
                   value={edit.contrasena ?? ''}
@@ -1077,19 +1201,17 @@ const filtered = useMemo(() => {
                   }
                   onMouseDown={(e) => {
                     const el = e.currentTarget;
-                    // Si no está enfocado todavía → abre el calendario una sola vez
-                    if (document.activeElement !== el && el.showPicker) {
-                      requestAnimationFrame(() => el.showPicker());
+                    if (document.activeElement !== el && (el as any).showPicker) {
+                      requestAnimationFrame(() => (el as any).showPicker());
                     }
                   }}
                 />
 
-                {/* Botón para abrir el calendario nativo manualmente */}
                 <button
                   type="button"
                   onClick={() => {
                     const input = document.querySelector('input[type="date"]') as HTMLInputElement;
-                    input?.showPicker?.();
+                    (input as any)?.showPicker?.();
                   }}
                   className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
                   title="Abrir calendario"
@@ -1109,7 +1231,6 @@ const filtered = useMemo(() => {
                 </button>
               </div>
             </Field>
-
 
               <Field label="Meses pagados">
                 <input
@@ -1163,11 +1284,11 @@ function KPI({ title, value }: { title: string; value: string | number }) {
     </div>
   );
 }
-function Th({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <th className={`text-left px-3 py-2 ${className}`}>{children}</th>;
+function Th({ children, className = '', ...rest }: React.ThHTMLAttributes<HTMLTableHeaderCellElement> & { className?: string }) {
+  return <th {...rest} className={`text-left px-3 py-2 ${className}`}>{children}</th>;
 }
-function Td({ children, className = '', colSpan }: { children?: React.ReactNode; className?: string; colSpan?: number }) {
-  return <td className={`px-3 py-2 ${className}`} colSpan={colSpan}>{children}</td>;
+function Td({ children, className = '', colSpan, ...rest }: React.TdHTMLAttributes<HTMLTableCellElement> & { className?: string; colSpan?: number }) {
+  return <td {...rest} className={`px-3 py-2 ${className}`} colSpan={colSpan}>{children}</td>;
 }
 function Field({ label, children, full = false }: { label: string; children: React.ReactNode; full?: boolean }) {
   return (
