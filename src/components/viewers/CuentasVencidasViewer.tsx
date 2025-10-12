@@ -159,6 +159,20 @@ function Modal({
 }
 
 /* ====================== Fetchers ====================== */
+
+// helper: plataformas por correo a partir de las filas cargadas
+function getPlatformsByEmail(rows: Registro[]) {
+  const m = new Map<string, Set<number>>();
+  for (const r of rows) {
+    const email = (r.correo || '').trim().toLowerCase();
+    if (!email || r.plataforma_id == null) continue;
+    if (!m.has(email)) m.set(email, new Set<number>());
+    m.get(email)!.add(r.plataforma_id);
+  }
+  return m;
+}
+
+
 async function pagedFetch(baseUrl: string) {
   const out: any[] = [];
   let cursor: string | null = null;
@@ -525,31 +539,53 @@ export default function CuentasPantallasVencidasPage() {
   /* ====== Notificaciones (cola) ====== */
   const pwChangedEmails = useMemo(() => Object.keys(pwNewByEmail), [pwNewByEmail]);
 
-  const sendPwChangeNotifications = async () => {
-    const items = Object.entries(pwNewByEmail).map(([correo, nuevaClave]) => ({
-      correo, nuevaClave: (nuevaClave || '').trim(),
-    }));
-    if (items.length === 0) { alert('No hay correos en la cola.'); return; }
-    const faltan = items.filter(it => !it.nuevaClave).map(it => it.correo);
-    if (faltan.length > 0) { alert(`Falta la nueva clave para:\n- ${faltan.join('\n- ')}`); return; }
+  // Reemplaza tu sendPwChangeNotifications por esta versión
+const sendPwChangeNotifications = async () => {
+  // mapear plataformas por correo según las filas actuales
+  const platByEmail = getPlatformsByEmail(rows);
 
-    try {
-      setNotifying(true);
-      const res = await fetch(NOTIFY_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items }),
-      });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok || j?.error) throw new Error(j?.error || 'No se pudo iniciar la notificación');
-      alert(`Notificación lanzada. PID: ${j?.pid ?? '—'}\nLog: ${j?.logFile ?? '(ver servidor)'}`);
-      setPwNewByEmail({});
-    } catch (e: any) {
-      alert(e?.message ?? 'Error al enviar notificaciones');
-    } finally {
-      setNotifying(false);
+  // construir items: uno por (correo, plataforma)
+  const items = Object.entries(pwNewByEmail).flatMap(([correoRaw, nuevaClave]) => {
+    const correo = (correoRaw || '').trim().toLowerCase();
+    const clave = (nuevaClave || '').trim();
+    if (!correo || !clave) return [];
+
+    const plats = platByEmail.get(correo);
+    // si no encontramos plataforma, mandamos un item "genérico" (backward compatible)
+    if (!plats || plats.size === 0) {
+      return [{ correo, nuevaClave: clave }];
     }
-  };
+
+    return Array.from(plats).map((plataforma_id) => ({
+      correo,
+      nuevaClave: clave,
+      plataforma_id,                         // 👈 NUEVO: id de plataforma
+      plataforma_nombre: platformName(plataforma_id), // opcional, pero útil para logs
+    }));
+  });
+
+  if (items.length === 0) { alert('No hay correos o faltan claves.'); return; }
+  const faltan = items.filter(it => !it.nuevaClave).map(it => it.correo);
+  if (faltan.length > 0) { alert(`Falta la nueva clave para:\n- ${faltan.join('\n- ')}`); return; }
+
+  try {
+    setNotifying(true);
+    const res = await fetch(NOTIFY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || j?.error) throw new Error(j?.error || 'No se pudo iniciar la notificación');
+    alert(`Notificación lanzada. PID: ${j?.pid ?? '—'}\nLog: ${j?.logFile ?? '(ver servidor)'}`);
+    setPwNewByEmail({});
+  } catch (e: any) {
+    alert(e?.message ?? 'Error al enviar notificaciones');
+  } finally {
+    setNotifying(false);
+  }
+};
+
 
   /* ====== Editar ====== */
   const openEdit = (r: Registro, focus: 'contacto' | 'contrasena' = 'contacto') => {
