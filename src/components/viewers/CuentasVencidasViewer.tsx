@@ -158,6 +158,18 @@ function Modal({
   );
 }
 
+/* ====================== Sync entre pestañas / señales ====================== */
+// Identificador de instancia + canales
+const LS_BROADCAST_KEY = '__vencidas_sync__';
+const INSTANCE_ID = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+  ? crypto.randomUUID()
+  : String(Math.random());
+
+let bc: BroadcastChannel | null = null;
+if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+  bc = new BroadcastChannel('vencidas-sync');
+}
+
 /* ====================== Fetchers ====================== */
 
 // helper: plataformas por correo a partir de las filas cargadas
@@ -171,7 +183,6 @@ function getPlatformsByEmail(rows: Registro[]) {
   }
   return m;
 }
-
 
 async function pagedFetch(baseUrl: string) {
   const out: any[] = [];
@@ -334,22 +345,80 @@ export default function CuentasPantallasVencidasPage() {
     })();
   }, []);
 
-  /* Refrescar */
+  /* ====== Refresco con mínima diferencia (anti-parpadeo) ====== */
+  const keyOf = (r: Registro) => `${r.tipo}:${r.id}`;
+  const sameKeys = (a: Registro[], b: Registro[]) => {
+    if (a.length !== b.length) return false;
+    const sa = new Set(a.map(keyOf));
+    for (const k of b.map(keyOf)) if (!sa.has(k)) return false;
+    return true;
+  };
+
   const forceRefresh = async () => {
     try {
       setLoading(true); setErr(null);
       const data = await fetchVencidasHoyManana();
-      setRows(data);
       setDaily(DAILY_KEY, data);
       setSource('server');
       setSelected(new Set());
       setPwNewByEmail({});
+      setRows(prev => sameKeys(prev, data) ? prev : data);
     } catch (e: any) {
       setErr(e?.message ?? 'No se pudo refrescar.');
     } finally {
       setLoading(false);
     }
   };
+
+  /* ====== Suscripciones de actualización automática ====== */
+  useEffect(() => {
+    let canceled = false;
+
+    // a) BroadcastChannel entre pestañas
+    const onBC = async (ev: MessageEvent) => {
+      const msg = ev.data || {};
+      if (msg.by === INSTANCE_ID) return;
+      if (!canceled) forceRefresh();
+    };
+    bc?.addEventListener?.('message', onBC);
+
+    // b) Fallback por storage
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== LS_BROADCAST_KEY || !e.newValue) return;
+      try {
+        const msg = JSON.parse(e.newValue);
+        if (msg.by === INSTANCE_ID) return;
+        if (!canceled) forceRefresh();
+      } catch {}
+    };
+    window.addEventListener('storage', onStorage);
+
+    // c) Al volver visible
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') forceRefresh();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    // d) Al volver online
+    const onOnline = () => { forceRefresh(); };
+    window.addEventListener('online', onOnline);
+
+    // e) Polling suave cada 45s solo cuando está visible
+    const iv = window.setInterval(() => {
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        forceRefresh();
+      }
+    }, 45000);
+
+    return () => {
+      canceled = true;
+      bc?.removeEventListener?.('message', onBC);
+      window.removeEventListener('storage', onStorage);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('online', onOnline);
+      window.clearInterval(iv);
+    };
+  }, []); // solo una vez
 
   /* Plataforma */
   const platformMap = useMemo(() => {
@@ -401,8 +470,6 @@ export default function CuentasPantallasVencidasPage() {
     });
   }, [rows, view, q, platFilter, platformMap, tipoFilter]);
 
-  const keyOf = (r: Registro) => `${r.tipo}:${r.id}`;
-
   /* ====== Inventario: check + helpers ====== */
   async function localCheckIsLast(r: Registro) {
     // Fallback más estricto: descarga TODOS (no solo vencidas) y filtra por plataforma+correo y tipo
@@ -442,16 +509,19 @@ export default function CuentasPantallasVencidasPage() {
       throw new Error(j?.error ?? 'No se pudo eliminar');
     }
     await res.json().catch(() => ({}));
-    const next = rows.filter(x => keyOf(x) !== keyOf(r));
+    const next = rows.filter(x => (`${x.tipo}:${x.id}`) !== (`${r.tipo}:${r.id}`));
     setRows(next);
     setDaily(DAILY_KEY, next);
-    setSelected(s => { const n = new Set(s); n.delete(keyOf(r)); return n; });
+    setSelected(s => { const n = new Set(s); n.delete(`${r.tipo}:${r.id}`); return n; });
+
+    // 🔔 Avisar a otras pestañas (BC + storage)
+    try { bc?.postMessage({ t: 'deleted', key: `${r.tipo}:${r.id}`, by: INSTANCE_ID, at: Date.now() }); } catch {}
+    try { localStorage.setItem(LS_BROADCAST_KEY, JSON.stringify({ t: 'bump', by: INSTANCE_ID, at: Date.now() })); } catch {}
   };
 
   const onAskDelete = async (r: Registro) => {
     const chk = await serverCheckIsLast(r);
     if (chk.isLast) {
-      // Si es último → ofrecer inventario (2 y 3: comentario) y también "Eliminar definitivamente" (4)
       setInvModal({ open: true, row: r, remaining: chk.remaining, busy: false, comment: '' });
     } else {
       setDelModal({ open: true, row: r, busy: false });
@@ -461,7 +531,7 @@ export default function CuentasPantallasVencidasPage() {
   /* ====== BULK ====== */
   const collectRows = (scope: 'selected' | 'visible') =>
     scope === 'selected'
-      ? rows.filter(r => selected.has(keyOf(r)))
+      ? rows.filter(r => selected.has(`${r.tipo}:${r.id}`))
       : filtered.slice(); // visibles
 
   const askBulkDelete = async (scope: 'selected' | 'visible') => {
@@ -474,7 +544,7 @@ export default function CuentasPantallasVencidasPage() {
     const checks = await Promise.all(
       list.map(async r => {
         const chk = await serverCheckIsLast(r);
-        return { r, k: keyOf(r), isLast: chk.isLast };
+        return { r, k: `${r.tipo}:${r.id}`, isLast: chk.isLast };
       })
     );
     const lastKeys = new Set(checks.filter(c => c.isLast).map(c => c.k));
@@ -503,8 +573,7 @@ export default function CuentasPantallasVencidasPage() {
     for (let i = 0; i < list.length; i++) {
       const r = list[i];
       try {
-        if (mode === 'inventory' && lastKeys.has(keyOf(r))) {
-          // Enviar a inventario con comentario común (3)
+        if (mode === 'inventory' && lastKeys.has(`${r.tipo}:${r.id}`)) {
           const resInv = await fetch(INVENTARIO_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -525,7 +594,7 @@ export default function CuentasPantallasVencidasPage() {
         ok++;
       } catch (e: any) {
         fail++;
-        errs.push(`${keyOf(r)}: ${e?.message ?? 'Error'}`);
+        errs.push(`${r.tipo}:${r.id}: ${e?.message ?? 'Error'}`);
       }
       setBulkModal(m => ({ ...m, progress: i + 1 }));
     }
@@ -539,53 +608,48 @@ export default function CuentasPantallasVencidasPage() {
   /* ====== Notificaciones (cola) ====== */
   const pwChangedEmails = useMemo(() => Object.keys(pwNewByEmail), [pwNewByEmail]);
 
-  // Reemplaza tu sendPwChangeNotifications por esta versión
-const sendPwChangeNotifications = async () => {
-  // mapear plataformas por correo según las filas actuales
-  const platByEmail = getPlatformsByEmail(rows);
+  const sendPwChangeNotifications = async () => {
+    const platByEmail = getPlatformsByEmail(rows);
 
-  // construir items: uno por (correo, plataforma)
-  const items = Object.entries(pwNewByEmail).flatMap(([correoRaw, nuevaClave]) => {
-    const correo = (correoRaw || '').trim().toLowerCase();
-    const clave = (nuevaClave || '').trim();
-    if (!correo || !clave) return [];
+    const items = Object.entries(pwNewByEmail).flatMap(([correoRaw, nuevaClave]) => {
+      const correo = (correoRaw || '').trim().toLowerCase();
+      const clave = (nuevaClave || '').trim();
+      if (!correo || !clave) return [];
 
-    const plats = platByEmail.get(correo);
-    // si no encontramos plataforma, mandamos un item "genérico" (backward compatible)
-    if (!plats || plats.size === 0) {
-      return [{ correo, nuevaClave: clave }];
-    }
+      const plats = platByEmail.get(correo);
+      if (!plats || plats.size === 0) {
+        return [{ correo, nuevaClave: clave }];
+      }
 
-    return Array.from(plats).map((plataforma_id) => ({
-      correo,
-      nuevaClave: clave,
-      plataforma_id,                         // 👈 NUEVO: id de plataforma
-      plataforma_nombre: platformName(plataforma_id), // opcional, pero útil para logs
-    }));
-  });
-
-  if (items.length === 0) { alert('No hay correos o faltan claves.'); return; }
-  const faltan = items.filter(it => !it.nuevaClave).map(it => it.correo);
-  if (faltan.length > 0) { alert(`Falta la nueva clave para:\n- ${faltan.join('\n- ')}`); return; }
-
-  try {
-    setNotifying(true);
-    const res = await fetch(NOTIFY_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items }),
+      return Array.from(plats).map((plataforma_id) => ({
+        correo,
+        nuevaClave: clave,
+        plataforma_id,
+        plataforma_nombre: platformName(plataforma_id),
+      }));
     });
-    const j = await res.json().catch(() => ({}));
-    if (!res.ok || j?.error) throw new Error(j?.error || 'No se pudo iniciar la notificación');
-    alert(`Notificación lanzada. PID: ${j?.pid ?? '—'}\nLog: ${j?.logFile ?? '(ver servidor)'}`);
-    setPwNewByEmail({});
-  } catch (e: any) {
-    alert(e?.message ?? 'Error al enviar notificaciones');
-  } finally {
-    setNotifying(false);
-  }
-};
 
+    if (items.length === 0) { alert('No hay correos o faltan claves.'); return; }
+    const faltan = items.filter(it => !it.nuevaClave).map(it => it.correo);
+    if (faltan.length > 0) { alert(`Falta la nueva clave para:\n- ${faltan.join('\n- ')}`); return; }
+
+    try {
+      setNotifying(true);
+      const res = await fetch(NOTIFY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || j?.error) throw new Error(j?.error || 'No se pudo iniciar la notificación');
+      alert(`Notificación lanzada. PID: ${j?.pid ?? '—'}\nLog: ${j?.logFile ?? '(ver servidor)'}`);
+      setPwNewByEmail({});
+    } catch (e: any) {
+      alert(e?.message ?? 'Error al enviar notificaciones');
+    } finally {
+      setNotifying(false);
+    }
+  };
 
   /* ====== Editar ====== */
   const openEdit = (r: Registro, focus: 'contacto' | 'contrasena' = 'contacto') => {
@@ -638,7 +702,7 @@ const sendPwChangeNotifications = async () => {
       const flat = await res.json().catch(() => ({}));
 
       const merged: Registro[] = rows.map(r =>
-        keyOf(r) === `${edit.tipo}:${edit.id}`
+        `${r.tipo}:${r.id}` === `${edit.tipo}:${edit.id}`
           ? ({
               ...r,
               contacto: flat?.row?.contacto ?? (edit.contacto ?? r.contacto),
@@ -656,7 +720,7 @@ const sendPwChangeNotifications = async () => {
       );
 
       // Encolar notificación si cambió la contraseña
-      const updated = merged.find(r => keyOf(r) === `${edit.tipo}:${edit.id}`)!;
+      const updated = merged.find(r => `${r.tipo}:${r.id}` === `${edit.tipo}:${edit.id}`)!;
       const oldPw = edit.__original_contrasena ?? '';
       const newPw = (flat?.row?.contrasena ?? edit.contrasena ?? '').toString();
       const emailForQueue = (flat?.row?.correo ?? edit.correo ?? updated.correo ?? '').toString().trim();
@@ -672,6 +736,10 @@ const sendPwChangeNotifications = async () => {
       setRows(next);
       setDaily(DAILY_KEY, next);
       closeEdit();
+
+      // 🔔 Cambios relevantes podrían venir de otros flujos: emite señal
+      try { bc?.postMessage({ t: 'updated', key: `${edit.tipo}:${edit.id}`, by: INSTANCE_ID, at: Date.now() }); } catch {}
+      try { localStorage.setItem(LS_BROADCAST_KEY, JSON.stringify({ t: 'bump', by: INSTANCE_ID, at: Date.now() })); } catch {}
     } catch (e: any) {
       alert(e?.message ?? 'Error guardando');
     } finally {
@@ -684,13 +752,13 @@ const sendPwChangeNotifications = async () => {
   const kpiManana = rows.filter(r => isTomorrow(r.fecha_vencimiento)).length;
   const kpiAnteriores = rows.filter(r => isExpired(r.fecha_vencimiento)).length;
 
-  const visibleIds = useMemo(() => new Set(filtered.map(r => keyOf(r))), [filtered]);
+  const visibleIds = useMemo(() => new Set(filtered.map(r => `${r.tipo}:${r.id}`)), [filtered]);
   const allVisibleSelected = visibleIds.size > 0 && [...visibleIds].every(id => selected.has(id));
   const toggleSelectAllVisible = () => {
     setSelected(prev => {
       const next = new Set(prev);
-      if (allVisibleSelected) filtered.forEach(r => next.delete(keyOf(r)));
-      else filtered.forEach(r => next.add(keyOf(r)));
+      if (allVisibleSelected) filtered.forEach(r => next.delete(`${r.tipo}:${r.id}`));
+      else filtered.forEach(r => next.add(`${r.tipo}:${r.id}`));
       return next;
     });
   };
@@ -895,17 +963,17 @@ const sendPwChangeNotifications = async () => {
           <tbody>
             {filtered.map((r) => (
               <tr
-                key={keyOf(r)}
+                key={`${r.tipo}:${r.id}`}
                 className="border-t border-neutral-800 hover:bg-neutral-900/30 cursor-pointer"
-                onDoubleClick={() => openEdit(r)} // 👉 Nuevo: doble click en cualquier parte de la fila
+                onDoubleClick={() => openEdit(r)} // 👉 doble click fila para editar
               >
                 <Td className="align-middle">
                   <input
                     type="checkbox"
-                    checked={selected.has(keyOf(r))}
+                    checked={selected.has(`${r.tipo}:${r.id}`)}
                     onChange={() => setSelected(prev => {
                       const n = new Set(prev);
-                      const k = keyOf(r);
+                      const k = `${r.tipo}:${r.id}`;
                       n.has(k) ? n.delete(k) : n.add(k);
                       return n;
                     })}
@@ -943,7 +1011,7 @@ const sendPwChangeNotifications = async () => {
                 <Td>{r.nombre || '—'}</Td>
                 <Td><span className="inline-block max-w-[260px] truncate align-bottom" title={r.correo ?? ''}>{r.correo || '—'}</span></Td>
 
-                {/* Clave visible pero sin doble click propio (usa el doble click de la fila) */}
+                {/* Clave visible (edición por doble click de fila) */}
                 <Td className="whitespace-nowrap">
                   <span>{r.contrasena || '—'}</span>
                 </Td>
@@ -1012,7 +1080,6 @@ const sendPwChangeNotifications = async () => {
               {typeof invModal.remaining === 'number' && (
                 <p className="text-neutral-400">Registros restantes (estimado): {invModal.remaining}</p>
               )}
-              {/* (2) y (3) comentario antes de enviar a inventario */}
               <label className="grid gap-1">
                 <span className="text-sm text-neutral-300">Comentario (opcional) para Inventario</span>
                 <textarea
@@ -1030,7 +1097,7 @@ const sendPwChangeNotifications = async () => {
                       onClick={() => setInvModal({ open:false, row:null })} disabled={!!invModal.busy}>Cancelar</button>
 
               <div className="flex items-center gap-2">
-                {/* (4) Eliminar definitivamente sin inventario */}
+                {/* Eliminar definitivamente */}
                 <button className="px-3 py-2 rounded-lg border border-rose-800 bg-rose-900/40 hover:bg-rose-900/60 disabled:opacity-60"
                         onClick={async () => {
                           if (!invModal.row) return;
@@ -1042,7 +1109,7 @@ const sendPwChangeNotifications = async () => {
                   {invModal.busy ? 'Procesando…' : 'Eliminar definitivamente'}
                 </button>
 
-                {/* Enviar a inventario SOLO si es último (ya estamos aquí por isLast=true) */}
+                {/* Enviar a inventario y eliminar */}
                 <button className="px-3 py-2 rounded-lg border border-amber-700 bg-amber-800/40 hover:bg-amber-800/60 disabled:opacity-60"
                         onClick={async () => {
                           if (!invModal.row) return;
@@ -1133,7 +1200,7 @@ const sendPwChangeNotifications = async () => {
                 );
               })()}
 
-              {/* (3) Comentario común para inventario en lote */}
+              {/* Comentario común para inventario en lote */}
               <label className="grid gap-1">
                 <span className="text-sm text-neutral-300">Comentario para Inventario (opcional, se aplica a los “últimos”)</span>
                 <textarea

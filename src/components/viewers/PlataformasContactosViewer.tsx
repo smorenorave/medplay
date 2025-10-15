@@ -45,22 +45,32 @@ function HeaderRow({
   title,
   onRefresh,
   refreshing,
-}: { title: string; onRefresh?: () => void; refreshing?: boolean }) {
+  rightExtra,
+}: {
+  title: string;
+  onRefresh?: () => void;
+  refreshing?: boolean;
+  rightExtra?: ReactNode;
+}) {
   return (
     <div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2 sm:px-4">
       <h3 className="text-lg font-semibold text-neutral-100">{title}</h3>
-      {onRefresh && (
-        <button
-          type="button"
-          onClick={onRefresh}
-          className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
-        >
-          {refreshing ? 'Refrescando…' : 'Refrescar'}
-        </button>
-      )}
+      <div className="flex items-center gap-2">
+        {rightExtra /* aquí van botones extra, ej: Proton */}
+        {onRefresh && (
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
+          >
+            {refreshing ? 'Refrescando…' : 'Refrescar'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
+
 
 /* --------- Iconos inline --------- */
 const EditIcon  = (p:any)=>(<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...p}><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" /></svg>);
@@ -501,6 +511,69 @@ function ContactosPane() {
     </Card>
   );
 }
+/* =================================================================== */
+/*                               Pane: Proton                           */
+/* =================================================================== */
+    function ProtonPane() {
+      const [correo, setCorreo] = useState('');
+      const [clave, setClave]   = useState('');
+      const [loading, setLoading] = useState(false);
+      const [ok, setOk] = useState<string | null>(null);
+      const [err, setErr] = useState<string | null>(null);
+
+      const input = 'h-10 w-full rounded-lg px-3 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500';
+      const btn   = 'h-10 rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-neutral-100 hover:bg-neutral-800 disabled:opacity-50';
+
+      const onSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setOk(null); setErr(null);
+        if (!correo.trim() || !clave.trim()) {
+          setErr('Escribe correo y clave');
+          return;
+        }
+        setLoading(true);
+        try {
+          const res = await fetch('/api/proton', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ correo: correo.trim().toLowerCase(), clave: clave.trim() }),
+          });
+          const j = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(j?.error ?? 'No se pudo ejecutar el script');
+          setOk('Solicitud enviada al script. Revisa el log si es necesario.');
+          setCorreo(''); setClave('');
+        } catch (e:any) {
+          setErr(e?.message ?? 'Error al ejecutar');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      return (
+        <Card>
+          <HeaderRow title="Proton" />
+          <div className="px-3 pb-4 pt-3 sm:px-4 space-y-3">
+            <form onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+              <div>
+                <label className="block text-sm mb-1 text-neutral-300">Correo</label>
+                <input type="email" className={input} value={correo} onChange={e=>setCorreo(e.target.value)} placeholder="correo@proton.me" required />
+              </div>
+              <div>
+                <label className="block text-sm mb-1 text-neutral-300">Clave</label>
+                <input type="text" className={input} value={clave} onChange={e=>setClave(e.target.value)} placeholder="******" required />
+              </div>
+              <div className="flex items-end">
+                <button type="submit" className={btn} disabled={loading}>{loading?'Enviando…':'Enviar cambio de clave'}</button>
+              </div>
+            </form>
+
+            {ok  && <div className="text-sm text-emerald-300">{ok}</div>}
+            {err && <div className="text-sm text-red-300">Error: {err}</div>}
+          </div>
+        </Card>
+      );
+    }
+
 
 /* =================================================================== */
 /*                       Pane: Inventario (buscador + lista + form)     */
@@ -822,7 +895,7 @@ function InventarioPane() {
 /*                         CONTENEDOR CON PESTAÑAS                      */
 /* =================================================================== */
 export default function PlataformasContactosInventarioViewer() {
-  type Tab = 'plataformas' | 'contactos' | 'inventario';
+  type Tab = 'plataformas' | 'contactos' | 'inventario' | 'proton'; // 👈 añade 'proton'
   const [tab, setTab] = useState<Tab>('plataformas');
 
   const btnBase = 'px-4 py-2 rounded-xl border transition-colors';
@@ -833,34 +906,22 @@ export default function PlataformasContactosInventarioViewer() {
     <div className="space-y-6">
       <h2 className="text-2xl font-semibold text-neutral-100">Plataformas, Contactos e Inventario</h2>
 
-      {/* Tabs */}
+      {/* Tabs (mismo nivel) */}
       <div className="flex gap-2">
         <button className={`${btnBase} ${tab==='plataformas'?active:idle}`} onClick={()=>setTab('plataformas')}>Plataformas</button>
-        <button className={`${btnBase} ${tab==='contactos'?active:idle}`} onClick={()=>setTab('contactos')}>Contactos</button>
-        <button className={`${btnBase} ${tab==='inventario'?active:idle}`} onClick={()=>setTab('inventario')}>Inventario</button>
+        <button className={`${btnBase} ${tab==='contactos'?active:idle}`}   onClick={()=>setTab('contactos')}>Contactos</button>
+        <button className={`${btnBase} ${tab==='inventario'?active:idle}`}  onClick={()=>setTab('inventario')}>Inventario</button>
+        <button className={`${btnBase} ${tab==='proton'?active:idle}`}      onClick={()=>setTab('proton')}>Proton</button> {/* 👈 NUEVO */}
       </div>
 
       {/* Panel activo */}
       {tab==='plataformas' && <PlataformasPane/>}
       {tab==='contactos'   && <ContactosPane/>}
       {tab==='inventario'  && <InventarioPane/>}
+      {tab==='proton'      && <ProtonPane/>}   {/* 👈 NUEVO */}
 
-      {/* Scrollbar discreto */}
-      <style jsx global>{`
-        .custom-scroll {
-          scrollbar-width: thin;
-          scrollbar-color: rgba(120,120,120,0.35) transparent;
-        }
-        .custom-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
-        .custom-scroll::-webkit-scrollbar-thumb {
-          background-color: rgba(120,120,120,0.35);
-          border-radius: 9999px;
-          border: 2px solid transparent;
-          background-clip: padding-box;
-        }
-        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
-        .custom-scroll:hover::-webkit-scrollbar-thumb { background-color: rgba(120,120,120,0.5); }
-      `}</style>
+      {/* … (css de la scrollbar se queda igual) … */}
     </div>
   );
 }
+

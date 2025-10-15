@@ -116,6 +116,57 @@ async function refreshCuentasStampOnce(): Promise<number> {
   }
 }
 
+/* ===== Helpers Ticket (FormCuentaCompletas) ===== */
+const fmtDateHumanCC = (yyyyMmDdOrIso?: string | null) => {
+  if (!yyyyMmDdOrIso) return '—';
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(yyyyMmDdOrIso)
+    ? parseLocalDateStr(yyyyMmDdOrIso)
+    : new Date(yyyyMmDdOrIso);
+  if (!d || Number.isNaN(d.getTime())) return '—';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = d.getFullYear();
+  return `${dd}/${mm}/${yy}`;
+};
+const fmtMoneyClientCC = (n?: number | null) =>
+  n == null || Number.isNaN(Number(n))
+    ? '—'
+    : new Intl.NumberFormat('es-CO').format(Number(n));
+
+/** Solo datos (sin agradecimiento) */
+function buildHandoffTextCC(
+  payload: any,
+  plataformaMap: Map<number, string>,
+  form: any
+) {
+  const platName =
+    plataformaMap.get(payload?.plataforma_id) ?? `#${payload?.plataforma_id ?? '—'}`;
+  return [
+    `Plataforma: ${platName}`,
+    `Correo: ${payload?.correo ?? '—'}`,
+    `Clave: ${payload?.contrasena ?? '—'}`,
+    `Fecha de compra: ${fmtDateHumanCC(form?.fecha_compra)}`,
+    `Fecha de vencimiento: ${fmtDateHumanCC(form?.fecha_vencimiento)}`,
+    `Meses pagados: ${form?.meses_pagados ?? '—'}`,
+    `Total pagado: ${fmtMoneyClientCC(payload?.total_pagado)}`,
+  ].join('\n');
+}
+
+/** Texto completo para mostrar/copiar/descargar */
+function buildHandoffFullCC(
+  payload: any,
+  plataformaMap: Map<number, string>,
+  form: any
+) {
+  return (
+    buildHandoffTextCC(payload, plataformaMap, form) +
+    `\n\n` +
+    `Gracias por tu compra! 🥳\n` +
+    `Recuerda que puedes disfrutar de tu servicio hasta la fecha indicada.\n` +
+    `Si tienes dudas o necesitas soporte, estamos para ayudarte.`
+  );
+}
+
 /* ===================== Usuarios: catálogo completo (una sola vez) ===================== */
 type UsersAllCache = { map: Record<string, Usuario>; ts: number };
 function readUsersAll(): UsersAllCache | null { return readLS<UsersAllCache>(LS_USERS_ALL); }
@@ -962,139 +1013,202 @@ export default function FormCuentaCompletas() {
         {okMsg && <p className="text-green-700 text-sm">{okMsg}</p>}
         {errMsg && <p className="text-red-600 text-sm">Error: {errMsg}</p>}
       </form>
-
-      {/* ===== Modal ===== */}
-      {confirmOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          onClick={() => setConfirmOpen(false)}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="confirm-title"
-        >
+       {/* ===== Modal ===== */}
+        {confirmOpen && (
           <div
-            className="w-full max-w-4xl rounded-2xl border border-neutral-700 bg-neutral-900 text-neutral-100 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            onClick={() => setConfirmOpen(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-title"
           >
-            {/* Header */}
-            <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-xl bg-neutral-800 flex items-center justify-center text-sm">✅</div>
-                <div>
-                  <h3 id="confirm-title" className="font-semibold text-lg">Confirmar datos a guardar</h3>
-                  <p className="text-xs text-neutral-400">Revisa el contenido antes de continuar. Se enviará tal cual.</p>
+            <div
+              className="w-full max-w-4xl rounded-2xl border border-neutral-700 bg-neutral-900 text-neutral-100 shadow-2xl
+                        max-h-[90vh] grid grid-rows-[auto_auto_1fr_auto]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-xl bg-neutral-800 flex items-center justify-center text-sm">✅</div>
+                  <div>
+                    <h3 id="confirm-title" className="font-semibold text-lg">Confirmar datos a guardar</h3>
+                    <p className="text-xs text-neutral-400">Revisa el contenido antes de continuar. Se enviará tal cual.</p>
+                  </div>
+                </div>
+                <button className="text-neutral-300 hover:text-white rounded-lg px-2 py-1" onClick={() => setConfirmOpen(false)} aria-label="Cerrar">✕</button>
+              </div>
+
+              {/* Tabs + Acciones */}
+              <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-2 border-b border-neutral-800">
+                <div className="inline-flex rounded-lg border border-neutral-700 overflow-hidden">
+                  <button type="button" className={`px-3 py-1.5 text-sm ${confirmView === 'resumen' ? 'bg-neutral-800' : 'bg-neutral-900 hover:bg-neutral-800'}`} onClick={() => setConfirmView('resumen')}>Resumen</button>
+                  <button type="button" className={`px-3 py-1.5 text-sm ${confirmView === 'json' ? 'bg-neutral-800' : 'bg-neutral-900 hover:bg-neutral-800'}`} onClick={() => setConfirmView('json')}>JSON</button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800"
+                    onClick={() => navigator.clipboard?.writeText?.(confirmText)}
+                  >
+                    Copiar JSON
+                  </button>
+                  <button
+                    type="button"
+                    className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800"
+                    onClick={() => {
+                      let obj = confirmPayload;
+                      try { obj = JSON.parse(confirmText); } catch {}
+                      const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url; a.download = 'cuenta.json'; a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    Descargar
+                  </button>
                 </div>
               </div>
-              <button className="text-neutral-300 hover:text-white rounded-lg px-2 py-1" onClick={() => setConfirmOpen(false)} aria-label="Cerrar">✕</button>
-            </div>
 
-            {/* Tabs + Acciones */}
-            <div className="px-5 pt-4 flex items-center justify-between gap-2">
-              <div className="inline-flex rounded-lg border border-neutral-700 overflow-hidden">
-                <button type="button" className={`px-3 py-1.5 text-sm ${confirmView === 'resumen' ? 'bg-neutral-800' : 'bg-neutral-900 hover:bg-neutral-800'}`} onClick={() => setConfirmView('resumen')}>Resumen</button>
-                <button type="button" className={`px-3 py-1.5 text-sm ${confirmView === 'json' ? 'bg-neutral-800' : 'bg-neutral-900 hover:bg-neutral-800'}`} onClick={() => setConfirmView('json')}>JSON</button>
+              {/* Contenido (scrollable) */}
+              <div className="p-5 overflow-y-auto min-w-0">
+                {confirmView === 'resumen' ? (
+                  <>
+                    {/* === Ticket para el cliente === */}
+                    <div className="rounded-xl border border-emerald-800/50 bg-emerald-950/30 p-4 mb-4">
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <h4 className="font-semibold text-sm text-emerald-300">Datos para entregar al cliente</h4>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            className="text-xs px-2 py-1 rounded-md border border-emerald-700/70 hover:bg-emerald-900/40"
+                            onClick={() => {
+                              const txt = buildHandoffFullCC(confirmPayload, plataformaMap, form);
+                              navigator.clipboard?.writeText?.(txt);
+                            }}
+                          >
+                            Copiar
+                          </button>
+                          <button
+                            type="button"
+                            className="text-xs px-2 py-1 rounded-md border border-neutral-700 hover:bg-neutral-800"
+                            onClick={() => {
+                              const txt = buildHandoffFullCC(confirmPayload, plataformaMap, form);
+                              const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url; a.download = 'ticket_cliente.txt'; a.click();
+                              URL.revokeObjectURL(url);
+                            }}
+                          >
+                            Descargar
+                          </button>
+                        </div>
+                      </div>
+
+                      <pre
+                        className="whitespace-pre-wrap break-words text-sm font-mono bg-neutral-950/70 border border-neutral-800 rounded-lg p-3
+                                  text-left max-h-56 md:max-h-72 overflow-auto"
+                      >
+                        {buildHandoffFullCC(confirmPayload, plataformaMap, form)}
+                      </pre>
+                    </div>
+
+                    {/* === Resumen técnico === */}
+                    <div className="grid gap-4 md:grid-cols-2 min-w-0">
+                      {/* Usuario */}
+                      <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 space-y-3 min-w-0">
+                        <h4 className="font-medium text-sm text-neutral-300 mb-1">Datos del usuario</h4>
+                        <dl className="grid grid-cols-[140px_1fr] text-sm gap-y-2">
+                          <dt className="text-neutral-400">Contacto</dt>
+                          <dd className="font-medium break-words">{confirmPayload?.contacto || '—'}</dd>
+                          <dt className="text-neutral-400">Nombre</dt>
+                          <dd className="font-medium break-words">
+                            {confirmPayload?.nombre || '—'}{' '}
+                            {(!confirmPayload?.nombre || confirmPayload?.nombre === '') && (
+                              <span className="text-[10px] px-2 py-[2px] rounded-full border border-neutral-500 text-neutral-300">opcional</span>
+                            )}
+                          </dd>
+                          <dt className="text-neutral-400">Estado</dt>
+                          <dd className="font-medium">{confirmPayload?.estado || '—'}</dd>
+                        </dl>
+                      </div>
+
+                      {/* Cuenta / Plataforma */}
+                      <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 space-y-3 min-w-0">
+                        <h4 className="font-medium text-sm text-neutral-300 mb-1">Cuenta y plataforma</h4>
+                        <dl className="grid grid-cols-[140px_1fr] text-sm gap-y-2">
+                          <dt className="text-neutral-400">Plataforma</dt>
+                          <dd className="font-semibold break-words">
+                            {plataformaMap.get(confirmPayload?.plataforma_id) ?? `#${confirmPayload?.plataforma_id ?? '—'}`}
+                          </dd>
+                          <dt className="text-neutral-400">Correo</dt>
+                          <dd className="font-medium break-words">{confirmPayload?.correo || '—'}</dd>
+                          <dt className="text-neutral-400">Contraseña</dt>
+                          <dd className="font-mono break-words">{confirmPayload?.contrasena || '—'}</dd>
+                          <dt className="text-neutral-400">Proveedor</dt>
+                          <dd className="font-medium break-words">{confirmPayload?.proveedor || '—'}</dd>
+                          <dt className="text-neutral-400">Compra</dt>
+                          <dd className="font-medium">{confirmPayload?.fecha_compra || '—'}</dd>
+                          <dt className="text-neutral-400">Vencimiento</dt>
+                          <dd className="font-medium">{confirmPayload?.fecha_vencimiento || '—'}</dd>
+                          <dt className="text-neutral-400">Meses pagados</dt>
+                          <dd className="font-medium">{confirmPayload?.meses_pagados ?? '—'}</dd>
+                        </dl>
+                      </div>
+
+                      {/* Totales */}
+                      <div className="md:col-span-2 rounded-xl border border-neutral-800 bg-neutral-950 p-4 min-w-0">
+                        <h4 className="font-medium text-sm text-neutral-300 mb-2">Totales</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="rounded-lg border border-neutral-800 p-3">
+                            <div className="text-xs text-neutral-400">Total pagado</div>
+                            <div className="text-lg font-semibold">{toMoney(confirmPayload?.total_pagado)}</div>
+                          </div>
+                          <div className="rounded-lg border border-neutral-800 p-3">
+                            <div className="text-xs text-neutral-400">Pagado proveedor</div>
+                            <div className="text-lg font-semibold">{toMoney(confirmPayload?.total_pagado_proveedor)}</div>
+                          </div>
+                          <div className="rounded-lg border border-neutral-800 p-3">
+                            <div className="text-xs text-neutral-400">Total ganado</div>
+                            <div className="text-lg font-semibold">{toMoney(confirmPayload?.total_ganado)}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Comentario */}
+                      <div className="md:col-span-2 rounded-xl border border-neutral-800 bg-neutral-950 p-4 min-w-0">
+                        <h4 className="font-medium text-sm text-neutral-300 mb-2">Comentario</h4>
+                        <div className="text-sm whitespace-pre-wrap">
+                          {confirmPayload?.comentario || <span className="opacity-70">—</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <p className="text-sm text-neutral-300 mb-2">Puedes editar el texto antes de confirmar. Se enviará exactamente este JSON.</p>
+                    <textarea
+                      className="w-full h-96 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-100 font-mono text-sm p-3"
+                      value={confirmText}
+                      onChange={(e) => setConfirmText(e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-2">
-                <button type="button" className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800" onClick={() => navigator.clipboard?.writeText?.(confirmText)}>Copiar JSON</button>
-                <button
-                  type="button"
-                  className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800"
-                  onClick={() => {
-                    let obj = confirmPayload;
-                    try { obj = JSON.parse(confirmText); } catch {}
-                    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url; a.download = 'cuenta.json'; a.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                >
-                  Descargar
+
+              {/* Footer */}
+              <div className="px-5 py-4 border-t border-neutral-800 flex items-center justify-end gap-2">
+                <button className="px-3 py-2 rounded-lg border border-neutral-600 hover:bg-neutral-800" onClick={() => setConfirmOpen(false)} disabled={loading}>Volver a editar</button>
+                <button className="px-3 py-2 rounded-lg border border-emerald-700 bg-emerald-800/40 hover:bg-emerald-800/60 disabled:opacity-60" onClick={confirmAndSave} disabled={loading}>
+                  {loading ? 'Guardando…' : 'Confirmar y guardar'}
                 </button>
               </div>
             </div>
-
-            {/* Contenido */}
-            <div className="p-5">
-              {confirmView === 'resumen' ? (
-                <div className="grid gap-4 md:grid-cols-2">
-                  {/* Usuario */}
-                  <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 space-y-3">
-                    <h4 className="font-medium text-sm text-neutral-300 mb-1">Datos del usuario</h4>
-                    <dl className="grid grid-cols-[140px_1fr] text-sm gap-y-2">
-                      <dt className="text-neutral-400">Contacto</dt><dd className="font-medium">{confirmPayload?.contacto || '—'}</dd>
-                      <dt className="text-neutral-400">Nombre</dt>
-                      <dd className="font-medium">
-                        {confirmPayload?.nombre || '—'} {isEmpty(confirmPayload?.nombre) && (
-                          <span className="text-[10px] px-2 py-[2px] rounded-full border border-neutral-500 text-neutral-300">opcional</span>
-                        )}
-                      </dd>
-                      <dt className="text-neutral-400">Estado</dt><dd className="font-medium">{confirmPayload?.estado || '—'}</dd>
-                    </dl>
-                  </div>
-
-                  {/* Cuenta */}
-                  <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 space-y-3">
-                    <h4 className="font-medium text-sm text-neutral-300 mb-1">Cuenta y plataforma</h4>
-                    <dl className="grid grid-cols-[140px_1fr] text-sm gap-y-2">
-                      <dt className="text-neutral-400">Plataforma</dt>
-                      <dd className="font-semibold">{plataformaMap.get(confirmPayload?.plataforma_id) ?? `#${confirmPayload?.plataforma_id ?? '—'}`}</dd>
-                      <dt className="text-neutral-400">Correo</dt><dd className="font-medium">{confirmPayload?.correo || '—'}</dd>
-                      <dt className="text-neutral-400">Contraseña</dt><dd className="font-mono">{confirmPayload?.contrasena || '—'}</dd>
-                      <dt className="text-neutral-400">Proveedor</dt><dd className="font-medium">{confirmPayload?.proveedor || '—'}</dd>
-                      <dt className="text-neutral-400">Compra</dt><dd className="font-medium">{confirmPayload?.fecha_compra || '—'}</dd>
-                      <dt className="text-neutral-400">Vencimiento</dt><dd className="font-medium">{confirmPayload?.fecha_vencimiento || '—'}</dd>
-                      <dt className="text-neutral-400">Meses pagados</dt><dd className="font-medium">{confirmPayload?.meses_pagados ?? '—'}</dd>
-                    </dl>
-                  </div>
-
-                  {/* Totales */}
-                  <div className="md:col-span-2 rounded-xl border border-neutral-800 bg-neutral-950 p-4">
-                    <h4 className="font-medium text-sm text-neutral-300 mb-2">Totales</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className="rounded-lg border border-neutral-800 p-3">
-                        <div className="text-xs text-neutral-400">Total pagado</div>
-                        <div className="text-lg font-semibold">{toMoney(confirmPayload?.total_pagado)}</div>
-                      </div>
-                      <div className="rounded-lg border border-neutral-800 p-3">
-                        <div className="text-xs text-neutral-400">Pagado proveedor</div>
-                        <div className="text-lg font-semibold">{toMoney(confirmPayload?.total_pagado_proveedor)}</div>
-                      </div>
-                      <div className="rounded-lg border border-neutral-800 p-3">
-                        <div className="text-xs text-neutral-400">Total ganado</div>
-                        <div className="text-lg font-semibold">{toMoney(confirmPayload?.total_ganado)}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Comentario */}
-                  <div className="md:col-span-2 rounded-xl border border-neutral-800 bg-neutral-950 p-4">
-                    <h4 className="font-medium text-sm text-neutral-300 mb-2">Comentario</h4>
-                    <div className="text-sm whitespace-pre-wrap">{confirmPayload?.comentario || <span className="opacity-70">—</span>}</div>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <p className="text-sm text-neutral-300 mb-2">Puedes editar el texto antes de confirmar. Se enviará exactamente este JSON.</p>
-                  <textarea
-                    className="w-full h-96 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-100 font-mono text-sm p-3"
-                    value={confirmText}
-                    onChange={(e) => setConfirmText(e.target.value)}
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="px-5 py-4 border-t border-neutral-800 flex items-center justify-end gap-2">
-              <button className="px-3 py-2 rounded-lg border border-neutral-600 hover:bg-neutral-800" onClick={() => setConfirmOpen(false)} disabled={loading}>Volver a editar</button>
-              <button className="px-3 py-2 rounded-lg border border-emerald-700 bg-emerald-800/40 hover:bg-emerald-800/60 disabled:opacity-60" onClick={confirmAndSave} disabled={loading}>
-                {loading ? 'Guardando…' : 'Confirmar y guardar'}
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        )}
+            
     </>
   );
 }

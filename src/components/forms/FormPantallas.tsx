@@ -17,6 +17,16 @@ import {
   BC_NAME,
 } from '@/lib/pantallasMutationBus';
 
+/** Texto final que se muestra, copia y descarga (datos + agradecimiento) */
+function buildHandoffFull(payload: any, plataformaMap: Map<number, string>, form: any) {
+  return (
+    buildHandoffText(payload, plataformaMap, form) +
+    `\n\n` +
+    `Gracias por tu compra! 🥳\n` +
+    `Recuerda que puedes disfrutar de tu servicio hasta la fecha indicada.\n` +
+    `Si tienes dudas o necesitas soporte, estamos para ayudarte.`
+  );
+}
 /* ===================== Fecha ===================== */
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const toLocalDateStr = (d: Date) =>
@@ -73,6 +83,39 @@ type InventarioItem = {
   correo: string;
   clave?: string | null;
 };
+
+
+/* ===== Ticket para el cliente (helpers) ===== */
+const fmtDateHuman = (isoOrYYYYMMDD?: string | null) => {
+  if (!isoOrYYYYMMDD) return '—';
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(isoOrYYYYMMDD)
+    ? parseLocalDateStr(isoOrYYYYMMDD)
+    : new Date(isoOrYYYYMMDD);
+  if (!d || Number.isNaN(d.getTime())) return '—';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = d.getFullYear();
+  return `${dd}/${mm}/${yy}`;
+};
+
+const fmtMoneyClient = (n: number | null | undefined) =>
+  n == null || Number.isNaN(Number(n)) ? '—' : new Intl.NumberFormat('es-CO').format(Number(n));
+
+function buildHandoffText(payload: any, plataformaMap: Map<number, string>, form: any) {
+  const platName =
+    plataformaMap.get(payload?.plataforma_id) ?? `#${payload?.plataforma_id ?? '—'}`;
+  const lineas = [
+    `Plataforma: ${platName}`,
+    `Pantalla: ${payload?.nro_pantalla ?? '—'}`,
+    `Correo: ${payload?.correo ?? '—'}`,
+    `Clave: ${payload?.contrasena ?? '—'}`,
+    `Fecha de compra: ${fmtDateHuman(form?.fecha_compra)}`,
+    `Fecha de vencimiento: ${fmtDateHuman(form?.fecha_vencimiento)}`,
+    `Meses pagados: ${form?.meses_pagados ?? '—'}`,
+    `Total pagado: ${fmtMoneyClient(payload?.total_pagado)}`,
+  ];
+  return lineas.join('\n');
+}
 
 /* ===================== Helpers LS/Stamp ===================== */
 const hasWindow = () => typeof window !== 'undefined';
@@ -379,6 +422,7 @@ export default function FormPantallas() {
   });
 
   const [availableSlots, setAvailableSlots] = useState<number[]>([]);
+  const [maxAllowed, setMaxAllowed] = useState<number>(1);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
   const { plataformas, loading: platLoading, error: platError } = usePlataformas();
@@ -543,7 +587,7 @@ export default function FormPantallas() {
 
     setLoadingSlots(true);
     try {
-      // 1) Lee la plataforma y determina el máximo permitido
+     // 1) Lee la plataforma y determina el máximo permitido
       let p: any = plataformas.find((x) => x.id === pid);
       let maxAllowed = resolveMaxPantallas(p);
 
@@ -551,10 +595,14 @@ export default function FormPantallas() {
       if (!p || maxAllowed <= 1) {
         const pFull = await fetchPlataformaById(pid);
         if (pFull) {
-          p = { ...p, ...pFull }; // merge suave
+          p = { ...p, ...pFull };
           maxAllowed = resolveMaxPantallas(p);
         }
       }
+
+      // ⬅️ NUEVO: persiste el máximo en state para usarlo al filtrar sugeridos
+      setMaxAllowed(maxAllowed);
+
 
       // 2) Pantallas ocupadas por esa cuenta/correo en esa plataforma
       const rows = await fetchPantallasByEmailOrCuenta(
@@ -727,27 +775,37 @@ export default function FormPantallas() {
     setOpen(true);
   };
 
-  const pickFromInv = (email: string) => {
-    const pass = invPassMap[email] ?? null;
-    setForm((s) => ({
-      ...s,
-      correo: email,
-      contrasena: s.contrasena || pass || '',
-    }));
-    setOpen(false);
-  };
+  
 
-  const pickFromAcct = (email: string) => {
-    const cid = acctIdMap[email];
-    const pass = acctPassMap[email];
-    setForm((s) => ({
-      ...s,
-      correo: email,
-      cuenta_id: cid ?? s.cuenta_id,
-      contrasena: s.contrasena || pass || '',
-    }));
-    setOpen(false);
-  };
+const ensureHasFree = (email: string) => {
+  const used = emailCounts[email];
+  return typeof used === 'number' && maxAllowed - used > 0;
+};
+
+const pickFromInv = (email: string) => {
+  if (!ensureHasFree(email)) return; // no permitir si no hay cupo
+  const pass = invPassMap[email] ?? null;
+  setForm((s) => ({
+    ...s,
+    correo: email,
+    contrasena: s.contrasena || pass || '',
+  }));
+  setOpen(false);
+};
+
+const pickFromAcct = (email: string) => {
+  if (!ensureHasFree(email)) return; // no permitir si no hay cupo
+  const cid = acctIdMap[email];
+  const pass = acctPassMap[email];
+  setForm((s) => ({
+    ...s,
+    correo: email,
+    cuenta_id: cid ?? s.cuenta_id,
+    contrasena: s.contrasena || pass || '',
+  }));
+  setOpen(false);
+};
+
 
   // Al escribir correo manualmente, intenta completar desde cache cuentas/inventario y actualizar contador
   const emailDetailTimer = useRef<number | null>(null);
@@ -1147,6 +1205,16 @@ export default function FormPantallas() {
   }
 
   /* ===================== UI ===================== */
+
+  const visibleOptions = useMemo(() => {
+  if (!maxAllowed || maxAllowed <= 0) return [];
+    return options.filter(({ email }) => {
+      const used = emailCounts[email];
+      return typeof used === 'number' && maxAllowed - used > 0; // solo si hay cupos
+    });
+  }, [options, emailCounts, maxAllowed]);
+
+
   const badge = (() => {
     const key = normalizeEmail(form.correo);
     const count = emailCounts[key] ?? 0;
@@ -1154,12 +1222,14 @@ export default function FormPantallas() {
       count > 0
         ? 'border-amber-300 bg-amber-50 text-amber-700'
         : 'border-emerald-300 bg-emerald-50 text-emerald-700';
+        
     return (
       <span className={`text-xs rounded-full px-2 py-[2px] border ${cls}`}>
         hay {count} {count === 1 ? 'registro' : 'registros'}
       </span>
     );
   })();
+  
 
   return (
     <>
@@ -1272,34 +1342,39 @@ export default function FormPantallas() {
 
                   {!loadingEmails && !errEmails && (
                     <ul className="max-h-72 overflow-auto">
-                      {options.length === 0 && (
-                        <li className="px-3 py-2 text-neutral-500">Sin sugerencias</li>
-                      )}
-                      {options.map(({ email, source }) => {
-                        const n = emailCounts[email] ?? 0;
-                        return (
-                          <li key={`${source}-${email}`}>
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() =>
-                                source === 'inv' ? pickFromInv(email) : pickFromAcct(email)
-                              }
-                              className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-neutral-800"
-                            >
-                              <span className="truncate">{email}</span>
-                              <span className="ml-2 flex items-center gap-2">
-                                {source === 'inv' && (
-                                  <span className="text-[10px] rounded-full px-2 py-[1px] border border-emerald-400/70 text-emerald-300">
-                                    INV
-                                  </span>
-                                )}
-                                <span className="text-xs opacity-70">{n ? `(${n})` : ''}</span>
-                              </span>
-                            </button>
-                          </li>
-                        );
-                      })}
+                      {visibleOptions.length === 0 && (
+                      <li className="px-3 py-2 text-neutral-500">
+                        {Object.keys(emailCounts).length === 0
+                          ? 'Calculando cupos…'
+                          : 'Sin sugerencias con cupos disponibles'}
+                      </li>
+                    )}
+
+                    {visibleOptions.map(({ email, source }) => {
+                      const n = emailCounts[email] ?? 0;
+                      const free = Math.max(0, maxAllowed - n);
+                      return (
+                        <li key={`${source}-${email}`}>
+                          <button
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => (source === 'inv' ? pickFromInv(email) : pickFromAcct(email))}
+                            className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-neutral-800"
+                          >
+                            <span className="truncate">{email}</span>
+                            <span className="ml-2 flex items-center gap-2">
+                              {source === 'inv' && (
+                                <span className="text-[10px] rounded-full px-2 py-[1px] border border-emerald-400/70 text-emerald-300">
+                                  INV
+                                </span>
+                              )}
+                              <span className="text-xs opacity-70">{free > 0 ? `cupos: ${free}` : ''}</span>
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                      
                     </ul>
                   )}
                 </div>
@@ -1542,7 +1617,6 @@ export default function FormPantallas() {
         {okMsg && <p className="text-green-700 text-sm">{okMsg}</p>}
         {errMsg && <p className="text-red-600 text-sm">Error: {errMsg}</p>}
       </form>
-
       {/* ===== Modal de confirmación ===== */}
       {confirmOpen && (
         <div
@@ -1553,22 +1627,17 @@ export default function FormPantallas() {
           aria-labelledby="confirm-title"
         >
           <div
-            className="w-full max-w-4xl rounded-2xl border border-neutral-700 bg-neutral-900 text-neutral-100 shadow-2xl"
+            className="w-full max-w-4xl rounded-2xl border border-neutral-700 bg-neutral-900 text-neutral-100 shadow-2xl
+                      max-h-[90vh] grid grid-rows-[auto_auto_1fr_auto]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-xl bg-neutral-800 flex items-center justify-center text-sm">
-                  ✅
-                </div>
+                <div className="h-9 w-9 rounded-xl bg-neutral-800 flex items-center justify-center text-sm">✅</div>
                 <div>
-                  <h3 id="confirm-title" className="font-semibold text-lg">
-                    Confirmar datos a guardar
-                  </h3>
-                  <p className="text-xs text-neutral-400">
-                    Revisa el contenido antes de continuar. Se enviará tal cual.
-                  </p>
+                  <h3 id="confirm-title" className="font-semibold text-lg">Confirmar datos a guardar</h3>
+                  <p className="text-xs text-neutral-400">Revisa el contenido antes de continuar. Se enviará tal cual.</p>
                 </div>
               </div>
               <button
@@ -1581,22 +1650,18 @@ export default function FormPantallas() {
             </div>
 
             {/* Tabs + Acciones */}
-            <div className="px-5 pt-4 flex items-center justify-between gap-2">
+            <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-2 border-b border-neutral-800">
               <div className="inline-flex rounded-lg border border-neutral-700 overflow-hidden">
                 <button
                   type="button"
-                  className={`px-3 py-1.5 text-sm ${
-                    confirmView === 'resumen' ? 'bg-neutral-800' : 'bg-neutral-900 hover:bg-neutral-800'
-                  }`}
+                  className={`px-3 py-1.5 text-sm ${confirmView === 'resumen' ? 'bg-neutral-800' : 'bg-neutral-900 hover:bg-neutral-800'}`}
                   onClick={() => setConfirmView('resumen')}
                 >
                   Resumen
                 </button>
                 <button
                   type="button"
-                  className={`px-3 py-1.5 text-sm ${
-                    confirmView === 'json' ? 'bg-neutral-800' : 'bg-neutral-900 hover:bg-neutral-800'
-                  }`}
+                  className={`px-3 py-1.5 text-sm ${confirmView === 'json' ? 'bg-neutral-800' : 'bg-neutral-900 hover:bg-neutral-800'}`}
                   onClick={() => setConfirmView('json')}
                 >
                   JSON
@@ -1615,9 +1680,7 @@ export default function FormPantallas() {
                   className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800"
                   onClick={() => {
                     let obj = confirmPayload;
-                    try {
-                      obj = JSON.parse(confirmText);
-                    } catch {}
+                    try { obj = JSON.parse(confirmText); } catch {}
                     downloadJson('pantalla.json', obj);
                   }}
                 >
@@ -1626,109 +1689,137 @@ export default function FormPantallas() {
               </div>
             </div>
 
-            {/* Contenido */}
-            <div className="p-5">
+            {/* Contenido (SCROLLABLE) */}
+            <div className="p-5 overflow-y-auto min-w-0">
               {confirmView === 'resumen' ? (
-                <div className="grid gap-4 md:grid-cols-2">
-                  {/* Usuario */}
-                  <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 space-y-3">
-                    <h4 className="font-medium text-sm text-neutral-300 mb-1">
-                      Datos del usuario
-                    </h4>
-                    <dl className="grid grid-cols-[140px_1fr] text-sm gap-y-2">
-                      <dt className="text-neutral-400">Contacto</dt>
-                      <dd className="font-medium">{confirmPayload?.contacto || '—'}</dd>
-                      <dt className="text-neutral-400">Nombre</dt>
-                      <dd className="font-medium">
-                        {form.nombre || '—'}{' '}
-                        {isEmpty(form.nombre) && (
-                          <span className="text-[10px] px-2 py-[2px] rounded-full border border-neutral-500 text-neutral-300">
-                            opcional
-                          </span>
-                        )}
-                      </dd>
-                      <dt className="text-neutral-400">Estado</dt>
-                      <dd className="font-medium">{confirmPayload?.estado || '—'}</dd>
-                    </dl>
-                  </div>
-
-                  {/* Cuenta / Plataforma */}
-                  <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 space-y-3">
-                    <h4 className="font-medium text-sm text-neutral-300 mb-1">
-                      Cuenta y plataforma
-                    </h4>
-                    <dl className="grid grid-cols-[140px_1fr] text-sm gap-y-2">
-                      <dt className="text-neutral-400">Plataforma</dt>
-                      <dd className="font-semibold">
-                        {plataformaMap.get(confirmPayload?.plataforma_id) ??
-                          `#${confirmPayload?.plataforma_id ?? '—'}`}
-                      </dd>
-                      <dt className="text-neutral-400">Correo</dt>
-                      <dd className="font-medium">{confirmPayload?.correo || '—'}</dd>
-                      <dt className="text-neutral-400">Contraseña</dt>
-                      <dd className="font-mono">{confirmPayload?.contrasena || '—'}</dd>
-                      <dt className="text-neutral-400">Proveedor</dt>
-                      <dd className="font-medium">
-                        {confirmPayload?.proveedor || '—'}{' '}
-                        {isEmpty(confirmPayload?.proveedor) && (
-                          <span className="text-[10px] px-2 py-[2px] rounded-full border border-neutral-500 text-neutral-300">
-                            opcional
-                          </span>
-                        )}
-                      </dd>
-                      <dt className="text-neutral-400">Cuenta ID</dt>
-                      <dd className="font-medium">{confirmPayload?.cuenta_id ?? '—'}</dd>
-                      <dt className="text-neutral-400">Nro. pantalla</dt>
-                      <dd className="font-medium">{confirmPayload?.nro_pantalla ?? '—'}</dd>
-                    </dl>
-                  </div>
-
-                  {/* Fechas */}
-                  <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4">
-                    <h4 className="font-medium text-sm text-neutral-300 mb-2">Fechas</h4>
-                    <dl className="grid grid-cols-[140px_1fr] text-sm gap-y-2">
-                      <dt className="text-neutral-400">Compra</dt>
-                      <dd className="font-medium">{form.fecha_compra || '—'}</dd>
-                      <dt className="text-neutral-400">Vencimiento</dt>
-                      <dd className="font-medium">{form.fecha_vencimiento || '—'}</dd>
-                      <dt className="text-neutral-400">Meses pagados</dt>
-                      <dd className="font-medium">{form.meses_pagados ?? '—'}</dd>
-                    </dl>
-                  </div>
-
-                  {/* Totales */}
-                  <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4">
-                    <h4 className="font-medium text-sm text-neutral-300 mb-2">Totales</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className="rounded-lg border border-neutral-800 p-3">
-                        <div className="text-xs text-neutral-400">Total pagado</div>
-                        <div className="text-lg font-semibold">
-                          {toMoney(confirmPayload?.total_pagado)}
-                        </div>
+                <>
+                  {/* === Ticket para el cliente === */}
+                  <div className="rounded-xl border border-emerald-800/50 bg-emerald-950/30 p-4 mb-4">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <h4 className="font-semibold text-sm text-emerald-300">Datos para entregar al cliente</h4>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="text-xs px-2 py-1 rounded-md border border-emerald-700/70 hover:bg-emerald-900/40"
+                          onClick={() => {
+                            const txt = buildHandoffFull(confirmPayload, plataformaMap, form);
+                            copyToClipboard(txt);
+                          }}
+                        >
+                          Copiar
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs px-2 py-1 rounded-md border border-neutral-700 hover:bg-neutral-800"
+                          onClick={() => {
+                            const txt = buildHandoffFull(confirmPayload, plataformaMap, form);
+                            const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = 'ticket_cliente.txt';
+                            a.click();
+                            URL.revokeObjectURL(url);
+                          }}
+                        >
+                          Descargar
+                        </button>
                       </div>
-                      <div className="rounded-lg border border-neutral-800 p-3">
-                        <div className="text-xs text-neutral-400">Pagado proveedor</div>
-                        <div className="text-lg font-semibold">
-                          {toMoney(confirmPayload?.total_pagado_proveedor)}
+                    </div>
+
+                    <pre
+                      className="whitespace-pre-wrap break-words text-sm font-mono bg-neutral-950/70 border border-neutral-800 rounded-lg p-3
+                                text-left max-h-56 md:max-h-72 overflow-auto"
+                    >
+                      {buildHandoffFull(confirmPayload, plataformaMap, form)}
+                    </pre>
+                  </div>
+
+                  {/* === Resto del resumen === */}
+                  <div className="grid gap-4 md:grid-cols-2 min-w-0">
+                    {/* Usuario */}
+                    <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 space-y-3 min-w-0">
+                      <h4 className="font-medium text-sm text-neutral-300 mb-1">Datos del usuario</h4>
+                      <dl className="grid grid-cols-[140px_1fr] text-sm gap-y-2">
+                        <dt className="text-neutral-400">Contacto</dt>
+                        <dd className="font-medium break-words">{confirmPayload?.contacto || '—'}</dd>
+                        <dt className="text-neutral-400">Nombre</dt>
+                        <dd className="font-medium break-words">
+                          {form.nombre || '—'}{' '}
+                          {(!form.nombre || form.nombre === '') && (
+                            <span className="text-[10px] px-2 py-[2px] rounded-full border border-neutral-500 text-neutral-300">opcional</span>
+                          )}
+                        </dd>
+                        <dt className="text-neutral-400">Estado</dt>
+                        <dd className="font-medium">{confirmPayload?.estado || '—'}</dd>
+                      </dl>
+                    </div>
+
+                    {/* Cuenta / Plataforma */}
+                    <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 space-y-3 min-w-0">
+                      <h4 className="font-medium text-sm text-neutral-300 mb-1">Cuenta y plataforma</h4>
+                      <dl className="grid grid-cols-[140px_1fr] text-sm gap-y-2">
+                        <dt className="text-neutral-400">Plataforma</dt>
+                        <dd className="font-semibold break-words">
+                          {plataformaMap.get(confirmPayload?.plataforma_id) ?? `#${confirmPayload?.plataforma_id ?? '—'}`}
+                        </dd>
+                        <dt className="text-neutral-400">Correo</dt>
+                        <dd className="font-medium break-words">{confirmPayload?.correo || '—'}</dd>
+                        <dt className="text-neutral-400">Contraseña</dt>
+                        <dd className="font-mono break-words">{confirmPayload?.contrasena || '—'}</dd>
+                        <dt className="text-neutral-400">Proveedor</dt>
+                        <dd className="font-medium break-words">
+                          {confirmPayload?.proveedor || '—'}{' '}
+                          {(!confirmPayload?.proveedor || confirmPayload?.proveedor === '') && (
+                            <span className="text-[10px] px-2 py-[2px] rounded-full border border-neutral-500 text-neutral-300">opcional</span>
+                          )}
+                        </dd>
+                        <dt className="text-neutral-400">Cuenta ID</dt>
+                        <dd className="font-medium">{confirmPayload?.cuenta_id ?? '—'}</dd>
+                        <dt className="text-neutral-400">Nro. pantalla</dt>
+                        <dd className="font-medium">{confirmPayload?.nro_pantalla ?? '—'}</dd>
+                      </dl>
+                    </div>
+
+                    {/* Fechas */}
+                    <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 min-w-0">
+                      <h4 className="font-medium text-sm text-neutral-300 mb-2">Fechas</h4>
+                      <dl className="grid grid-cols-[140px_1fr] text-sm gap-y-2">
+                        <dt className="text-neutral-400">Compra</dt>
+                        <dd className="font-medium">{form.fecha_compra || '—'}</dd>
+                        <dt className="text-neutral-400">Vencimiento</dt>
+                        <dd className="font-medium">{form.fecha_vencimiento || '—'}</dd>
+                        <dt className="text-neutral-400">Meses pagados</dt>
+                        <dd className="font-medium">{form.meses_pagados ?? '—'}</dd>
+                      </dl>
+                    </div>
+
+                    {/* Totales */}
+                    <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 min-w-0">
+                      <h4 className="font-medium text-sm text-neutral-300 mb-2">Totales</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="rounded-lg border border-neutral-800 p-3">
+                          <div className="text-xs text-neutral-400">Total pagado</div>
+                          <div className="text-lg font-semibold">{toMoney(confirmPayload?.total_pagado)}</div>
                         </div>
-                      </div>
-                      <div className="rounded-lg border border-neutral-800 p-3">
-                        <div className="text-xs text-neutral-400">Total ganado</div>
-                        <div className="text-lg font-semibold">
-                          {toMoney(confirmPayload?.total_ganado)}
+                        <div className="rounded-lg border border-neutral-800 p-3">
+                          <div className="text-xs text-neutral-400">Pagado proveedor</div>
+                          <div className="text-lg font-semibold">{toMoney(confirmPayload?.total_pagado_proveedor)}</div>
+                        </div>
+                        <div className="rounded-lg border border-neutral-800 p-3">
+                          <div className="text-xs text-neutral-400">Total ganado</div>
+                          <div className="text-lg font-semibold">{toMoney(confirmPayload?.total_ganado)}</div>
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Comentario */}
-                  <div className="md:col-span-2 rounded-xl border border-neutral-800 bg-neutral-950 p-4">
-                    <h4 className="font-medium text-sm text-neutral-300 mb-2">Comentario</h4>
-                    <div className="text-sm whitespace-pre-wrap">
-                      {form.comentario || <span className="opacity-70">—</span>}
+                    {/* Comentario */}
+                    <div className="md:col-span-2 rounded-xl border border-neutral-800 bg-neutral-950 p-4 min-w-0">
+                      <h4 className="font-medium text-sm text-neutral-300 mb-2">Comentario</h4>
+                      <div className="text-sm whitespace-pre-wrap">{form.comentario || <span className="opacity-70">—</span>}</div>
                     </div>
                   </div>
-                </div>
+                </>
               ) : (
                 <div>
                   <p className="text-sm text-neutral-300 mb-2">
@@ -1763,6 +1854,8 @@ export default function FormPantallas() {
           </div>
         </div>
       )}
+
+
     </>
   );
 }
