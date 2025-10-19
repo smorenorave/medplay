@@ -56,6 +56,8 @@ const CHECK_LAST_CUENTAS_URL = `${CUENTAS_BASE}/check-last`;
 const CHECK_LAST_PANTALLAS_URL = `${PANTALLAS_BASE}/check-last`;
 const INVENTARIO_URL = "/api/inventario";
 const QUEUE_KEY = "__pw_queue_daily_v1";
+const NOTIFY_LOCK_KEY = "__pw_notify_lock_v1"; // lock cross-tab
+const NOTIFY_BC = "pw-notify-sync"; // canal de broadcast para notify
 
 /** Normaliza texto para búsqueda: minúsculas, sin tildes y sin espacios */
 const normSearch = (s?: string | null) =>
@@ -126,7 +128,7 @@ function Modal({
     const prevWidth = body.style.width;
     const prevPadR = body.style.paddingRight;
     const scrollbar = window.innerWidth - document.documentElement.clientWidth;
-    
+
     if (scrollbar > 0) body.style.paddingRight = `${scrollbar}px`;
     body.style.position = "fixed";
     body.style.top = `-${y}px`;
@@ -178,6 +180,11 @@ const INSTANCE_ID =
 let bc: BroadcastChannel | null = null;
 if (typeof window !== "undefined" && "BroadcastChannel" in window) {
   bc = new BroadcastChannel("vencidas-sync");
+}
+
+let bcNotify: BroadcastChannel | null = null;
+if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+  bcNotify = new BroadcastChannel(NOTIFY_BC);
 }
 
 /* ====================== Fetchers ====================== */
@@ -348,15 +355,20 @@ export default function CuentasPantallasVencidasPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set()); // key = tipo:id
 
   // Cola notificación
-  const [pwNewByEmail, setPwNewByEmail] = useState<Record<string, string>>(() => {
-  const cached = getDaily<Record<string, string>>(QUEUE_KEY);
-  return cached && typeof cached === 'object' ? cached : {};
-});
-const [notifying, setNotifying] = useState(false);
+  const [pwNewByEmail, setPwNewByEmail] = useState<Record<string, string>>(
+    () => {
+      const cached = getDaily<Record<string, string>>(QUEUE_KEY);
+      return cached && typeof cached === "object" ? cached : {};
+    }
+  );
+  const [notifying, setNotifying] = useState(false);
 
   // Persistir cambios de la cola en la caché diaria
   useEffect(() => {
     setDaily(QUEUE_KEY, pwNewByEmail);
+    try {
+      bcNotify?.postMessage({ t: "queue_update", at: Date.now() });
+    } catch {}
   }, [pwNewByEmail]);
 
   // Editar
@@ -408,7 +420,6 @@ const [notifying, setNotifying] = useState(false);
     total: 0,
     invComment: "",
   });
-
 
   /* Boot con caché */
   useEffect(() => {
@@ -501,6 +512,39 @@ const [notifying, setNotifying] = useState(false);
     };
   }, []); // solo una vez
 
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      // si otra pestaña modificó la cola diaria -> reflejar aquí
+      if (e.key === QUEUE_KEY) {
+        try {
+          const v = getDaily<Record<string, string>>(QUEUE_KEY) || {};
+          setPwNewByEmail(v);
+        } catch {}
+      }
+      // si otra pestaña liberó el lock -> despejar estado local
+      if (e.key === NOTIFY_LOCK_KEY && e.newValue === null) {
+        setNotifying(false);
+      }
+    };
+    window.addEventListener("storage", onStorage);
+
+    const onBC = (ev: MessageEvent) => {
+      const msg = ev.data || {};
+      if (msg.t === "notify_start") setNotifying(true);
+      if (msg.t === "notify_done") setNotifying(false);
+      if (msg.t === "queue_update") {
+        const v = getDaily<Record<string, string>>(QUEUE_KEY) || {};
+        setPwNewByEmail(v);
+      }
+    };
+    bcNotify?.addEventListener?.("message", onBC);
+
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      bcNotify?.removeEventListener?.("message", onBC);
+    };
+  }, []);
+
   /* Plataforma */
   const platformMap = useMemo(() => {
     const m = new Map<number, string>();
@@ -536,16 +580,19 @@ const [notifying, setNotifying] = useState(false);
   const filtered = useMemo(() => {
     // 1) Filtrado por rango (hoy, mañana, anteriores, todos)
     const base = rows.filter((r) => {
-  const fv = r.fecha_vencimiento;
-  if (!isYYYYMMDD(fv)) return false;
-  switch (view) {
-    case "hoy":        return isToday(fv);
-    case "manana":     return isTomorrow(fv);
-    case "anteriores": return fv < today();
-    case "todos":      return fv < today() || isToday(fv) || isTomorrow(fv);
-  }
-});
-
+      const fv = r.fecha_vencimiento;
+      if (!isYYYYMMDD(fv)) return false;
+      switch (view) {
+        case "hoy":
+          return isToday(fv);
+        case "manana":
+          return isTomorrow(fv);
+        case "anteriores":
+          return fv < today();
+        case "todos":
+          return fv < today() || isToday(fv) || isTomorrow(fv);
+      }
+    });
 
     // 2) Normaliza término y filtro de plataforma
     const term = normSearch(dq);
@@ -605,42 +652,51 @@ const [notifying, setNotifying] = useState(false);
     }
   };
 
-const deleteRowDirect = async (r: Registro) => {
-  const base = r.tipo === "cuenta" ? CUENTAS_BASE : PANTALLAS_BASE;
-  const res = await fetch(`${base}/${r.id}`, { method: "DELETE" });
-  if (!res.ok) {
-    const j = await res.json().catch(() => ({}));
-    throw new Error(j?.error ?? "No se pudo eliminar");
-  }
-  await res.json().catch(() => ({}));
+  const deleteRowDirect = async (r: Registro) => {
+    const base = r.tipo === "cuenta" ? CUENTAS_BASE : PANTALLAS_BASE;
+    const res = await fetch(`${base}/${r.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j?.error ?? "No se pudo eliminar");
+    }
+    await res.json().catch(() => ({}));
 
-  const delKey = `${r.tipo}:${r.id}`;
+    const delKey = `${r.tipo}:${r.id}`;
 
-  // ✅ Usar el estado previo real en cada borrado (no el cierre)
-  setRows(prev => {
-    const next = prev.filter(x => `${x.tipo}:${x.id}` !== delKey);
-    setDaily(DAILY_KEY, next);   // mantener la caché alineada
-    return next;
-  });
+    // ✅ Usar el estado previo real en cada borrado (no el cierre)
+    setRows((prev) => {
+      const next = prev.filter((x) => `${x.tipo}:${x.id}` !== delKey);
+      setDaily(DAILY_KEY, next); // mantener la caché alineada
+      return next;
+    });
 
-  setSelected(prev => {
-    const n = new Set(prev);
-    n.delete(delKey);
-    return n;
-  });
+    setSelected((prev) => {
+      const n = new Set(prev);
+      n.delete(delKey);
+      return n;
+    });
 
-  // 🔔 Avisar a otras pestañas (solo informativo)
-  try {
-    bc?.postMessage({ t: "deleted", key: delKey, by: INSTANCE_ID, at: Date.now() });
-  } catch {}
-  try {
-    localStorage.setItem(
-      LS_BROADCAST_KEY,
-      JSON.stringify({ t: "deleted", key: delKey, by: INSTANCE_ID, at: Date.now() })
-    );
-  } catch {}
-};
-
+    // 🔔 Avisar a otras pestañas (solo informativo)
+    try {
+      bc?.postMessage({
+        t: "deleted",
+        key: delKey,
+        by: INSTANCE_ID,
+        at: Date.now(),
+      });
+    } catch {}
+    try {
+      localStorage.setItem(
+        LS_BROADCAST_KEY,
+        JSON.stringify({
+          t: "deleted",
+          key: delKey,
+          by: INSTANCE_ID,
+          at: Date.now(),
+        })
+      );
+    } catch {}
+  };
 
   const onAskDelete = async (r: Registro) => {
     const chk = await serverCheckIsLast(r);
@@ -760,19 +816,34 @@ const deleteRowDirect = async (r: Registro) => {
   );
   const platByEmail = useMemo(() => getPlatformsByEmail(rows), [rows]);
   const sendPwChangeNotifications = async () => {
-    //const platByEmail = getPlatformsByEmail(rows);
+    if (notifying) return; // guard extra
 
+    // ----- LOCK cross-tab (TTL 5 min) -----
+    const now = Date.now();
+    const TTL = 5 * 60 * 1000;
+    try {
+      const raw = localStorage.getItem(NOTIFY_LOCK_KEY);
+      if (raw) {
+        const { at } = JSON.parse(raw);
+        if (typeof at === "number" && now - at < TTL) {
+          alert("Ya hay un envío en curso desde otra pestaña/ventana.");
+          return;
+        }
+      }
+      localStorage.setItem(NOTIFY_LOCK_KEY, JSON.stringify({ at: now }));
+      bcNotify?.postMessage({ t: "notify_start", at: now });
+    } catch {
+      // si localStorage falla, seguimos sin lock (no recomendado)
+    }
+
+    // ----- Construcción de items (igual que antes) -----
     const items = Object.entries(pwNewByEmail).flatMap(
       ([correoRaw, nuevaClave]) => {
         const correo = (correoRaw || "").trim().toLowerCase();
         const clave = (nuevaClave || "").trim();
         if (!correo || !clave) return [];
-
         const plats = platByEmail.get(correo);
-        if (!plats || plats.size === 0) {
-          return [{ correo, nuevaClave: clave }];
-        }
-
+        if (!plats || plats.size === 0) return [{ correo, nuevaClave: clave }];
         return Array.from(plats).map((plataforma_id) => ({
           correo,
           nuevaClave: clave,
@@ -784,11 +855,11 @@ const deleteRowDirect = async (r: Registro) => {
 
     if (items.length === 0) {
       alert("No hay correos o faltan claves.");
-      return;
-    }
-    const faltan = items.filter((it) => !it.nuevaClave).map((it) => it.correo);
-    if (faltan.length > 0) {
-      alert(`Falta la nueva clave para:\n- ${faltan.join("\n- ")}`);
+      // liberar lock
+      try {
+        localStorage.removeItem(NOTIFY_LOCK_KEY);
+        bcNotify?.postMessage({ t: "notify_done", at: Date.now() });
+      } catch {}
       return;
     }
 
@@ -798,21 +869,30 @@ const deleteRowDirect = async (r: Registro) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items }),
+        cache: "no-store",
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || j?.error)
         throw new Error(j?.error || "No se pudo iniciar la notificación");
+
       alert(
         `Notificación lanzada. PID: ${j?.pid ?? "—"}\nLog: ${
-          j?.logFile ?? "(ver servidor)"
+          j?.logFile ?? "(servidor)"
         }`
       );
       setPwNewByEmail({});
-      setDaily(QUEUE_KEY, {});
+      setDaily(QUEUE_KEY, {}); // limpia local
+      try {
+        bcNotify?.postMessage({ t: "queue_update", at: Date.now() });
+      } catch {}
     } catch (e: any) {
       alert(e?.message ?? "Error al enviar notificaciones");
     } finally {
       setNotifying(false);
+      try {
+        localStorage.removeItem(NOTIFY_LOCK_KEY);
+        bcNotify?.postMessage({ t: "notify_done", at: Date.now() });
+      } catch {}
     }
   };
 
@@ -1091,6 +1171,7 @@ const deleteRowDirect = async (r: Registro) => {
               Copiar correos
             </button>
             <button
+              type="button"
               onClick={sendPwChangeNotifications}
               disabled={pwChangedEmails.length === 0 || notifying}
               className="rounded-lg border border-emerald-700 bg-emerald-800/40 px-3 py-2 text-emerald-100 hover:bg-emerald-800/60 disabled:opacity-60"
