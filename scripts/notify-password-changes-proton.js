@@ -479,7 +479,7 @@ function buildMessage(nombre, items, correo, nuevaClave) {
 
 ${bullets}
 
-*La nueva contraseña es:* ${nuevaClave}.
+*La nueva contraseña es:* ${nuevaClave} 
 No la compartas con nadie; ¡que estés súper bien!${notaPantalla}
 
 `.trim();

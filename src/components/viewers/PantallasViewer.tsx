@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { usePlataformas } from '@/hooks/usePlataformas';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { usePlataformas } from "@/hooks/usePlataformas";
 
 /* =========================================================
  * Tipos
@@ -16,8 +16,8 @@ type Pantalla = {
   correo: string | null;
   contrasena: string | null;
   nro_pantalla: string | null;
-  fecha_compra: string | null;       // YYYY-MM-DD
-  fecha_vencimiento: string | null;  // YYYY-MM-DD (auto)
+  fecha_compra: string | null; // YYYY-MM-DD
+  fecha_vencimiento: string | null; // YYYY-MM-DD (auto)
   meses_pagados: number | null;
   total_pagado: number | null;
   total_pagado_proveedor: number | null;
@@ -32,36 +32,36 @@ type EditState = Partial<Pantalla> & { id: number };
  * Config
  * ======================================================= */
 const REFETCH_ON_FOCUS = false;
-const STALE_AFTER_MS   = 5 * 60_000;
-const STAMP_TTL_MS     = 5 * 30_000;
+const STALE_AFTER_MS = 5 * 60_000;
+const STAMP_TTL_MS = 5 * 30_000;
 
 /* =========================================================
  * Cache y sync
  * ======================================================= */
-const LS_CACHE_KEY     = '__pantallas_cache_v3';
-const LS_REMOTE_STAMP  = '__pantallas_remote_stamp';
-const BC_NAME          = 'pantallas_mutations_bc';
+const LS_CACHE_KEY = "__pantallas_cache_v3";
+const LS_REMOTE_STAMP = "__pantallas_remote_stamp";
+const BC_NAME = "pantallas_mutations_bc";
 
 const todayYMDLocal = () => {
   const d = new Date();
   const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
 };
 
 type CacheShape = { rows: Pantalla[]; ts: number };
 
-const hasWindow = () => typeof window !== 'undefined';
+const hasWindow = () => typeof window !== "undefined";
 const n = (x: unknown) =>
-  x == null || x === '' || Number.isNaN(Number(x)) ? null : Number(x);
+  x == null || x === "" || Number.isNaN(Number(x)) ? null : Number(x);
 
 function normalizeRow(r: any): Pantalla {
   return {
     id: Number(r.id),
     cuenta_id: n(r.cuenta_id),
     plataforma_id: n(r.plataforma_id),
-    contacto: String(r.contacto ?? ''),
+    contacto: String(r.contacto ?? ""),
     nombre: r.nombre ?? null,
     correo: r.correo ?? null,
     contrasena: r.contrasena ?? null,
@@ -71,7 +71,9 @@ function normalizeRow(r: any): Pantalla {
     meses_pagados: n(r.meses_pagados),
     total_pagado: r.total_pagado == null ? null : Number(r.total_pagado),
     total_pagado_proveedor:
-      r.total_pagado_proveedor == null ? null : Number(r.total_pagado_proveedor),
+      r.total_pagado_proveedor == null
+        ? null
+        : Number(r.total_pagado_proveedor),
     total_ganado: r.total_ganado == null ? null : Number(r.total_ganado),
     estado: r.estado ?? null,
     proveedor: r.proveedor ?? null,
@@ -91,8 +93,11 @@ function readCache(): CacheShape | null {
 function writeCache(rows: Pantalla[], remoteStamp?: number) {
   if (!hasWindow()) return;
   try {
-    localStorage.setItem(LS_CACHE_KEY, JSON.stringify({ rows, ts: Date.now() }));
-    if (typeof remoteStamp === 'number') {
+    localStorage.setItem(
+      LS_CACHE_KEY,
+      JSON.stringify({ rows, ts: Date.now() })
+    );
+    if (typeof remoteStamp === "number") {
       localStorage.setItem(LS_REMOTE_STAMP, String(remoteStamp));
     }
   } catch {}
@@ -121,7 +126,7 @@ function removeFromCache(id: number) {
 function broadcastInvalidate() {
   try {
     const bc = new BroadcastChannel(BC_NAME);
-    bc.postMessage({ type: 'invalidate-pantallas' });
+    bc.postMessage({ type: "invalidate-pantallas" });
     bc.close();
   } catch {}
 }
@@ -131,10 +136,12 @@ function broadcastInvalidate() {
  * ======================================================= */
 async function fetchStamp(): Promise<number> {
   try {
-    const r = await fetch('/api/pantallas/stamp', { cache: 'no-store' });
+    const r = await fetch("/api/pantallas/stamp", { cache: "no-store" });
     const j = (await r.json()) as { stamp?: number };
     return Number(j?.stamp || 0);
-  } catch { return 0; }
+  } catch {
+    return 0;
+  }
 }
 async function fetchAllPantallas(): Promise<Pantalla[]> {
   const out: Pantalla[] = [];
@@ -142,9 +149,10 @@ async function fetchAllPantallas(): Promise<Pantalla[]> {
   let guard = 0;
   while (guard++ < 50) {
     const url =
-      '/api/pantallas?limit=500' + (cursor ? `&cursor=${encodeURIComponent(String(cursor))}` : '');
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error('No se pudieron cargar las pantallas');
+      "/api/pantallas?limit=500" +
+      (cursor ? `&cursor=${encodeURIComponent(String(cursor))}` : "");
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error("No se pudieron cargar las pantallas");
     const j: any = await res.json();
     const items: any[] = Array.isArray(j?.items) ? j.items : [];
     out.push(...items.map(normalizeRow));
@@ -159,7 +167,7 @@ async function fetchAllPantallas(): Promise<Pantalla[]> {
  * UI helpers
  * ======================================================= */
 const money = (v: number | null) =>
-  v == null || Number.isNaN(v) ? '—' : '$ ' + new Intl.NumberFormat().format(v);
+  v == null || Number.isNaN(v) ? "—" : "$ " + new Intl.NumberFormat().format(v);
 
 const clamp = (val: unknown, min: number) => {
   const num = Number(val);
@@ -168,21 +176,20 @@ const clamp = (val: unknown, min: number) => {
 
 /** Normaliza texto para búsqueda: minúsculas, sin tildes y sin espacios */
 const normSearch = (s?: string | null) =>
-  (s ?? '')
+  (s ?? "")
     .toString()
     .trim()
     .toLowerCase()
-    .normalize('NFD')                 // separa diacríticos
-    .replace(/\p{Diacritic}/gu, '')   // quita tildes
-    .replace(/\s+/g, '');             // quita TODOS los espacios
-
+    .normalize("NFD") // separa diacríticos
+    .replace(/\p{Diacritic}/gu, "") // quita tildes
+    .replace(/\s+/g, ""); // quita TODOS los espacios
 
 /** YYYY-MM-DD + meses (conserva fin de mes) */
 function addMonthsYYYYMMDD(ymd: string, months: number): string {
-  if (!ymd || !Number.isFinite(months)) return '';
-  const [y, m, d] = ymd.split('-').map(Number);
+  if (!ymd || !Number.isFinite(months)) return "";
+  const [y, m, d] = ymd.split("-").map(Number);
   const base = new Date(y, (m ?? 1) - 1, d ?? 1);
-  if (Number.isNaN(base.getTime())) return '';
+  if (Number.isNaN(base.getTime())) return "";
   const target = new Date(base);
   target.setMonth(target.getMonth() + months);
   if (target.getDate() !== (d ?? 1)) target.setDate(0);
@@ -197,8 +204,10 @@ function ModalPortal({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMounted(true);
     const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prevOverflow; };
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
   }, []);
   if (!mounted) return null;
   return createPortal(children, document.body);
@@ -207,23 +216,39 @@ function ModalPortal({ children }: { children: React.ReactNode }) {
 /* =========================================================
  * Helpers Inventario / Cuentas / Conteos
  * ======================================================= */
-const normEmail = (s?: string | null) => (s ?? '').trim().toLowerCase();
+const normEmail = (s?: string | null) => (s ?? "").trim().toLowerCase();
 
-async function existsInInventario(plataforma_id: number | null | undefined, correo: string): Promise<boolean> {
+async function existsInInventario(
+  plataforma_id: number | null | undefined,
+  correo: string
+): Promise<boolean> {
   const email = normEmail(correo);
   try {
     const base = `/api/inventario`;
-    const url = plataforma_id != null
-      ? `${base}?q=${encodeURIComponent(email)}&plataforma_id=${plataforma_id}`
-      : `${base}?q=${encodeURIComponent(email)}`;
-    const res = await fetch(url, { cache: 'no-store' });
+    const url =
+      plataforma_id != null
+        ? `${base}?q=${encodeURIComponent(
+            email
+          )}&plataforma_id=${plataforma_id}`
+        : `${base}?q=${encodeURIComponent(email)}`;
+    const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) return false;
     const data = await res.json();
-    const arr: any[] = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
-    return arr.some((r) => String(r?.correo ?? '').toLowerCase() === email);
-  } catch { return false; }
+    const arr: any[] = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.items)
+      ? data.items
+      : [];
+    return arr.some((r) => String(r?.correo ?? "").toLowerCase() === email);
+  } catch {
+    return false;
+  }
 }
-async function ensureInInventario(plataforma_id?: number | null, correo?: string | null, clave?: string | null) {
+async function ensureInInventario(
+  plataforma_id?: number | null,
+  correo?: string | null,
+  clave?: string | null
+) {
   if (!correo) return;
   const email = normEmail(correo);
   try {
@@ -231,44 +256,61 @@ async function ensureInInventario(plataforma_id?: number | null, correo?: string
     const body: any = { correo: email };
     if (plataforma_id != null) body.plataforma_id = plataforma_id;
     if (clave && clave.trim().length > 0) body.clave = clave;
-    await fetch('/api/inventario', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    await fetch("/api/inventario", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-  } catch { /* best-effort */ }
+  } catch {
+    /* best-effort */
+  }
 }
 
 /** fetch util */
 async function fetchListSafe(urls: string[]): Promise<any[]> {
   for (const url of urls) {
     try {
-      const res = await fetch(url, { cache: 'no-store' });
+      const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) continue;
       const data = await res.json();
-      return Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+      return Array.isArray(data)
+        ? data
+        : Array.isArray(data?.items)
+        ? data.items
+        : [];
     } catch {}
   }
   return [];
 }
 
 /** Conteo por (correo + plataforma) vía API (queda por si lo necesitas en el futuro) */
-async function countPantallasByEmailAndPlatform(correo: string, plataforma_id: number | null): Promise<number> {
+async function countPantallasByEmailAndPlatform(
+  correo: string,
+  plataforma_id: number | null
+): Promise<number> {
   const email = normEmail(correo);
   const base = `/api/pantallas`;
   const urls: string[] = [];
   if (plataforma_id != null) {
-    urls.push(`${base}?correo=${encodeURIComponent(email)}&plataforma_id=${plataforma_id}`);
-    urls.push(`${base}?q=${encodeURIComponent(email)}&plataforma_id=${plataforma_id}`);
+    urls.push(
+      `${base}?correo=${encodeURIComponent(
+        email
+      )}&plataforma_id=${plataforma_id}`
+    );
+    urls.push(
+      `${base}?q=${encodeURIComponent(email)}&plataforma_id=${plataforma_id}`
+    );
   }
   urls.push(`${base}?correo=${encodeURIComponent(email)}`);
   urls.push(`${base}?q=${encodeURIComponent(email)}`);
   urls.push(`${base}?limit=5000`);
 
   const arr = await fetchListSafe(urls);
-  return arr.filter((r) =>
-    String(r?.correo ?? '').toLowerCase() === email &&
-    (plataforma_id == null || Number(r?.plataforma_id) === Number(plataforma_id))
+  return arr.filter(
+    (r) =>
+      String(r?.correo ?? "").toLowerCase() === email &&
+      (plataforma_id == null ||
+        Number(r?.plataforma_id) === Number(plataforma_id))
   ).length;
 }
 
@@ -279,50 +321,70 @@ function countLocalByEmailAndPlatform(
   plataforma_id: number | null | undefined
 ): number {
   if (!correo || plataforma_id == null) return 0;
-  const email = (correo ?? '').trim().toLowerCase();
+  const email = (correo ?? "").trim().toLowerCase();
   const pid = Number(plataforma_id);
   return all.reduce((acc, r) => {
-    const sameEmail = (r.correo ?? '').trim().toLowerCase() === email;
-    const samePlat  = Number(r.plataforma_id) === pid;
+    const sameEmail = (r.correo ?? "").trim().toLowerCase() === email;
+    const samePlat = Number(r.plataforma_id) === pid;
     return acc + (sameEmail && samePlat ? 1 : 0);
   }, 0);
 }
 
 /** === cuentascompartidas helpers (para editar correo) === */
-async function findCuentaCompartidaByCorreo(plataforma_id: number | null | undefined, correo: string) {
+async function findCuentaCompartidaByCorreo(
+  plataforma_id: number | null | undefined,
+  correo: string
+) {
   const email = normEmail(correo);
   if (!email) return null;
   const urls: string[] = [];
   if (plataforma_id != null) {
-    urls.push(`/api/cuentascompartidas?correo=${encodeURIComponent(email)}&plataforma_id=${plataforma_id}`);
+    urls.push(
+      `/api/cuentascompartidas?correo=${encodeURIComponent(
+        email
+      )}&plataforma_id=${plataforma_id}`
+    );
   }
   urls.push(`/api/cuentascompartidas?correo=${encodeURIComponent(email)}`);
   for (const u of urls) {
     try {
-      const r = await fetch(u, { cache: 'no-store' });
+      const r = await fetch(u, { cache: "no-store" });
       if (!r.ok) continue;
       const j = await r.json();
-      const arr: any[] = Array.isArray(j) ? j : (Array.isArray(j?.items) ? j.items : []);
-      const hit = arr.find(x =>
-        normEmail(x?.correo) === email &&
-        (plataforma_id == null || Number(x?.plataforma_id) === Number(plataforma_id))
+      const arr: any[] = Array.isArray(j)
+        ? j
+        : Array.isArray(j?.items)
+        ? j.items
+        : [];
+      const hit = arr.find(
+        (x) =>
+          normEmail(x?.correo) === email &&
+          (plataforma_id == null ||
+            Number(x?.plataforma_id) === Number(plataforma_id))
       );
       if (hit) return hit;
     } catch {}
   }
   return null;
 }
-async function upsertCuentaCompartida(plataforma_id: number | null | undefined, correo: string, contrasena?: string | null): Promise<number> {
+async function upsertCuentaCompartida(
+  plataforma_id: number | null | undefined,
+  correo: string,
+  contrasena?: string | null
+): Promise<number> {
   const email = normEmail(correo);
-  if (!email) throw new Error('Correo vacío al crear/buscar cuenta compartida');
+  if (!email) throw new Error("Correo vacío al crear/buscar cuenta compartida");
 
-  const existing = await findCuentaCompartidaByCorreo(plataforma_id ?? null, email);
+  const existing = await findCuentaCompartidaByCorreo(
+    plataforma_id ?? null,
+    email
+  );
   if (existing?.id) {
-    if (contrasena && contrasena.trim() !== '') {
+    if (contrasena && contrasena.trim() !== "") {
       try {
         await fetch(`/api/cuentascompartidas/${existing.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ contrasena }),
         });
       } catch {}
@@ -332,19 +394,20 @@ async function upsertCuentaCompartida(plataforma_id: number | null | undefined, 
 
   const body: any = { correo: email };
   if (plataforma_id != null) body.plataforma_id = plataforma_id;
-  if (contrasena && contrasena.trim() !== '') body.contrasena = contrasena;
+  if (contrasena && contrasena.trim() !== "") body.contrasena = contrasena;
 
-  const rNew = await fetch('/api/cuentascompartidas', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  const rNew = await fetch("/api/cuentascompartidas", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   if (!rNew.ok) {
     const j = await rNew.json().catch(() => ({}));
-    throw new Error(j?.error ?? 'No se pudo crear la cuenta compartida');
+    throw new Error(j?.error ?? "No se pudo crear la cuenta compartida");
   }
   const created = await rNew.json();
-  if (!created?.id) throw new Error('La API no devolvió id al crear cuentascompartidas');
+  if (!created?.id)
+    throw new Error("La API no devolvió id al crear cuentascompartidas");
   return Number(created.id);
 }
 
@@ -358,8 +421,8 @@ export default function PantallasViewer() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const [q, setQ] = useState('');
-  const [platFilter, setPlatFilter] = useState<number | 'all'>('all');
+  const [q, setQ] = useState("");
+  const [platFilter, setPlatFilter] = useState<number | "all">("all");
 
   // edición
   const [edit, setEdit] = useState<EditState | null>(null);
@@ -369,12 +432,17 @@ export default function PantallasViewer() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   // eliminación individual
-  const [deleteTarget, setDeleteTarget] = useState<{ id: number; label?: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: number;
+    label?: string;
+  } | null>(null);
   const [checkingArchive, setCheckingArchive] = useState(false);
   const [canArchive, setCanArchive] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
-  const [deleteAction, setDeleteAction] = useState<'archive' | 'purge' | null>(null);
+  const [deleteAction, setDeleteAction] = useState<"archive" | "purge" | null>(
+    null
+  );
   const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
 
   // eliminación masiva
@@ -392,7 +460,12 @@ export default function PantallasViewer() {
   const [bulkErr, setBulkErr] = useState<string | null>(null);
   const [bulkProcessing, setBulkProcessing] = useState(false);
   const [bulkProgress, setBulkProgress] = useState(0);
-  const [bulkSummary, setBulkSummary] = useState<{ total: number; archived: number; purged: number; failed: number } | null>(null);
+  const [bulkSummary, setBulkSummary] = useState<{
+    total: number;
+    archived: number;
+    purged: number;
+    failed: number;
+  } | null>(null);
 
   const mounted = useRef(false);
 
@@ -413,7 +486,9 @@ export default function PantallasViewer() {
 
       const localStamp = Number(localStorage.getItem(LS_REMOTE_STAMP) || 0);
       const needServer =
-        !cached?.rows?.length || cacheAge > STALE_AFTER_MS || remoteStamp !== localStamp;
+        !cached?.rows?.length ||
+        cacheAge > STALE_AFTER_MS ||
+        remoteStamp !== localStamp;
 
       if (!needServer) return;
 
@@ -424,7 +499,7 @@ export default function PantallasViewer() {
         setRows(all);
         writeCache(all, remoteStamp);
       } catch (e: any) {
-        if (mounted.current) setErr(e?.message ?? 'Error cargando pantallas');
+        if (mounted.current) setErr(e?.message ?? "Error cargando pantallas");
       } finally {
         if (mounted.current) setLoading(false);
       }
@@ -434,7 +509,7 @@ export default function PantallasViewer() {
     try {
       bc = new BroadcastChannel(BC_NAME);
       bc.onmessage = async (ev) => {
-        if (ev?.data?.type === 'invalidate-pantallas') {
+        if (ev?.data?.type === "invalidate-pantallas") {
           try {
             setLoading(true);
             const stamp = await fetchStamp();
@@ -446,7 +521,8 @@ export default function PantallasViewer() {
               writeCache(all, stamp);
             }
           } catch (e: any) {
-            if (mounted.current) setErr(e?.message ?? 'Error actualizando datos');
+            if (mounted.current)
+              setErr(e?.message ?? "Error actualizando datos");
           } finally {
             if (mounted.current) setLoading(false);
           }
@@ -458,20 +534,25 @@ export default function PantallasViewer() {
       if (!REFETCH_ON_FOCUS) return;
       const cached = readCache();
       const cacheAge = cached ? Date.now() - cached.ts : Infinity;
-      if (cacheAge > STALE_AFTER_MS) { await forceRefresh(); return; }
+      if (cacheAge > STALE_AFTER_MS) {
+        await forceRefresh();
+        return;
+      }
       try {
         const stamp = await fetchStamp();
         const local = Number(localStorage.getItem(LS_REMOTE_STAMP) || 0);
         if (stamp !== local) await forceRefresh();
       } catch {}
     };
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onFocus);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
     return () => {
       mounted.current = false;
-      try { bc?.close(); } catch {}
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onFocus);
+      try {
+        bc?.close();
+      } catch {}
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
     };
   }, []);
 
@@ -479,40 +560,148 @@ export default function PantallasViewer() {
     try {
       setLoading(true);
       setErr(null);
-      const [stamp, all] = await Promise.all([fetchStamp(), fetchAllPantallas()]);
+      const [stamp, all] = await Promise.all([
+        fetchStamp(),
+        fetchAllPantallas(),
+      ]);
       if (!mounted.current) return;
       setRows(all);
       writeCache(all, stamp);
     } catch (e: any) {
-      if (mounted.current) setErr(e?.message ?? 'No se pudo refrescar');
+      if (mounted.current) setErr(e?.message ?? "No se pudo refrescar");
     } finally {
       if (mounted.current) setLoading(false);
     }
   }
 
- // Filtro + búsqueda local
-const filtered = useMemo(() => {
-  const term = normSearch(q);
-  const pid: number | null = platFilter === 'all' ? null : Number(platFilter);
+  // Filtro + búsqueda local
+  const filtered = useMemo(() => {
+    const term = normSearch(q);
+    const pid: number | null = platFilter === "all" ? null : Number(platFilter);
 
-  if (!term && pid === null) return rows;
+    if (!term && pid === null) return rows;
 
-  return rows.filter((r) => {
-    if (pid !== null && r.plataforma_id !== pid) return false;
-    if (!term) return true;
+    return rows.filter((r) => {
+      if (pid !== null && r.plataforma_id !== pid) return false;
+      if (!term) return true;
 
-    const hay =
-      normSearch(r.nombre).includes(term) ||
-      normSearch(r.contacto).includes(term) ||
-      normSearch(r.correo).includes(term) ||
-      normSearch(r.estado).includes(term) ||
-      normSearch(r.comentario).includes(term) ||
-      normSearch(r.nro_pantalla).includes(term);
+      const hay =
+        normSearch(r.nombre).includes(term) ||
+        normSearch(r.contacto).includes(term) ||
+        normSearch(r.correo).includes(term) ||
+        normSearch(r.estado).includes(term) ||
+        normSearch(r.comentario).includes(term) ||
+        normSearch(r.nro_pantalla).includes(term);
 
-    return hay;
-  });
-}, [rows, q, platFilter]);
+      return hay;
+    });
+  }, [rows, q, platFilter]);
 
+  // Normaliza email
+  const emailKey = (s?: string | null) => (s ?? "").trim().toLowerCase();
+
+  // Capacidad por plataforma (desde usePlataformas)
+  const capacityByPlatform = useMemo(() => {
+    const m = new Map<number, number | null>();
+    for (const p of plataformas) {
+      // soporta snake y camel, y castea string/number
+      const raw =
+        (p as any).cantidad_pantallas ?? (p as any).cantidadPantallas ?? null;
+
+      if (raw === null || raw === undefined || raw === "") {
+        m.set(Number(p.id), null); // capacidad desconocida (AÚN no pintamos rojo)
+        continue;
+      }
+
+      const cap = Number(raw);
+      m.set(Number(p.id), Number.isFinite(cap) ? cap : null);
+    }
+    return m;
+  }, [plataformas]);
+
+  // Nombre por plataforma (para mostrar en el badge)
+  const nameByPlatform = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const p of plataformas) {
+      m.set(Number(p.id), String(p.nombre ?? `#${p.id}`));
+    }
+    return m;
+  }, [plataformas]);
+
+  // Pantallas usadas por (correo + plataforma) sobre TODO el dataset
+  // key: `${pid}__${email}` -> value: usadas
+  const usedByEmailPlat = useMemo(() => {
+    const m = new Map<string, number>(); // key: `${pid}__${email}`
+    const norm = (s?: string | null) => (s ?? "").trim().toLowerCase();
+    for (const r of rows) {
+      const pid = Number(r.plataforma_id);
+      const em = norm(r.correo);
+      if (!Number.isFinite(pid) || !em) continue;
+      const k = `${pid}__${em}`;
+      m.set(k, (m.get(k) ?? 0) + 1);
+    }
+    return m;
+  }, [rows]);
+
+  // Helper que arma los items para los badges de un email dado
+  function getPerPlatformForEmail(email: string) {
+    const norm = (s?: string | null) => (s ?? "").trim().toLowerCase();
+    const em = norm(email);
+
+    // plataformas donde este email tiene algo
+    const seen = new Set<number>();
+    for (const r of rows) {
+      if (norm(r.correo) !== em) continue;
+      const pid = Number(r.plataforma_id);
+      if (Number.isFinite(pid)) seen.add(pid);
+    }
+
+    const items: Array<{
+      pid: number;
+      name: string;
+      used: number;
+      capacity: number | null;
+      available: number | null;
+    }> = [];
+    for (const pid of seen) {
+      const name =
+        plataformas.find((p) => Number(p.id) === pid)?.nombre ?? `#${pid}`;
+      const capacity = capacityByPlatform.get(pid) ?? null; // puede ser null (desconocida)
+      const used = usedByEmailPlat.get(`${pid}__${em}`) ?? 0;
+      const available = capacity == null ? null : Math.max(0, capacity - used);
+      items.push({ pid, name, used, capacity, available });
+    }
+
+    items.sort((a, b) => a.name.localeCompare(b.name));
+    return items;
+  }
+
+  // Agrupar por correo y ordenar dentro por fecha de vencimiento asc (vacías al final)
+  const groupedByEmail = useMemo(() => {
+    const toNum = (s?: string | null) => {
+      if (!s) return Number.POSITIVE_INFINITY;
+      const t = new Date(s).getTime();
+      return Number.isFinite(t) ? t : Number.POSITIVE_INFINITY;
+    };
+
+    const map = new Map<string, Pantalla[]>();
+    for (const r of filtered) {
+      const email = (r.correo ?? "(sin correo)").trim().toLowerCase();
+      if (!map.has(email)) map.set(email, []);
+      map.get(email)!.push(r);
+    }
+
+    const groups = Array.from(map.entries()).map(([email, arr]) => {
+      const rowsSorted = [...arr].sort(
+        (a, b) => toNum(a.fecha_vencimiento) - toNum(b.fecha_vencimiento)
+      );
+      return { email, rows: rowsSorted };
+    });
+
+    // (opcional) ordenar grupos por email asc
+    groups.sort((a, b) => a.email.localeCompare(b.email));
+    return groups;
+  }, [filtered]);
 
   /* =========================================================
    * Editar / Guardar
@@ -520,18 +709,25 @@ const filtered = useMemo(() => {
   function openEdit(row: Pantalla) {
     const seeded: EditState = {
       ...row,
-      nombre: row.nombre ?? '',
-      correo: row.correo ?? '',
-      contrasena: row.contrasena ?? '',
-      nro_pantalla: row.nro_pantalla ?? '',
-      fecha_compra: row.fecha_compra ?? '',
-      fecha_vencimiento: row.fecha_vencimiento ?? '',
-      estado: row.estado ?? '',
-      comentario: row.comentario ?? '',
-      proveedor: row.proveedor ?? '',
+      nombre: row.nombre ?? "",
+      correo: row.correo ?? "",
+      contrasena: row.contrasena ?? "",
+      nro_pantalla: row.nro_pantalla ?? "",
+      fecha_compra: row.fecha_compra ?? "",
+      fecha_vencimiento: row.fecha_vencimiento ?? "",
+      estado: row.estado ?? "",
+      comentario: row.comentario ?? "",
+      proveedor: row.proveedor ?? "",
     };
-    if (seeded.fecha_compra && seeded.meses_pagados && !seeded.fecha_vencimiento) {
-      const venc = addMonthsYYYYMMDD(seeded.fecha_compra as string, Number(seeded.meses_pagados));
+    if (
+      seeded.fecha_compra &&
+      seeded.meses_pagados &&
+      !seeded.fecha_vencimiento
+    ) {
+      const venc = addMonthsYYYYMMDD(
+        seeded.fecha_compra as string,
+        Number(seeded.meses_pagados)
+      );
       if (venc) seeded.fecha_vencimiento = venc;
     }
     setEdit(seeded);
@@ -540,7 +736,7 @@ const filtered = useMemo(() => {
   // recalcula vencimiento cuando cambia compra/meses
   useEffect(() => {
     if (!edit) return;
-    const fc = edit.fecha_compra ?? '';
+    const fc = edit.fecha_compra ?? "";
     const m = edit.meses_pagados ?? null;
     if (fc && m != null && m >= 1) {
       const venc = addMonthsYYYYMMDD(fc, m);
@@ -548,7 +744,7 @@ const filtered = useMemo(() => {
         setEdit((s) => ({ ...(s as EditState), fecha_vencimiento: venc }));
       }
     } else if (edit.fecha_vencimiento) {
-      setEdit((s) => ({ ...(s as EditState), fecha_vencimiento: '' }));
+      setEdit((s) => ({ ...(s as EditState), fecha_vencimiento: "" }));
     }
   }, [edit?.fecha_compra, edit?.meses_pagados]);
 
@@ -558,12 +754,13 @@ const filtered = useMemo(() => {
     setErr(null);
     try {
       const row = rows.find((r) => r.id === edit.id);
-      if (!row) throw new Error('Fila no encontrada');
+      if (!row) throw new Error("Fila no encontrada");
 
       // Determinar cambio de correo y plataforma de la fila
       const oldCorreo = normEmail(row.correo);
       const newCorreo = normEmail(edit.correo as string);
-      const pid: number | null = row.plataforma_id == null ? null : Number(row.plataforma_id);
+      const pid: number | null =
+        row.plataforma_id == null ? null : Number(row.plataforma_id);
 
       // fecha_vencimiento derivada si hay compra+meses
       let finalVence = edit.fecha_vencimiento ?? null;
@@ -573,16 +770,17 @@ const filtered = useMemo(() => {
 
       // Payload base
       const payload: Record<string, unknown> = {
-        contacto: edit.contacto ?? '',
-        nombre: (edit.nombre ?? '') === '' ? null : (edit.nombre ?? ''),
-        nro_pantalla: edit.nro_pantalla ?? '',
+        contacto: edit.contacto ?? "",
+        nombre: (edit.nombre ?? "") === "" ? null : edit.nombre ?? "",
+        nro_pantalla: edit.nro_pantalla ?? "",
         fecha_compra: edit.fecha_compra ?? null,
         fecha_vencimiento: finalVence,
-        meses_pagados: edit.meses_pagados == null ? null : clamp(edit.meses_pagados, 1),
+        meses_pagados:
+          edit.meses_pagados == null ? null : clamp(edit.meses_pagados, 1),
         total_pagado: edit.total_pagado,
         total_pagado_proveedor: edit.total_pagado_proveedor,
         total_ganado: edit.total_ganado,
-        estado: edit.estado ?? '',
+        estado: edit.estado ?? "",
         comentario: (edit.comentario ?? null) as string | null,
       };
 
@@ -591,21 +789,25 @@ const filtered = useMemo(() => {
 
       if (newCorreo && newCorreo !== oldCorreo) {
         // upsert cuentascompartidas en la MISMA plataforma y reasignar cuenta_id
-        const newCuentaId = await upsertCuentaCompartida(pid, newCorreo, (edit.contrasena as string) ?? null);
+        const newCuentaId = await upsertCuentaCompartida(
+          pid,
+          newCorreo,
+          (edit.contrasena as string) ?? null
+        );
         payload.cuenta_id = newCuentaId;
         payload.correo = newCorreo; // por si el backend lo usa directamente
         cuentaIdToUpdate = newCuentaId;
       } else {
         // Si no cambió correo pero cambió clave y hay cuenta_id ⇒ actualizar clave en cuentascompartidas
         const hasNewPass =
-          typeof edit.contrasena === 'string' &&
-          edit.contrasena.trim() !== '' &&
+          typeof edit.contrasena === "string" &&
+          edit.contrasena.trim() !== "" &&
           edit.contrasena !== row.contrasena;
         if (hasNewPass && row.cuenta_id) {
           try {
             await fetch(`/api/cuentascompartidas/${row.cuenta_id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ contrasena: edit.contrasena }),
             });
           } catch {}
@@ -615,13 +817,13 @@ const filtered = useMemo(() => {
       }
 
       const res = await fetch(`/api/pantallas/${edit.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        throw new Error(j?.error ?? 'No se pudo guardar');
+        throw new Error(j?.error ?? "No se pudo guardar");
       }
       const flat = await res.json();
 
@@ -634,13 +836,20 @@ const filtered = useMemo(() => {
         fecha_compra: flat?.row?.fecha_compra ?? edit.fecha_compra ?? null,
         fecha_vencimiento: flat?.row?.fecha_vencimiento ?? finalVence ?? null,
         meses_pagados:
-          flat?.row?.meses_pagados ?? (edit.meses_pagados == null ? null : edit.meses_pagados),
-        total_pagado: flat?.row?.total_pagado == null ? null : Number(flat.row.total_pagado as any),
+          flat?.row?.meses_pagados ??
+          (edit.meses_pagados == null ? null : edit.meses_pagados),
+        total_pagado:
+          flat?.row?.total_pagado == null
+            ? null
+            : Number(flat.row.total_pagado as any),
         total_pagado_proveedor:
           flat?.row?.total_pagado_proveedor == null
             ? null
             : Number(flat.row.total_pagado_proveedor as any),
-        total_ganado: flat?.row?.total_ganado == null ? null : Number(flat.row.total_ganado as any),
+        total_ganado:
+          flat?.row?.total_ganado == null
+            ? null
+            : Number(flat.row.total_ganado as any),
         estado: flat?.row?.estado ?? edit.estado ?? null,
         comentario: flat?.row?.comentario ?? edit.comentario ?? null,
         plataforma_id: row.plataforma_id,
@@ -654,7 +863,7 @@ const filtered = useMemo(() => {
       broadcastInvalidate();
       setEdit(null);
     } catch (e: any) {
-      setErr(e?.message ?? 'Error guardando');
+      setErr(e?.message ?? "Error guardando");
     } finally {
       setSaving(false);
     }
@@ -672,8 +881,12 @@ const filtered = useMemo(() => {
       return next;
     });
   };
-  const allVisibleIds = filtered.map((r) => r.id).filter((id) => Number.isFinite(id));
-  const allVisibleSelected = allVisibleIds.length > 0 && allVisibleIds.every((id) => selectedIds.has(id));
+  const allVisibleIds = filtered
+    .map((r) => r.id)
+    .filter((id) => Number.isFinite(id));
+  const allVisibleSelected =
+    allVisibleIds.length > 0 &&
+    allVisibleIds.every((id) => selectedIds.has(id));
   const someVisibleSelected = allVisibleIds.some((id) => selectedIds.has(id));
   const toggleAllVisible = (checked: boolean) => {
     setSelectedIds((prev) => {
@@ -702,14 +915,18 @@ const filtered = useMemo(() => {
       if (!correo || plataforma_id == null) {
         const resolved = await (async () => {
           try {
-            const res = await fetch(`/api/pantallas/${id}`, { cache: 'no-store' });
+            const res = await fetch(`/api/pantallas/${id}`, {
+              cache: "no-store",
+            });
             if (!res.ok) return null;
             const j = await res.json();
             return {
               correo: j?.item?.correo ?? j?.correo ?? null,
               plataforma_id: j?.item?.plataforma_id ?? j?.plataforma_id ?? null,
             };
-          } catch { return null; }
+          } catch {
+            return null;
+          }
         })();
         if (resolved) {
           if (!correo) correo = resolved.correo;
@@ -721,16 +938,25 @@ const filtered = useMemo(() => {
         id,
         label:
           label ??
-          (correo ? `${correo} / ${victimLocal?.nro_pantalla ?? ''}` : victimLocal?.nro_pantalla ?? `#${id}`),
+          (correo
+            ? `${correo} / ${victimLocal?.nro_pantalla ?? ""}`
+            : victimLocal?.nro_pantalla ?? `#${id}`),
       });
 
-      if (!correo || plataforma_id == null) { setCanArchive(false); return; }
+      if (!correo || plataforma_id == null) {
+        setCanArchive(false);
+        return;
+      }
 
       // ======== usar SOLO las filas cargadas (lo que "miras") ========
-      const usesLocal = countLocalByEmailAndPlatform(rows, correo, plataforma_id);
+      const usesLocal = countLocalByEmailAndPlatform(
+        rows,
+        correo,
+        plataforma_id
+      );
       setCanArchive(usesLocal <= 1);
     } catch (e: any) {
-      setDeleteErr(e?.message ?? 'Error al verificar el estado del correo.');
+      setDeleteErr(e?.message ?? "Error al verificar el estado del correo.");
     } finally {
       setCheckingArchive(false);
     }
@@ -740,7 +966,7 @@ const filtered = useMemo(() => {
     if (!deleteTarget) return;
     setDeleting(true);
     setDeleteErr(null);
-    setDeleteAction(archive ? 'archive' : 'purge');
+    setDeleteAction(archive ? "archive" : "purge");
     try {
       let victim = rows.find((r) => r.id === deleteTarget.id) || null;
       let victimPlataforma = victim?.plataforma_id ?? null;
@@ -749,24 +975,38 @@ const filtered = useMemo(() => {
 
       if ((!victimCorreo || victimPlataforma == null) && archive) {
         try {
-          const resolved = await fetch(`/api/pantallas/${deleteTarget.id}`, { cache: 'no-store' })
-            .then(r => r.ok ? r.json() : null);
+          const resolved = await fetch(`/api/pantallas/${deleteTarget.id}`, {
+            cache: "no-store",
+          }).then((r) => (r.ok ? r.json() : null));
           if (resolved) {
-            if (!victimCorreo) victimCorreo = resolved?.item?.correo ?? resolved?.correo ?? null;
-            if (victimPlataforma == null) victimPlataforma = resolved?.item?.plataforma_id ?? resolved?.plataforma_id ?? null;
-            if (!victimClave) victimClave = resolved?.item?.contrasena ?? resolved?.contrasena ?? null;
+            if (!victimCorreo)
+              victimCorreo = resolved?.item?.correo ?? resolved?.correo ?? null;
+            if (victimPlataforma == null)
+              victimPlataforma =
+                resolved?.item?.plataforma_id ??
+                resolved?.plataforma_id ??
+                null;
+            if (!victimClave)
+              victimClave =
+                resolved?.item?.contrasena ?? resolved?.contrasena ?? null;
           }
         } catch {}
       }
 
       if (archive && victimCorreo && victimPlataforma != null) {
-        await ensureInInventario(victimPlataforma as number | null, victimCorreo, victimClave);
+        await ensureInInventario(
+          victimPlataforma as number | null,
+          victimCorreo,
+          victimClave
+        );
       }
 
-      const res = await fetch(`/api/pantallas/${deleteTarget.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/pantallas/${deleteTarget.id}`, {
+        method: "DELETE",
+      });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        throw new Error(j?.error ?? 'No se pudo eliminar');
+        throw new Error(j?.error ?? "No se pudo eliminar");
       }
       await res.json().catch(() => ({}));
 
@@ -774,11 +1014,15 @@ const filtered = useMemo(() => {
       setRows(next);
       broadcastInvalidate();
 
-      setDeleteMsg('Pantalla eliminada correctamente.');
-      setSelectedIds((prev) => { const s = new Set(prev); s.delete(deleteTarget.id); return s; });
+      setDeleteMsg("Pantalla eliminada correctamente.");
+      setSelectedIds((prev) => {
+        const s = new Set(prev);
+        s.delete(deleteTarget.id);
+        return s;
+      });
       setDeleteTarget(null);
     } catch (e: any) {
-      setDeleteErr(e?.message ?? 'Error al eliminar');
+      setDeleteErr(e?.message ?? "Error al eliminar");
     } finally {
       setDeleting(false);
       setDeleteAction(null);
@@ -787,8 +1031,12 @@ const filtered = useMemo(() => {
 
   // ==== BULK ====
   type Built = {
-    id: number; label?: string; canArchive: boolean;
-    plataforma_id: number | null; correo: string | null; contrasena: string | null;
+    id: number;
+    label?: string;
+    canArchive: boolean;
+    plataforma_id: number | null;
+    correo: string | null;
+    contrasena: string | null;
   };
 
   const buildBulkItem = async (id: number): Promise<Built> => {
@@ -800,7 +1048,9 @@ const filtered = useMemo(() => {
     if (!correo || plataforma_id == null) {
       const resolved = await (async () => {
         try {
-          const res = await fetch(`/api/pantallas/${id}`, { cache: 'no-store' });
+          const res = await fetch(`/api/pantallas/${id}`, {
+            cache: "no-store",
+          });
           if (!res.ok) return null;
           const j = await res.json();
           return {
@@ -808,7 +1058,9 @@ const filtered = useMemo(() => {
             plataforma_id: j?.item?.plataforma_id ?? j?.plataforma_id ?? null,
             contrasena: j?.item?.contrasena ?? j?.contrasena ?? null,
           };
-        } catch { return null; }
+        } catch {
+          return null;
+        }
       })();
       if (resolved) {
         if (!correo) correo = resolved.correo;
@@ -820,11 +1072,24 @@ const filtered = useMemo(() => {
     // ======== usar SOLO las filas cargadas (lo que "miras") ========
     let can = false;
     if (correo && plataforma_id != null) {
-      const usesLocal = countLocalByEmailAndPlatform(rows, correo, plataforma_id);
+      const usesLocal = countLocalByEmailAndPlatform(
+        rows,
+        correo,
+        plataforma_id
+      );
       can = usesLocal <= 1;
     }
-    const label = correo ? `${correo} / ${local?.nro_pantalla ?? ''}` : local?.nro_pantalla ?? `#${id}`;
-    return { id, label, canArchive: can, plataforma_id: plataforma_id ?? null, correo: correo ?? null, contrasena: contrasena ?? null };
+    const label = correo
+      ? `${correo} / ${local?.nro_pantalla ?? ""}`
+      : local?.nro_pantalla ?? `#${id}`;
+    return {
+      id,
+      label,
+      canArchive: can,
+      plataforma_id: plataforma_id ?? null,
+      correo: correo ?? null,
+      contrasena: contrasena ?? null,
+    };
   };
 
   const openBulk = async (ids: number[]) => {
@@ -844,7 +1109,7 @@ const filtered = useMemo(() => {
       }
       setBulkItems(items);
     } catch (e: any) {
-      setBulkErr(e?.message ?? 'Error preparando la eliminación masiva.');
+      setBulkErr(e?.message ?? "Error preparando la eliminación masiva.");
     } finally {
       setBulkAssessing(false);
     }
@@ -858,23 +1123,47 @@ const filtered = useMemo(() => {
     setBulkErr(null);
     setBulkProgress(0);
     const total = bulkItems.length;
-    let archived = 0, purged = 0, failed = 0;
+    let archived = 0,
+      purged = 0,
+      failed = 0;
 
     for (let i = 0; i < bulkItems.length; i++) {
       const it = bulkItems[i];
       try {
-        if (preferArchive && it.canArchive && it.correo && it.plataforma_id != null) {
+        if (
+          preferArchive &&
+          it.canArchive &&
+          it.correo &&
+          it.plataforma_id != null
+        ) {
           // eslint-disable-next-line no-await-in-loop
-          await ensureInInventario(it.plataforma_id, it.correo, it.contrasena ?? null);
+          await ensureInInventario(
+            it.plataforma_id,
+            it.correo,
+            it.contrasena ?? null
+          );
         }
         // eslint-disable-next-line no-await-in-loop
-        const res = await fetch(`/api/pantallas/${it.id}`, { method: 'DELETE' });
+        const res = await fetch(`/api/pantallas/${it.id}`, {
+          method: "DELETE",
+        });
         if (!res.ok) {
           failed++;
         } else {
-          if (preferArchive && it.canArchive && it.correo && it.plataforma_id != null) archived++; else purged++;
+          if (
+            preferArchive &&
+            it.canArchive &&
+            it.correo &&
+            it.plataforma_id != null
+          )
+            archived++;
+          else purged++;
           setRows((rs) => rs.filter((r) => r.id !== it.id));
-          setSelectedIds((prev) => { const next = new Set(prev); next.delete(it.id); return next; });
+          setSelectedIds((prev) => {
+            const next = new Set(prev);
+            next.delete(it.id);
+            return next;
+          });
           removeFromCache(it.id);
         }
       } catch {
@@ -896,7 +1185,9 @@ const filtered = useMemo(() => {
 
   return (
     <div className="p-4">
-      <h2 className="text-xl font-semibold text-neutral-100 mb-3">Ver/Editar Pantallas</h2>
+      <h2 className="text-xl font-semibold text-neutral-100 mb-3">
+        Ver/Editar Pantallas
+      </h2>
 
       {/* Filtros */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center mb-3">
@@ -907,13 +1198,17 @@ const filtered = useMemo(() => {
           className="flex-1 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
         />
         <select
-          value={platFilter === 'all' ? '' : String(platFilter)}
-          onChange={(e) => setPlatFilter(e.target.value ? Number(e.target.value) : 'all')}
+          value={platFilter === "all" ? "" : String(platFilter)}
+          onChange={(e) =>
+            setPlatFilter(e.target.value ? Number(e.target.value) : "all")
+          }
           className="w-64 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
         >
           <option value="">Todas</option>
           {plataformas.map((p) => (
-            <option key={p.id} value={p.id}>{p.nombre}</option>
+            <option key={p.id} value={p.id}>
+              {p.nombre}
+            </option>
           ))}
         </select>
 
@@ -922,7 +1217,7 @@ const filtered = useMemo(() => {
           disabled={loading}
           className="px-4 py-2 rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-100 hover:bg-neutral-800 disabled:opacity-60"
         >
-          {loading ? 'Actualizando…' : 'Refrescar'}
+          {loading ? "Actualizando…" : "Refrescar"}
         </button>
       </div>
 
@@ -970,7 +1265,11 @@ const filtered = useMemo(() => {
                   type="checkbox"
                   aria-label="Seleccionar todo"
                   checked={allVisibleSelected}
-                  ref={(el) => { if (el) el.indeterminate = !allVisibleSelected && someVisibleSelected; }}
+                  ref={(el) => {
+                    if (el)
+                      el.indeterminate =
+                        !allVisibleSelected && someVisibleSelected;
+                  }}
                   onChange={(e) => toggleAllVisible(e.target.checked)}
                 />
               </th>
@@ -980,6 +1279,7 @@ const filtered = useMemo(() => {
               <th className="px-3 py-2 text-left w-40">Nombre</th>
               <th className="px-3 py-2 text-left w-[280px]">Correo</th>
               <th className="px-3 py-2 text-left w-[220px]">Clave</th>
+              <th className="px-3 py-2 text-center w-24">Pantalla</th>
               <th className="px-3 py-2 text-right w-28">Total</th>
               <th className="px-3 py-2 text-right w-28">Pagado Prov.</th>
               <th className="px-3 py-2 text-right w-28">Ganado</th>
@@ -991,87 +1291,274 @@ const filtered = useMemo(() => {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((r, idx) => (
-              <tr
-                key={r.id ?? `row-${idx}`}
-                className="border-b border-neutral-800 hover:bg-neutral-900/30"
-                onDoubleClick={() => openEdit(r)}
-              >
-                <td className="px-3 py-2 text-center">
-                  <input
-                    type="checkbox"
-                    checked={isRowSelected(r.id)}
-                    onChange={(e) => toggleRow(r.id, e.target.checked)}
-                  />
-                </td>
+            {groupedByEmail.length > 0 ? (
+              groupedByEmail.map((g, gi) => (
+                <React.Fragment key={`grp-${gi}-${g.email}`}>
+                  {/* Encabezado del grupo (correo) + badges de disponibilidad */}
+                  <tr className="bg-neutral-950/60 border-b border-neutral-800">
+                    <td colSpan={16} className="px-3 py-2">
+                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                        <span className="font-semibold text-neutral-200">
+                          {g.email}
+                        </span>
+                        <span className="text-neutral-400">
+                          • {g.rows.length} registro(s)
+                        </span>
+                        {getPerPlatformForEmail(g.email).map((pp) => {
+                          // ❶ Si aún no tenemos capacidad, no pintes rojo: muestra “capacidad desconocida”
+                          if (pp.capacity == null) {
+                            return (
+                              <span
+                                key={pp.pid}
+                                className="ml-2 inline-flex items-center gap-2 rounded-md border px-2 py-0.5 text-xs border-neutral-600 bg-neutral-800/40 text-neutral-200"
+                                title={`${pp.name} • capacidad: desconocida • usadas: ${pp.used}`}
+                              >
+                                <strong className="font-medium">
+                                  {pp.name}
+                                </strong>
+                                <span>· Capacidad desconocida</span>
+                              </span>
+                            );
+                          }
 
-                <td className="px-3 py-2">
-                  <div className="flex gap-2">
-                    <button
-                      title="Editar"
-                      onClick={() => openEdit(r)}
-                      className="text-neutral-300 hover:text-white inline-flex p-1 rounded-md hover:bg-neutral-800/60"
-                      aria-label="Editar"
+                          const available = pp.available ?? 0;
+                          const ok = available > 0;
+
+                          return (
+                            <span
+                              key={pp.pid}
+                              className={
+                                "ml-2 inline-flex items-center gap-2 rounded-md border px-2 py-0.5 text-xs " +
+                                (ok
+                                  ? "border-emerald-700 bg-emerald-800/40 text-emerald-100"
+                                  : "border-rose-700 bg-rose-900/40 text-rose-100")
+                              }
+                              title={`${pp.name} • capacidad: ${pp.capacity} • usadas: ${pp.used}`}
+                            >
+                              <strong className="font-medium">{pp.name}</strong>
+                              <span>
+                                ·{" "}
+                                {ok
+                                  ? `${available} disponibles`
+                                  : "Sin pantallas disponibles"}
+                              </span>
+                            </span>
+                          );
+                        })}
+
+                        {/* Badges calculadas en línea (sin cambiar groupedByEmail) */}
+                        {(() => {
+                          const norm = (s?: string | null) =>
+                            (s ?? "").trim().toLowerCase();
+                          const em = norm(g.email);
+
+                          // mapas de capacidad y nombre por plataforma (desde hook)
+                          const capBy = new Map<number, number>();
+                          const nameBy = new Map<number, string>();
+                          for (const p of plataformas) {
+                            capBy.set(
+                              Number(p.id),
+                              Number((p as any).cantidad_pantallas ?? 0)
+                            );
+                            nameBy.set(
+                              Number(p.id),
+                              String(p.nombre ?? `#${p.id}`)
+                            );
+                          }
+
+                          // usadas por plataforma para ESTE correo (sobre todas las filas)
+                          const usedByPid = new Map<number, number>();
+                          for (const rr of rows) {
+                            if (norm(rr.correo) !== em) continue;
+                            if (rr.plataforma_id == null) continue;
+                            const pid = Number(rr.plataforma_id);
+                            usedByPid.set(pid, (usedByPid.get(pid) ?? 0) + 1);
+                          }
+
+                          // construir ítems solo para plataformas donde el correo tiene algo
+                          const items = Array.from(usedByPid.entries())
+                            .map(([pid, used]) => {
+                              const capacity = capBy.get(pid) ?? 0;
+                              const available = Math.max(0, capacity - used);
+                              return {
+                                pid,
+                                name: nameBy.get(pid) ?? `#${pid}`,
+                                used,
+                                capacity,
+                                available,
+                              };
+                            })
+                            .sort((a, b) => a.name.localeCompare(b.name));
+
+                          return items.map((pp) => (
+                            <span
+                              key={pp.pid}
+                              className={
+                                "ml-2 inline-flex items-center gap-2 rounded-md border px-2 py-0.5 text-xs " +
+                                (pp.available > 0
+                                  ? "border-emerald-700 bg-emerald-800/40 text-emerald-100"
+                                  : "border-rose-700 bg-rose-900/40 text-rose-100")
+                              }
+                              title={`${pp.name} • capacidad: ${pp.capacity} • usadas: ${pp.used}`}
+                            >
+                              <strong className="font-medium">{pp.name}</strong>
+                              <span>
+                                ·{" "}
+                                {pp.available > 0
+                                  ? `${pp.available} disponibles`
+                                  : "Sin pantallas disponibles"}
+                              </span>
+                            </span>
+                          ));
+                        })()}
+                      </div>
+                    </td>
+                  </tr>
+
+                  {/* Filas del grupo (ya vienen ordenadas por vence desde tu groupedByEmail) */}
+                  {g.rows.map((r, idx) => (
+                    <tr
+                      key={r.id ?? `row-${gi}-${idx}`}
+                      className="border-b border-neutral-800 hover:bg-neutral-900/30"
+                      onDoubleClick={() => openEdit(r)}
                     >
-                      {/* lápiz */}
-                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M12 20h9" />
-                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-                      </svg>
-                    </button>
-                    <button
-                      title="Eliminar"
-                      onClick={() => openDelete(r.id, `${r.correo ?? ''} / ${r.nro_pantalla ?? ''}`)}
-                      className="text-rose-300 hover:text-rose-200 inline-flex p-1 rounded-md hover:bg-rose-900/30"
-                      aria-label="Eliminar"
-                    >
-                      {/* papelera */}
-                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                        <path d="M10 11v6" />
-                        <path d="M14 11v6" />
-                        <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
-                      </svg>
-                    </button>
-                  </div>
-                </td>
+                      <td className="px-3 py-2 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isRowSelected(r.id)}
+                          onChange={(e) => toggleRow(r.id, e.target.checked)}
+                        />
+                      </td>
 
-                <td className="px-3 py-2 whitespace-nowrap">
-                  {plataformas.find((p) => p.id === r.plataforma_id)?.nombre ?? '—'}
-                </td>
-                <td className="px-3 py-2 whitespace-nowrap">{r.contacto || '—'}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{r.nombre || '—'}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex gap-2">
+                          <button
+                            title="Editar"
+                            onClick={() => openEdit(r)}
+                            className="text-neutral-300 hover:text-white inline-flex p-1 rounded-md hover:bg-neutral-800/60"
+                            aria-label="Editar"
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              width="18"
+                              height="18"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            >
+                              <path d="M12 20h9" />
+                              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                            </svg>
+                          </button>
+                          <button
+                            title="Eliminar"
+                            onClick={() =>
+                              openDelete(
+                                r.id,
+                                `${r.correo ?? ""} / ${r.nro_pantalla ?? ""}`
+                              )
+                            }
+                            className="text-rose-300 hover:text-rose-200 inline-flex p-1 rounded-md hover:bg-rose-900/30"
+                            aria-label="Eliminar"
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              width="18"
+                              height="18"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            >
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                              <path d="M10 11v6" />
+                              <path d="M14 11v6" />
+                              <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
 
-                <td className="px-3 py-2">
-                  <span className="inline-block max-w-[260px] truncate align-bottom" title={r.correo ?? ''}>
-                    {r.correo || '—'}
-                  </span>
-                </td>
-                <td className="px-3 py-2">
-                  <span className="inline-block max-w-[200px] truncate align-bottom" title={r.contrasena ?? ''}>
-                    {r.contrasena || '—'}
-                  </span>
-                </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {plataformas.find((p) => p.id === r.plataforma_id)
+                          ?.nombre ?? "—"}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {r.contacto || "—"}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {r.nombre || "—"}
+                      </td>
 
-                <td className="px-3 py-2 text-right">{money(r.total_pagado)}</td>
-                <td className="px-3 py-2 text-right">{money(r.total_pagado_proveedor)}</td>
-                <td className="px-3 py-2 text-right">{money(r.total_ganado)}</td>
-                <td className="px-3 py-2 text-center">{r.meses_pagados ?? '—'}</td>
-                <td className="px-3 py-2 text-center whitespace-nowrap">{r.fecha_compra || '—'}</td>
-                <td className="px-3 py-2 text-center whitespace-nowrap">{r.fecha_vencimiento || '—'}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{r.estado || '—'}</td>
-                <td className="px-3 py-2">
-                  <span className="inline-block max-w-[420px] truncate align-bottom" title={r.comentario ?? ''}>
-                    {r.comentario || '—'}
-                  </span>
-                </td>
-              </tr>
-            ))}
-            {!filtered.length && (
+                      <td className="px-3 py-2">
+                        <span
+                          className="inline-block max-w-[260px] truncate align-bottom"
+                          title={r.correo ?? ""}
+                        >
+                          {r.correo || "—"}
+                        </span>
+                      </td>
+
+                      <td className="px-3 py-2">
+                        <span
+                          className="inline-block max-w-[200px] truncate align-bottom"
+                          title={r.contrasena ?? ""}
+                        >
+                          {r.contrasena || "—"}
+                        </span>
+                      </td>
+
+                      {/* Pantalla (nro_pantalla) */}
+                      <td className="px-3 py-2 text-center">
+                        {r.nro_pantalla || "—"}
+                      </td>
+
+                      <td className="px-3 py-2 text-right">
+                        {money(r.total_pagado)}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {money(r.total_pagado_proveedor)}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {money(r.total_ganado)}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {r.meses_pagados ?? "—"}
+                      </td>
+                      <td className="px-3 py-2 text-center whitespace-nowrap">
+                        {r.fecha_compra || "—"}
+                      </td>
+                      <td className="px-3 py-2 text-center whitespace-nowrap">
+                        {r.fecha_vencimiento || "—"}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {r.estado || "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span
+                          className="inline-block max-w-[420px] truncate align-bottom"
+                          title={r.comentario ?? ""}
+                        >
+                          {r.comentario || "—"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </React.Fragment>
+              ))
+            ) : (
               <tr>
-                <td colSpan={15} className="px-3 py-6 text-center text-neutral-400">
-                  {loading ? 'Cargando…' : 'No se encontraron resultados.'}
+                <td
+                  colSpan={16}
+                  className="px-3 py-6 text-center text-neutral-400"
+                >
+                  {loading ? "Cargando…" : "No se encontraron resultados."}
                 </td>
               </tr>
             )}
@@ -1083,7 +1570,9 @@ const filtered = useMemo(() => {
       <div className="mt-2 text-sm text-neutral-400">
         {rows.length} fila(s) en cache · {filtered.length} visible(s)
         {err && <span className="text-rose-400 ml-2">— {err}</span>}
-        {deleteMsg && <span className="text-emerald-400 ml-2">— {deleteMsg}</span>}
+        {deleteMsg && (
+          <span className="text-emerald-400 ml-2">— {deleteMsg}</span>
+        )}
       </div>
 
       {/* Modal edición */}
@@ -1102,7 +1591,11 @@ const filtered = useMemo(() => {
               >
                 <div className="px-5 py-3 border-b border-neutral-800 flex items-center justify-between sticky top-0 bg-neutral-900 rounded-t-2xl">
                   <h3 className="font-semibold">Editar pantalla #{edit.id}</h3>
-                  <button className="px-2 py-1 hover:text-white" onClick={() => setEdit(null)} disabled={saving}>
+                  <button
+                    className="px-2 py-1 hover:text-white"
+                    onClick={() => setEdit(null)}
+                    disabled={saving}
+                  >
                     ✕
                   </button>
                 </div>
@@ -1112,16 +1605,26 @@ const filtered = useMemo(() => {
                     <span className="text-sm text-neutral-300">Contacto</span>
                     <input
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.contacto ?? ''}
-                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), contacto: e.target.value }))}
+                      value={edit.contacto ?? ""}
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          contacto: e.target.value,
+                        }))
+                      }
                     />
                   </label>
                   <label className="grid gap-1">
                     <span className="text-sm text-neutral-300">Nombre</span>
                     <input
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.nombre ?? ''}
-                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), nombre: e.target.value }))}
+                      value={edit.nombre ?? ""}
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          nombre: e.target.value,
+                        }))
+                      }
                     />
                   </label>
 
@@ -1129,25 +1632,42 @@ const filtered = useMemo(() => {
                     <span className="text-sm text-neutral-300">Correo</span>
                     <input
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.correo ?? ''}
-                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), correo: e.target.value }))}
+                      value={edit.correo ?? ""}
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          correo: e.target.value,
+                        }))
+                      }
                     />
                   </label>
                   <label className="grid gap-1">
                     <span className="text-sm text-neutral-300">Contraseña</span>
                     <input
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.contrasena ?? ''}
-                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), contrasena: e.target.value }))}
+                      value={edit.contrasena ?? ""}
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          contrasena: e.target.value,
+                        }))
+                      }
                     />
                   </label>
 
                   <label className="grid gap-1">
-                    <span className="text-sm text-neutral-300">Nro. pantalla</span>
+                    <span className="text-sm text-neutral-300">
+                      Nro. pantalla
+                    </span>
                     <input
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.nro_pantalla ?? ''}
-                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), nro_pantalla: e.target.value }))}
+                      value={edit.nro_pantalla ?? ""}
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          nro_pantalla: e.target.value,
+                        }))
+                      }
                     />
                   </label>
 
@@ -1155,125 +1675,162 @@ const filtered = useMemo(() => {
                     <span className="text-sm text-neutral-300">Estado</span>
                     <input
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.estado ?? ''}
-                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), estado: e.target.value }))}
+                      value={edit.estado ?? ""}
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          estado: e.target.value,
+                        }))
+                      }
                     />
                   </label>
                   <label className="grid gap-1">
-                  <span className="text-sm text-neutral-300">Fecha compra (YYYY-MM-DD)</span>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="date"
-                      className="flex-1 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.fecha_compra ?? ''}
-                      onChange={(e) =>
-                        setEdit((s) => ({ ...(s as EditState), fecha_compra: e.target.value }))
-                      }
-                      // 👉 Abre el calendario solo si aún no está enfocado
-                      onMouseDown={(e) => {
-                        const el = e.currentTarget;
-                        if (document.activeElement !== el && el.showPicker) {
-                          requestAnimationFrame(() => el.showPicker());
+                    <span className="text-sm text-neutral-300">
+                      Fecha compra (YYYY-MM-DD)
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        className="flex-1 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600"
+                        value={edit.fecha_compra ?? ""}
+                        onChange={(e) =>
+                          setEdit((s) => ({
+                            ...(s as EditState),
+                            fecha_compra: e.target.value,
+                          }))
                         }
-                      }}
-                    />
+                        // 👉 Abre el calendario solo si aún no está enfocado
+                        onMouseDown={(e) => {
+                          const el = e.currentTarget;
+                          if (document.activeElement !== el && el.showPicker) {
+                            requestAnimationFrame(() => el.showPicker());
+                          }
+                        }}
+                      />
 
-                    {/* 📅 Botón para abrir el calendario explícitamente */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const input = document.querySelector('input[type="date"]') as HTMLInputElement;
-                        input?.showPicker?.();
-                      }}
-                      className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
-                      title="Abrir calendario"
-                    >
-                      📅
-                    </button>
+                      {/* 📅 Botón para abrir el calendario explícitamente */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const input = document.querySelector(
+                            'input[type="date"]'
+                          ) as HTMLInputElement;
+                          input?.showPicker?.();
+                        }}
+                        className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
+                        title="Abrir calendario"
+                      >
+                        📅
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setEdit((s) => ({ ...(s as EditState), fecha_compra: todayYMDLocal() }))
-                      }
-                      className="whitespace-nowrap rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
-                      title="Poner fecha de compra en hoy"
-                    >
-                      Hoy
-                    </button>
-                  </div>
-                </label>                 
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEdit((s) => ({
+                            ...(s as EditState),
+                            fecha_compra: todayYMDLocal(),
+                          }))
+                        }
+                        className="whitespace-nowrap rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
+                        title="Poner fecha de compra en hoy"
+                      >
+                        Hoy
+                      </button>
+                    </div>
+                  </label>
                   <label className="grid gap-1">
-                    <span className="text-sm text-neutral-300">Meses pagados</span>
+                    <span className="text-sm text-neutral-300">
+                      Meses pagados
+                    </span>
                     <input
                       type="number"
                       min={1}
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={String(edit.meses_pagados ?? '')}
+                      value={String(edit.meses_pagados ?? "")}
                       onChange={(e) =>
                         setEdit((s) => ({
                           ...(s as EditState),
-                          meses_pagados: e.target.value === '' ? null : Number(e.target.value),
+                          meses_pagados:
+                            e.target.value === ""
+                              ? null
+                              : Number(e.target.value),
                         }))
                       }
                     />
                   </label>
 
                   <label className="grid gap-1">
-                    <span className="text-sm text-neutral-300">Fecha vencimiento (auto)</span>
+                    <span className="text-sm text-neutral-300">
+                      Fecha vencimiento (auto)
+                    </span>
                     <input
                       type="date"
                       disabled
                       readOnly
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950/70 text-neutral-400 cursor-not-allowed"
-                      value={edit.fecha_vencimiento ?? ''}
+                      value={edit.fecha_vencimiento ?? ""}
                     />
                   </label>
 
                   <label className="grid gap-1">
-                    <span className="text-sm text-neutral-300">Total pagado</span>
+                    <span className="text-sm text-neutral-300">
+                      Total pagado
+                    </span>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.total_pagado ?? ''}
+                      value={edit.total_pagado ?? ""}
                       onChange={(e) =>
                         setEdit((s) => ({
                           ...(s as EditState),
-                          total_pagado: e.target.value === '' ? null : Number(e.target.value),
+                          total_pagado:
+                            e.target.value === ""
+                              ? null
+                              : Number(e.target.value),
                         }))
                       }
                     />
                   </label>
                   <label className="grid gap-1">
-                    <span className="text-sm text-neutral-300">Pagado proveedor</span>
+                    <span className="text-sm text-neutral-300">
+                      Pagado proveedor
+                    </span>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.total_pagado_proveedor ?? ''}
+                      value={edit.total_pagado_proveedor ?? ""}
                       onChange={(e) =>
                         setEdit((s) => ({
                           ...(s as EditState),
-                          total_pagado_proveedor: e.target.value === '' ? null : Number(e.target.value),
+                          total_pagado_proveedor:
+                            e.target.value === ""
+                              ? null
+                              : Number(e.target.value),
                         }))
                       }
                     />
                   </label>
                   <label className="grid gap-1">
-                    <span className="text-sm text-neutral-300">Total ganado</span>
+                    <span className="text-sm text-neutral-300">
+                      Total ganado
+                    </span>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.total_ganado ?? ''}
+                      value={edit.total_ganado ?? ""}
                       onChange={(e) =>
                         setEdit((s) => ({
                           ...(s as EditState),
-                          total_ganado: e.target.value === '' ? null : Number(e.target.value),
+                          total_ganado:
+                            e.target.value === ""
+                              ? null
+                              : Number(e.target.value),
                         }))
                       }
                     />
@@ -1284,8 +1841,13 @@ const filtered = useMemo(() => {
                     <textarea
                       rows={3}
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.comentario ?? ''}
-                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), comentario: e.target.value }))}
+                      value={edit.comentario ?? ""}
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          comentario: e.target.value,
+                        }))
+                      }
                     />
                   </label>
                 </div>
@@ -1303,7 +1865,7 @@ const filtered = useMemo(() => {
                     onClick={saveEdit}
                     disabled={saving}
                   >
-                    {saving ? 'Guardando…' : 'Guardar cambios'}
+                    {saving ? "Guardando…" : "Guardar cambios"}
                   </button>
                 </div>
               </div>
@@ -1315,7 +1877,10 @@ const filtered = useMemo(() => {
       {/* Modal eliminar (individual) */}
       {deleteTarget && (
         <ModalPortal>
-          <div className="fixed inset-0 z-50 bg-black/60 overflow-y-auto" onClick={() => !deleting && setDeleteTarget(null)}>
+          <div
+            className="fixed inset-0 z-50 bg-black/60 overflow-y-auto"
+            onClick={() => !deleting && setDeleteTarget(null)}
+          >
             <div className="min-h-screen flex items-center justify-center p-4">
               <div
                 className="w-full max-w-md rounded-xl border border-neutral-700 bg-neutral-900 p-4 text-neutral-100 shadow-xl"
@@ -1324,21 +1889,36 @@ const filtered = useMemo(() => {
                 aria-labelledby="modal-title"
                 aria-describedby="modal-desc"
               >
-                <h4 id="modal-title" className="text-lg font-semibold mb-2">Eliminar pantalla</h4>
+                <h4 id="modal-title" className="text-lg font-semibold mb-2">
+                  Eliminar pantalla
+                </h4>
                 <p id="modal-desc" className="text-sm text-neutral-300">
-                  {deleteTarget.label ? <><span className="opacity-80">({deleteTarget.label})</span><br/></> : null}
+                  {deleteTarget.label ? (
+                    <>
+                      <span className="opacity-80">({deleteTarget.label})</span>
+                      <br />
+                    </>
+                  ) : null}
                   {checkingArchive
-                    ? 'Verificando si es la última relación por correo y plataforma…'
+                    ? "Verificando si es la última relación por correo y plataforma…"
                     : canArchive
-                      ? 'Es la última pantalla con este correo en esta plataforma. Puedes enviarla al inventario antes de eliminar.'
-                      : 'Existen más pantallas con este correo en esta plataforma. Solo puedes eliminar definitivamente.'}
+                    ? "Es la última pantalla con este correo en esta plataforma. Puedes enviarla al inventario antes de eliminar."
+                    : "Existen más pantallas con este correo en esta plataforma. Solo puedes eliminar definitivamente."}
                 </p>
 
                 {deleteErr && (
-                  <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">{deleteErr}</div>
+                  <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">
+                    {deleteErr}
+                  </div>
                 )}
 
-                <div className={`mt-4 ${canArchive ? 'grid gap-2 sm:grid-cols-2' : 'flex justify-end gap-2'}`}>
+                <div
+                  className={`mt-4 ${
+                    canArchive
+                      ? "grid gap-2 sm:grid-cols-2"
+                      : "flex justify-end gap-2"
+                  }`}
+                >
                   {canArchive && (
                     <button
                       type="button"
@@ -1347,7 +1927,9 @@ const filtered = useMemo(() => {
                       className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-700 bg-emerald-800/40 px-3 py-2 hover:bg-emerald-800/60 focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:opacity-60"
                       title="Crear/asegurar inventario y eliminar"
                     >
-                      {deleting && deleteAction === 'archive' ? 'Enviando…' : 'Enviar al inventario'}
+                      {deleting && deleteAction === "archive"
+                        ? "Enviando…"
+                        : "Enviar al inventario"}
                     </button>
                   )}
 
@@ -1358,7 +1940,9 @@ const filtered = useMemo(() => {
                     className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-700 bg-red-800/40 px-3 py-2 hover:bg-red-800/60 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-60"
                     title="Eliminar sin archivar"
                   >
-                    {deleting && deleteAction === 'purge' ? 'Eliminando…' : 'Eliminar definitivamente'}
+                    {deleting && deleteAction === "purge"
+                      ? "Eliminando…"
+                      : "Eliminar definitivamente"}
                   </button>
                 </div>
 
@@ -1381,7 +1965,10 @@ const filtered = useMemo(() => {
       {/* Modal eliminación MASIVA */}
       {bulkOpen && (
         <ModalPortal>
-          <div className="fixed inset-0 z-50 bg-black/60 overflow-y-auto" onClick={() => !bulkProcessing && setBulkOpen(false)}>
+          <div
+            className="fixed inset-0 z-50 bg-black/60 overflow-y-auto"
+            onClick={() => !bulkProcessing && setBulkOpen(false)}
+          >
             <div className="min-h-screen flex items-center justify-center p-4">
               <div
                 className="w-full max-w-xl rounded-xl border border-neutral-700 bg-neutral-900 p-4 text-neutral-100 shadow-xl"
@@ -1390,25 +1977,36 @@ const filtered = useMemo(() => {
                 aria-labelledby="bulk-title"
                 aria-describedby="bulk-desc"
               >
-                <h4 id="bulk-title" className="text-lg font-semibold mb-2">Eliminar {bulkItems.length} pantalla(s)</h4>
+                <h4 id="bulk-title" className="text-lg font-semibold mb-2">
+                  Eliminar {bulkItems.length} pantalla(s)
+                </h4>
 
                 {bulkAssessing ? (
-                  <p className="text-sm text-neutral-300">Analizando registros para decidir inventario/eliminación…</p>
+                  <p className="text-sm text-neutral-300">
+                    Analizando registros para decidir inventario/eliminación…
+                  </p>
                 ) : (
                   <>
                     <p id="bulk-desc" className="text-sm text-neutral-300">
-                      Se verificará cada registro: si es la última relación por <strong>correo + plataforma</strong>, se enviará al inventario y luego se eliminará; en caso contrario, se eliminará definitivamente.
+                      Se verificará cada registro: si es la última relación por{" "}
+                      <strong>correo + plataforma</strong>, se enviará al
+                      inventario y luego se eliminará; en caso contrario, se
+                      eliminará definitivamente.
                     </p>
 
                     {bulkErr && (
-                      <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">{bulkErr}</div>
+                      <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">
+                        {bulkErr}
+                      </div>
                     )}
 
                     {bulkSummary && (
                       <div className="mt-3 rounded-lg border border-neutral-700 bg-neutral-800/40 p-2 text-sm">
                         <div>Total procesados: {bulkSummary.total}</div>
                         <div>Enviados a inventario: {bulkSummary.archived}</div>
-                        <div>Eliminados definitivamente: {bulkSummary.purged}</div>
+                        <div>
+                          Eliminados definitivamente: {bulkSummary.purged}
+                        </div>
                         <div>Fallidos: {bulkSummary.failed}</div>
                       </div>
                     )}
@@ -1416,9 +2014,14 @@ const filtered = useMemo(() => {
                     {bulkProcessing && (
                       <div className="mt-3">
                         <div className="h-2 w-full rounded bg-neutral-800 overflow-hidden">
-                          <div className="h-2 bg-emerald-600" style={{ width: `${bulkProgress}%` }} />
+                          <div
+                            className="h-2 bg-emerald-600"
+                            style={{ width: `${bulkProgress}%` }}
+                          />
                         </div>
-                        <div className="mt-1 text-xs text-neutral-400">{bulkProgress}%</div>
+                        <div className="mt-1 text-xs text-neutral-400">
+                          {bulkProgress}%
+                        </div>
                       </div>
                     )}
 
@@ -1426,7 +2029,11 @@ const filtered = useMemo(() => {
                       <button
                         type="button"
                         onClick={() => runBulk(true)}
-                        disabled={bulkAssessing || bulkProcessing || bulkItems.length === 0}
+                        disabled={
+                          bulkAssessing ||
+                          bulkProcessing ||
+                          bulkItems.length === 0
+                        }
                         className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-700 bg-emerald-800/40 px-3 py-2 hover:bg-emerald-800/60 focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:opacity-60"
                       >
                         Inventario (cuando aplique) + Eliminar
@@ -1435,7 +2042,11 @@ const filtered = useMemo(() => {
                       <button
                         type="button"
                         onClick={() => runBulk(false)}
-                        disabled={bulkAssessing || bulkProcessing || bulkItems.length === 0}
+                        disabled={
+                          bulkAssessing ||
+                          bulkProcessing ||
+                          bulkItems.length === 0
+                        }
                         className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-700 bg-red-800/40 px-3 py-2 hover:bg-red-800/60 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-60"
                       >
                         Eliminar definitivamente

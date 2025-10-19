@@ -438,7 +438,7 @@ EN EL COMPUTADOR: https://www.youtube.com/watch?v=2pYn4px0YWI`;
 
 ${bullet}
 
-*La nueva contraseña es:* ${nuevaClave}.
+*La nueva contraseña es:* ${nuevaClave} 
 No la compartas con nadie; ¡que estés súper bien!${notaPantalla}
 
 ${tips}`.trim();
