@@ -1,117 +1,145 @@
-// src/app/api/plataformas/[id]/route.ts
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
 
-type RouteParams = Promise<{ id: string }>;
-
-function parseId(v: string) {
-  const id = Number(v);
-  if (!Number.isInteger(id) || id <= 0) throw new Error('invalid-id');
-  return id;
+/** Lee y valida el id desde ctx.params (que puede ser Promise en Next 15) */
+async function getId(
+  params: { id?: string } | Promise<{ id?: string }>
+): Promise<number | null> {
+  const p = await params;
+  const n = Number(p?.id ?? "");
+  if (!Number.isInteger(n) || n <= 0) return null;
+  return n;
 }
 
-/* ======================= GET /api/plataformas/:id ======================= */
-export async function GET(_req: Request, { params }: { params: RouteParams }) {
-  try {
-    const { id: idStr } = await params;
-    const id = parseId(idStr);
+/* =========================================================
+ * GET /api/plataformas/:id
+ * ======================================================= */
+export async function GET(
+  _req: Request,
+  ctx: { params: { id?: string } | Promise<{ id?: string }> }
+) {
+  const id = await getId(ctx.params);
+  if (!id) {
+    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+  }
 
+  try {
     const row = await prisma.plataformas.findUnique({
       where: { id },
-      // sin select para no romper si el modelo no tiene algun campo opcional
+      select: { id: true, nombre: true, cantidad_pantallas: true },
     });
-    if (!row) return NextResponse.json({ error: 'not-found' }, { status: 404 });
 
-    return NextResponse.json(row);
-  } catch (e: any) {
-    if (e?.message === 'invalid-id') {
-      return NextResponse.json({ error: 'invalid-id' }, { status: 400 });
+    if (!row) {
+      return NextResponse.json({ error: "No encontrada" }, { status: 404 });
     }
-    return NextResponse.json({ error: 'read_failed' }, { status: 500 });
+
+    return NextResponse.json(row, { status: 200 });
+  } catch (err) {
+    console.error("GET /api/plataformas/[id] error:", err);
+    return NextResponse.json({ error: "No se pudo obtener" }, { status: 500 });
   }
 }
 
-/* =================== PATCH /api/plataformas/:id =================== */
-// Acepta { nombre?, cantidad_pantallas? } o { cantidadPantallas? }
-export async function PATCH(req: Request, { params }: { params: RouteParams }) {
+/* =========================================================
+ * PATCH /api/plataformas/:id
+ * Body: { nombre?: string, cantidad_pantallas?: number }
+ * ======================================================= */
+export async function PATCH(
+  _req: Request,
+  ctx: { params: { id?: string } | Promise<{ id?: string }> }
+) {
+  const id = await getId(ctx.params);
+  if (!id) {
+    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+  }
+
   try {
-    const { id: idStr } = await params;
-    const id = parseId(idStr);
+    const body = await _req.json().catch(() => ({} as any));
+    const data: Record<string, unknown> = {};
 
-    const raw = await req.json().catch(() => ({} as any));
-    const data: Record<string, any> = {};
-
-    // nombre
-    if (Object.prototype.hasOwnProperty.call(raw, 'nombre')) {
-      const nombre = String(raw.nombre ?? '').trim();
+    if (typeof body?.nombre === "string") {
+      const nombre = body.nombre.trim();
       if (!nombre) {
         return NextResponse.json(
-          { error: 'El nombre no puede estar vacío.' },
+          { error: "El nombre no puede estar vacío." },
           { status: 400 }
         );
       }
       if (nombre.length > 100) {
         return NextResponse.json(
-          { error: 'Máximo 100 caracteres.' },
+          { error: "Máximo 100 caracteres." },
           { status: 400 }
         );
       }
       data.nombre = nombre;
     }
 
-    // cantidad_pantallas (snake o camel)
-    if (
-      Object.prototype.hasOwnProperty.call(raw, 'cantidad_pantallas') ||
-      Object.prototype.hasOwnProperty.call(raw, 'cantidadPantallas')
-    ) {
-      const cantRaw =
-        raw.cantidad_pantallas ?? raw.cantidadPantallas ?? null;
-      const cant = Number(cantRaw);
-      if (!Number.isInteger(cant) || cant < 0) {
+    if (body?.cantidad_pantallas !== undefined && body?.cantidad_pantallas !== null) {
+      const n = Number(body.cantidad_pantallas);
+      if (!Number.isInteger(n) || n < 0) {
         return NextResponse.json(
-          { error: 'cantidad_pantallas debe ser un entero ≥ 0' },
+          { error: '"cantidad_pantallas" debe ser un entero >= 0.' },
           { status: 400 }
         );
       }
-      data.cantidad_pantallas = cant; // 👈 campo esperado en Prisma
+      data.cantidad_pantallas = n;
     }
 
-    if (!Object.keys(data).length) {
-      return NextResponse.json({ error: 'no-fields' }, { status: 400 });
-    }
-
-    const row = await prisma.plataformas.update({
+    const updated = await prisma.plataformas.update({
       where: { id },
       data,
-      // sin select para devolver todo y que veas el valor actualizado
+      select: { id: true, nombre: true, cantidad_pantallas: true },
     });
 
-    return NextResponse.json(row);
+    return NextResponse.json(updated, { status: 200 });
   } catch (err: any) {
-    if (err?.message === 'invalid-id') {
-      return NextResponse.json({ error: 'invalid-id' }, { status: 400 });
-    }
-    if (err?.code === 'P2025') {
-      return NextResponse.json({ error: 'not-found' }, { status: 404 });
-    }
-    if (err?.code === 'P2002') {
+    if (err?.code === "P2002") {
       return NextResponse.json(
-        { error: 'Ya existe una plataforma con ese nombre.' },
+        { error: "Ya existe una plataforma con ese nombre." },
         { status: 409 }
       );
     }
-    return NextResponse.json({ error: 'update_failed' }, { status: 500 });
+    console.error("PATCH /api/plataformas/[id] error:", err);
+    return NextResponse.json(
+      { error: "No se pudo actualizar" },
+      { status: 500 }
+    );
   }
 }
 
-// Soporte si algún proxy no permite PATCH
-export async function PUT(req: Request, ctx: { params: RouteParams }) {
-  return PATCH(req, ctx);
+/* =========================================================
+ * DELETE /api/plataformas/:id
+ * ======================================================= */
+export async function DELETE(
+  _req: Request,
+  ctx: { params: { id?: string } | Promise<{ id?: string }> }
+) {
+  const id = await getId(ctx.params);
+  if (!id) {
+    return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+  }
+
+  try {
+    await prisma.plataformas.delete({ where: { id } });
+    return NextResponse.json({ ok: true }, { status: 200 });
+  } catch (err: any) {
+    if (err?.code === "P2003") {
+      return NextResponse.json(
+        { message: "No se puede eliminar: la plataforma tiene registros asociados." },
+        { status: 409 }
+      );
+    }
+    console.error("DELETE /api/plataformas/[id] error:", err);
+    return NextResponse.json({ error: "No se pudo eliminar" }, { status: 500 });
+  }
 }
 
+/* =========================================================
+ * OPTIONS /api/plataformas/:id
+ * ======================================================= */
 export function OPTIONS() {
   return NextResponse.json({}, { status: 204 });
 }

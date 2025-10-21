@@ -166,6 +166,7 @@ async function refreshStampOnce(): Promise<number> {
 }
 
 /* ===================== Fetch helpers ===================== */
+
 async function fetchListSafe(urls: string[]): Promise<any[]> {
   for (const url of urls) {
     try {
@@ -238,14 +239,26 @@ function resolveMaxPantallas(p: any): number {
   return val ?? 1;
 }
 
-async function fetchPlataformaById(pid: number): Promise<any | null> {
-  try {
-    const r = await fetch(`/api/plataformas/${pid}`, { cache: "no-store" });
-    if (!r.ok) return null;
-    return await r.json();
-  } catch {
-    return null;
-  }
+function capacityForPlatform(
+  pid: number | null | undefined,
+  plataformas: any[]
+): number | null {
+  if (!pid) return null;
+  const p = plataformas.find((x) => Number(x.id) === Number(pid));
+  if (!p) return null;
+
+  // igual que en el viewer: acepta snake/camel y castea
+  const raw =
+    (p as any).cantidad_pantallas ??
+    (p as any).cantidadPantallas ??
+    (p as any).max_pantallas ??
+    (p as any).pantallas ??
+    (p as any).perfiles ??
+    null;
+
+  if (raw === null || raw === undefined || raw === "") return null; // desconocida
+  const cap = Number(raw);
+  return Number.isFinite(cap) && cap > 0 ? cap : null;
 }
 
 async function fetchPantallasCountByEmailPlat(
@@ -274,15 +287,11 @@ async function fetchPantallasCountByEmailPlat(
 
 async function countPantallasSmart(
   email: string,
-  cuentaId?: number,
+  _cuentaId?: number, // ignorado
   plataformaId?: number
 ): Promise<number> {
   try {
-    if (cuentaId) {
-      const n = await fetchPantallasCountByCuentaId(cuentaId);
-      const byEmail = await fetchPantallasCountByEmailPlat(email, plataformaId);
-      return Math.max(n, byEmail);
-    }
+    // Contar SIEMPRE por correo + plataforma
     return await fetchPantallasCountByEmailPlat(email, plataformaId);
   } catch {
     return 0;
@@ -461,10 +470,17 @@ export default function FormPantallas() {
     comentario: "",
   });
 
+  // arriba, junto a otros useState del módulo de correos
+  const [deletingAcctId, setDeletingAcctId] = useState<number | null>(null);
+
   const [availableSlots, setAvailableSlots] = useState<number[]>([]);
   const [maxAllowed, setMaxAllowed] = useState<number>(1);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
+  const [freeByEmail, setFreeByEmail] = useState<Record<string, number | null>>(
+    {}
+  );
+
   const {
     plataformas,
     loading: platLoading,
@@ -641,6 +657,35 @@ export default function FormPantallas() {
     return m;
   }, [plataformas]);
 
+  // 📊 Mapa de capacidades por plataforma (sin fetch extra)
+  const platformCapacity = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const p of plataformas) {
+      const raw =
+        (p as any).cantidad_pantallas ??
+        (p as any).cantidadPantallas ??
+        (p as any).max_pantallas ??
+        (p as any).pantallas ??
+        (p as any).perfiles ??
+        null;
+      const cap = Number(raw);
+      m.set(Number(p.id), Number.isFinite(cap) && cap > 0 ? cap : 0);
+    }
+    return m;
+  }, [plataformas]);
+
+  useEffect(() => {
+    if (!form.plataforma_id) {
+      setMaxAllowed(0);
+      return;
+    }
+    const plat = plataformas.find(
+      (p) => Number(p.id) === Number(form.plataforma_id)
+    );
+    const cap = plat ? resolveMaxPantallas(plat as any) : 0;
+    setMaxAllowed(cap);
+  }, [form.plataforma_id, plataformas]);
+
   const lastPlatformId = useMemo<number | null>(() => {
     const raw =
       typeof window !== "undefined"
@@ -711,35 +756,26 @@ export default function FormPantallas() {
       setSlotsError(null);
       setAvailableSlots([]);
 
+      // 🧭 1) Definir pid aquí:
       const pid = form.plataforma_id;
       const email = normalizeEmail(form.correo);
-      if (!pid || !email) return; // Falta info básica
+      if (!pid || !email) return; // si falta plataforma o correo, no sigue
 
       setLoadingSlots(true);
       try {
-        // 1) Lee la plataforma y determina el máximo permitido
-        let p: any = plataformas.find((x) => x.id === pid);
-        let maxAllowed = resolveMaxPantallas(p);
-
-        // Si el hook no trae cantidad_pantallas (o maxAllowed <= 1 por falta de dato), intenta fetch directo
-        if (!p || maxAllowed <= 1) {
-          const pFull = await fetchPlataformaById(pid);
-          if (pFull) {
-            p = { ...p, ...pFull };
-            maxAllowed = resolveMaxPantallas(p);
-          }
-        }
-
-        // ⬅️ NUEVO: persiste el máximo en state para usarlo al filtrar sugeridos
+        // 🧮 2) Obtener la capacidad máxima desde plataformas (sin fetch)
+        const plat = plataformas.find((p) => Number(p.id) === Number(pid));
+        const maxAllowed = plat ? resolveMaxPantallas(plat as any) : 0;
         setMaxAllowed(maxAllowed);
 
-        // 2) Pantallas ocupadas por esa cuenta/correo en esa plataforma
+        // 📊 3) Traer pantallas ya usadas por ese correo/cuenta
         const rows = await fetchPantallasByEmailOrCuenta(
           email,
           form.cuenta_id ?? undefined,
           pid
         );
 
+        // 🧼 4) Construir set de pantallas ocupadas
         const taken = new Set<number>();
         for (const r of rows) {
           const raw = (r?.nro_pantalla ?? "").toString().trim();
@@ -747,31 +783,29 @@ export default function FormPantallas() {
           if (Number.isInteger(n) && n >= 1) taken.add(n);
         }
 
-        // 3) Libres = [1..maxAllowed] \ taken
+        // 🆓 5) Calcular pantallas disponibles
         const free: number[] = [];
         for (let i = 1; i <= maxAllowed; i++) {
           if (!taken.has(i)) free.push(i);
         }
 
-        if (!cancelled) {
-          setAvailableSlots(free);
-          // Si la selección actual ya no es válida, limpiar
-          if (
-            form.nro_pantalla &&
-            (!free.includes(Number(form.nro_pantalla)) ||
-              !Number(form.nro_pantalla))
-          ) {
-            setForm((s) => ({ ...s, nro_pantalla: "" }));
-          }
+        // ✍️ 6) Actualizar estado
+        setAvailableSlots(free);
+
+        // Si el nro_pantalla actual no es válido, se limpia
+        if (
+          form.nro_pantalla &&
+          (!free.includes(Number(form.nro_pantalla)) ||
+            !Number(form.nro_pantalla))
+        ) {
+          setForm((s) => ({ ...s, nro_pantalla: "" }));
         }
       } catch (e: any) {
-        if (!cancelled) {
-          setSlotsError(
-            e?.message ?? "No se pudieron calcular las pantallas disponibles"
-          );
-        }
+        setSlotsError(
+          e?.message ?? "No se pudieron calcular las pantallas disponibles"
+        );
       } finally {
-        if (!cancelled) setLoadingSlots(false);
+        setLoadingSlots(false);
       }
     }
 
@@ -792,6 +826,65 @@ export default function FormPantallas() {
     setOpen(false);
   }, [form.plataforma_id]);
 
+  async function deleteCuentaCompartidaByEmail(email: string) {
+    const pid = form.plataforma_id;
+    const id = acctIdMap[email];
+    if (!pid || !id) return;
+
+    // confirmación simple
+    if (!window.confirm(`¿Eliminar la cuenta compartida\n${email}?`)) return;
+
+    setDeletingAcctId(id);
+    setErrEmails(null);
+
+    try {
+      const res = await fetch(`/api/cuentascompartidas/${id}`, {
+        method: "DELETE",
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        // 409: tiene pantallas asociadas
+        throw new Error(j?.error ?? "No se pudo eliminar la cuenta");
+      }
+
+      // ✅ Quitar de caches persistentes
+      const map = getAcctMap(pid) || {};
+      delete map[email];
+      writeAcctCache(pid, map);
+
+      // ✅ Quitar de estados en memoria
+      setAcctIdMap((m) => {
+        const { [email]: _, ...rest } = m;
+        return rest;
+      });
+      setAcctPassMap((m) => {
+        const { [email]: _, ...rest } = m;
+        return rest;
+      });
+
+      // quitar opción del dropdown
+      setOptions((opts) =>
+        opts.filter((o) => !(o.source === "acct" && o.email === email))
+      );
+
+      // limpiar cupos calculados para esa opción
+      setFreeByEmail((m) => {
+        const copy = { ...m };
+        delete copy[`${pid}::acct::${email}`];
+        return copy;
+      });
+
+      // refrescar sello para invalidar vistas en otras pestañas
+      await refreshStampOnce();
+    } catch (e: any) {
+      setErrEmails(e?.message ?? "Error eliminando cuenta");
+    } finally {
+      setDeletingAcctId(null);
+    }
+  }
+
   async function loadEmails() {
     if (!form.plataforma_id) return;
     setLoadingEmails(true);
@@ -799,17 +892,15 @@ export default function FormPantallas() {
     try {
       const pid = form.plataforma_id;
 
-      // 0) Intento usar caches persistentes
+      // 0) Caches persistentes
       let acctMap = getAcctMap(pid); // { [email]: {id, pass} }
       let invMap = getInvMap(pid); // { [email]: {pass} }
 
-      // 1) Si falta alguno, fetch y persiste
+      // 1) Completar caches si faltan
       if (!acctMap) {
         const rAcct = await fetch(
-          `/api/cuentascompartidas?plataforma_id=${pid}`,
-          {
-            cache: "no-store",
-          }
+          `/api/cuentascompartidas?plataforma_id=${pid}&limit=10000`,
+          { cache: "no-store" }
         );
         if (!rAcct.ok) throw new Error("No se pudieron cargar correos");
         const acctRows: Cuenta[] = await rAcct.json();
@@ -827,10 +918,8 @@ export default function FormPantallas() {
       }
       if (!invMap) {
         const rInv = await fetch(
-          `/api/inventario?plataforma_id=${pid}&limit=100`,
-          {
-            cache: "no-store",
-          }
+          `/api/inventario?plataforma_id=${pid}&limit=10000`,
+          { cache: "no-store" }
         );
         const m: Record<string, InvEntry> = {};
         if (rInv.ok) {
@@ -845,26 +934,39 @@ export default function FormPantallas() {
         invMap = m;
       }
 
-      // 2) Construir opciones (hasta 20, priorizando cuentas compartidas)
-      const seen = new Set<string>();
-      const nextOptions: Array<{ email: string; source: "acct" | "inv" }> = [];
+      // 2) Construir candidatos con metadatos (incluye cuenta_id cuando existe)
+      type Cand = {
+        email: string;
+        source: "acct" | "inv";
+        cuentaId?: number | null;
+      };
 
-      for (const email of Object.keys(acctMap)) {
-        if (seen.has(email)) continue;
-        seen.add(email);
-        nextOptions.push({ email, source: "acct" });
-        if (nextOptions.length >= 20) break;
+      const seen = new Set<string>();
+      const candidates: Cand[] = [];
+
+      // prioriza cuentascompartidas
+      for (const [email, entry] of Object.entries(acctMap)) {
+        const e = email.toLowerCase();
+        if (seen.has(e)) continue;
+        seen.add(e);
+        candidates.push({
+          email: e,
+          source: "acct",
+          cuentaId: entry.id ?? null,
+        });
+        if (candidates.length >= 50) break;
       }
-      if (nextOptions.length < 20) {
+      if (candidates.length < 50) {
         for (const email of Object.keys(invMap)) {
-          if (seen.has(email)) continue;
-          seen.add(email);
-          nextOptions.push({ email, source: "inv" });
-          if (nextOptions.length >= 20) break;
+          const e = email.toLowerCase();
+          if (seen.has(e)) continue;
+          seen.add(e);
+          candidates.push({ email: e, source: "inv", cuentaId: null });
+          if (candidates.length >= 50) break;
         }
       }
 
-      // 3) Setear maps locales
+      // 3) Mapas locales de ids/pass (para completar al seleccionar)
       const nextAcctId: Record<string, number> = {};
       const nextAcctPass: Record<string, string | null> = {};
       for (const [email, entry] of Object.entries(acctMap)) {
@@ -878,22 +980,63 @@ export default function FormPantallas() {
       setAcctIdMap(nextAcctId);
       setAcctPassMap(nextAcctPass);
       setInvPassMap(nextInvPass);
-      setOptions(nextOptions);
 
-      // 4) Conteos smart (con cache por email+plataforma)
+      // 4) Capacidad real de la plataforma
+      const cap = capacityForPlatform(pid, plataformas) ?? 0;
+      const freeMap: Record<string, number | null> = {};
+      const emailCountsLocal: Record<string, number> = {};
+
+      if (!cap || cap <= 0) {
+        // sin capacidad definida → no sugerimos nada
+        setFreeByEmail({});
+        setEmailCounts({});
+        setOptions([]);
+        return;
+      }
+
+      // 5) Calcula usados y filtra SOLO los que tengan cupo > 0
+      const withFree: Cand[] = [];
+
       await Promise.all(
-        nextOptions.map(async ({ email, source }) => {
-          const cached = getCountFromCache(pid, email);
-          if (cached !== undefined) {
-            setEmailCounts((m) => ({ ...m, [email]: cached }));
-            return;
+        candidates.map(async (c) => {
+          const key = `${pid}::${c.source}::${c.email}`;
+          let used = 0;
+
+          if (c.source === "acct" && c.cuentaId) {
+            // 👈 SIEMPRE por cuenta_id para cuentascompartidas
+            used = await fetchPantallasCountByCuentaId(c.cuentaId);
+          } else {
+            // inventario: por correo+plataforma
+            used = await fetchPantallasCountByEmailPlat(c.email, pid);
           }
-          const cid = source === "acct" ? nextAcctId[email] : undefined;
-          const n = await countPantallasSmart(email, cid, pid);
-          setEmailCounts((m) => ({ ...m, [email]: n }));
-          setCountInCache(pid, email, n);
+
+          const free = Math.max(0, cap - used);
+          freeMap[key] = free;
+
+          // badge del input: por correo+plataforma (una sola vez)
+          if (emailCountsLocal[c.email] == null) {
+            const countByEmail = await fetchPantallasCountByEmailPlat(
+              c.email,
+              pid
+            );
+            emailCountsLocal[c.email] = countByEmail;
+            setCountInCache(pid, c.email, countByEmail);
+          }
+
+          if (free > 0) withFree.push(c); // 👈 solo pasan los que tienen cupo
         })
       );
+
+      // 6) Persistir estados y opciones (solo con cupo)
+      setFreeByEmail(freeMap);
+      setEmailCounts((prev) => ({ ...prev, ...emailCountsLocal }));
+
+      // Mantén prioridad: primero cuentascompartidas, luego inventario
+      const ordered = withFree.sort((a, b) =>
+        a.source === b.source ? 0 : a.source === "acct" ? -1 : 1
+      );
+
+      setOptions(ordered.slice(0, 20));
     } catch (e: any) {
       setErrEmails(e?.message ?? "No se pudieron cargar correos");
       setOptions([]);
@@ -911,13 +1054,16 @@ export default function FormPantallas() {
     setOpen(true);
   };
 
-  const ensureHasFree = (email: string) => {
-    const used = emailCounts[email];
-    return typeof used === "number" && maxAllowed - used > 0;
+  const ensureHasFree = (email: string, source: "acct" | "inv") => {
+    const pid = form.plataforma_id;
+    if (!pid) return false;
+    const key = `${pid}::${source}::${email}`;
+    const free = freeByEmail[key];
+    return typeof free === "number" && free > 0;
   };
 
   const pickFromInv = (email: string) => {
-    if (!ensureHasFree(email)) return; // no permitir si no hay cupo
+    if (!ensureHasFree(email, "inv")) return;
     const pass = invPassMap[email] ?? null;
     setForm((s) => ({
       ...s,
@@ -928,7 +1074,7 @@ export default function FormPantallas() {
   };
 
   const pickFromAcct = (email: string) => {
-    if (!ensureHasFree(email)) return; // no permitir si no hay cupo
+    if (!ensureHasFree(email, "acct")) return;
     const cid = acctIdMap[email];
     const pass = acctPassMap[email];
     setForm((s) => ({
@@ -1377,16 +1523,15 @@ export default function FormPantallas() {
       setLoading(false);
     }
   }
-
-  /* ===================== UI ===================== */
-
   const visibleOptions = useMemo(() => {
-    if (!maxAllowed || maxAllowed <= 0) return [];
-    return options.filter(({ email }) => {
-      const used = emailCounts[email];
-      return typeof used === "number" && maxAllowed - used > 0; // solo si hay cupos
+    const pid = form.plataforma_id;
+    if (!pid || !options.length) return [];
+    return options.filter(({ email, source }) => {
+      const key = `${pid}::${source}::${email}`;
+      const free = freeByEmail[key];
+      return typeof free === "number" && free > 0;
     });
-  }, [options, emailCounts, maxAllowed]);
+  }, [options, freeByEmail, form.plataforma_id]);
 
   const badge = (() => {
     const key = normalizeEmail(form.correo);
@@ -1529,39 +1674,62 @@ export default function FormPantallas() {
                     <ul className="max-h-72 overflow-auto">
                       {visibleOptions.length === 0 && (
                         <li className="px-3 py-2 text-neutral-500">
-                          {Object.keys(emailCounts).length === 0
+                          {loadingEmails
                             ? "Calculando cupos…"
-                            : "Sin sugerencias con cupos disponibles"}
+                            : "Sin correos con cupos disponibles"}
                         </li>
                       )}
 
                       {visibleOptions.map(({ email, source }) => {
-                        const n = emailCounts[email] ?? 0;
-                        const free = Math.max(0, maxAllowed - n);
+                        const pid = form.plataforma_id;
+                        const key = `${pid}::${source}::${email}`;
+                        const free = freeByEmail[key]; // ✅ número o null
+
+                        // (defensa extra) si por algo llega una opción sin cupo, no la muestres
+                        if (!(typeof free === "number" && free > 0))
+                          return null;
+
                         return (
                           <li key={`${source}-${email}`}>
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() =>
-                                source === "inv"
-                                  ? pickFromInv(email)
-                                  : pickFromAcct(email)
-                              }
-                              className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-neutral-800"
-                            >
-                              <span className="truncate">{email}</span>
-                              <span className="ml-2 flex items-center gap-2">
+                            <div className="flex w-full items-center justify-between px-3 py-2 hover:bg-neutral-800">
+                              {/* Botón de selección */}
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() =>
+                                  source === "inv"
+                                    ? pickFromInv(email)
+                                    : pickFromAcct(email)
+                                }
+                                className="flex-1 min-w-0 text-left"
+                              >
+                                <span className="truncate">{email}</span>
+                              </button>
+
+                              <div className="ml-2 flex items-center gap-2">
                                 {source === "inv" && (
                                   <span className="text-[10px] rounded-full px-2 py-[1px] border border-emerald-400/70 text-emerald-300">
                                     INV
                                   </span>
                                 )}
-                                <span className="text-xs opacity-70">
-                                  {free > 0 ? `cupos: ${free}` : ""}
-                                </span>
-                              </span>
-                            </button>
+                                <span className="text-xs opacity-70">{`cupos: ${free}`}</span>
+
+                                {/* 🗑️ BOTÓN ELIMINAR — solo si es una cuenta compartida */}
+                                {source === "acct" && (
+                                  <button
+                                    type="button"
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      deleteCuentaCompartidaByEmail(email);
+                                    }}
+                                    className="ml-1 text-xs rounded px-2 py-[3px] border border-red-700/60 text-red-300 hover:bg-red-900/30"
+                                  >
+                                    Eliminar
+                                  </button>
+                                )}
+                              </div>
+                            </div>
                           </li>
                         );
                       })}

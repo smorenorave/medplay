@@ -597,6 +597,12 @@ export default function PantallasViewer() {
     });
   }, [rows, q, platFilter]);
 
+  // 🔸 justo después de const filtered = useMemo(...)
+
+  const [platCaps, setPlatCaps] = useState<
+    Map<number, { nombre: string; capacidad: number }>
+  >(new Map());
+
   // Normaliza email
   const emailKey = (s?: string | null) => (s ?? "").trim().toLowerCase();
 
@@ -644,6 +650,7 @@ export default function PantallasViewer() {
   }, [rows]);
 
   // Helper que arma los items para los badges de un email dado
+  // REEMPLAZA tu función actual por esta
   function getPerPlatformForEmail(email: string) {
     const norm = (s?: string | null) => (s ?? "").trim().toLowerCase();
     const em = norm(email);
@@ -656,18 +663,33 @@ export default function PantallasViewer() {
       if (Number.isFinite(pid)) seen.add(pid);
     }
 
-    const items: Array<{
+    type Item = {
       pid: number;
       name: string;
       used: number;
-      capacity: number | null;
-      available: number | null;
-    }> = [];
+      capacity: number | null; // null = desconocida
+      available: number | null; // null = desconocida
+    };
+
+    const items: Item[] = [];
     for (const pid of seen) {
-      const name =
-        plataformas.find((p) => Number(p.id) === pid)?.nombre ?? `#${pid}`;
-      const capacity = capacityByPlatform.get(pid) ?? null; // puede ser null (desconocida)
       const used = usedByEmailPlat.get(`${pid}__${em}`) ?? 0;
+
+      // nombre y capacidad: primero hook, si no existe usa lo traído por /api/plataformas/:id
+      const hookCap = capacityByPlatform.get(pid); // number | null
+      const fetched = platCaps.get(pid); // { nombre, capacidad } | undefined
+      const capacity =
+        hookCap != null
+          ? hookCap
+          : fetched?.capacidad != null
+          ? Number(fetched.capacidad)
+          : null;
+
+      const name =
+        plataformas.find((p) => Number(p.id) === pid)?.nombre ??
+        fetched?.nombre ??
+        `#${pid}`;
+
       const available = capacity == null ? null : Math.max(0, capacity - used);
       items.push({ pid, name, used, capacity, available });
     }
@@ -1305,112 +1327,38 @@ export default function PantallasViewer() {
                           • {g.rows.length} registro(s)
                         </span>
                         {getPerPlatformForEmail(g.email).map((pp) => {
-                          // ❶ Si aún no tenemos capacidad, no pintes rojo: muestra “capacidad desconocida”
-                          if (pp.capacity == null) {
-                            return (
-                              <span
-                                key={pp.pid}
-                                className="ml-2 inline-flex items-center gap-2 rounded-md border px-2 py-0.5 text-xs border-neutral-600 bg-neutral-800/40 text-neutral-200"
-                                title={`${pp.name} • capacidad: desconocida • usadas: ${pp.used}`}
-                              >
-                                <strong className="font-medium">
-                                  {pp.name}
-                                </strong>
-                                <span>· Capacidad desconocida</span>
-                              </span>
-                            );
-                          }
+                          const cap = pp.capacity; // puede ser null si no se conoce aún
+                          const avail = pp.available; // ya viene calculado (null si cap==null)
 
-                          const available = pp.available ?? 0;
-                          const ok = available > 0;
+                          const cls =
+                            avail == null
+                              ? "border-neutral-600 bg-neutral-800/40 text-neutral-200"
+                              : avail > 0
+                              ? "border-emerald-700 bg-emerald-800/40 text-emerald-100"
+                              : "border-rose-700 bg-rose-900/40 text-rose-100";
 
                           return (
                             <span
                               key={pp.pid}
-                              className={
-                                "ml-2 inline-flex items-center gap-2 rounded-md border px-2 py-0.5 text-xs " +
-                                (ok
-                                  ? "border-emerald-700 bg-emerald-800/40 text-emerald-100"
-                                  : "border-rose-700 bg-rose-900/40 text-rose-100")
+                              className={`ml-2 inline-flex items-center gap-2 rounded-md border px-2 py-0.5 text-xs ${cls}`}
+                              title={
+                                cap == null
+                                  ? `${pp.name} • capacidad: desconocida • usadas: ${pp.used}`
+                                  : `${pp.name} • capacidad: ${cap} • usadas: ${pp.used}`
                               }
-                              title={`${pp.name} • capacidad: ${pp.capacity} • usadas: ${pp.used}`}
                             >
                               <strong className="font-medium">{pp.name}</strong>
                               <span>
                                 ·{" "}
-                                {ok
-                                  ? `${available} disponibles`
+                                {cap == null
+                                  ? "Capacidad desconocida"
+                                  : avail! > 0
+                                  ? `${avail} disponibles`
                                   : "Sin pantallas disponibles"}
                               </span>
                             </span>
                           );
                         })}
-
-                        {/* Badges calculadas en línea (sin cambiar groupedByEmail) */}
-                        {(() => {
-                          const norm = (s?: string | null) =>
-                            (s ?? "").trim().toLowerCase();
-                          const em = norm(g.email);
-
-                          // mapas de capacidad y nombre por plataforma (desde hook)
-                          const capBy = new Map<number, number>();
-                          const nameBy = new Map<number, string>();
-                          for (const p of plataformas) {
-                            capBy.set(
-                              Number(p.id),
-                              Number((p as any).cantidad_pantallas ?? 0)
-                            );
-                            nameBy.set(
-                              Number(p.id),
-                              String(p.nombre ?? `#${p.id}`)
-                            );
-                          }
-
-                          // usadas por plataforma para ESTE correo (sobre todas las filas)
-                          const usedByPid = new Map<number, number>();
-                          for (const rr of rows) {
-                            if (norm(rr.correo) !== em) continue;
-                            if (rr.plataforma_id == null) continue;
-                            const pid = Number(rr.plataforma_id);
-                            usedByPid.set(pid, (usedByPid.get(pid) ?? 0) + 1);
-                          }
-
-                          // construir ítems solo para plataformas donde el correo tiene algo
-                          const items = Array.from(usedByPid.entries())
-                            .map(([pid, used]) => {
-                              const capacity = capBy.get(pid) ?? 0;
-                              const available = Math.max(0, capacity - used);
-                              return {
-                                pid,
-                                name: nameBy.get(pid) ?? `#${pid}`,
-                                used,
-                                capacity,
-                                available,
-                              };
-                            })
-                            .sort((a, b) => a.name.localeCompare(b.name));
-
-                          return items.map((pp) => (
-                            <span
-                              key={pp.pid}
-                              className={
-                                "ml-2 inline-flex items-center gap-2 rounded-md border px-2 py-0.5 text-xs " +
-                                (pp.available > 0
-                                  ? "border-emerald-700 bg-emerald-800/40 text-emerald-100"
-                                  : "border-rose-700 bg-rose-900/40 text-rose-100")
-                              }
-                              title={`${pp.name} • capacidad: ${pp.capacity} • usadas: ${pp.used}`}
-                            >
-                              <strong className="font-medium">{pp.name}</strong>
-                              <span>
-                                ·{" "}
-                                {pp.available > 0
-                                  ? `${pp.available} disponibles`
-                                  : "Sin pantallas disponibles"}
-                              </span>
-                            </span>
-                          ));
-                        })()}
                       </div>
                     </td>
                   </tr>
