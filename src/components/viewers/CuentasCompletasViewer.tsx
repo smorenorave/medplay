@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { usePlataformas } from '@/hooks/usePlataformas';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { usePlataformas } from "@/hooks/usePlataformas";
 
 /* =========================================================
  * Tipos
@@ -15,14 +15,15 @@ type Cuenta = {
   correo: string | null;
   contrasena: string | null;
   proveedor: string | null;
-  fecha_compra: string | null;       // YYYY-MM-DD
-  fecha_vencimiento: string | null;  // YYYY-MM-DD (auto)
+  fecha_compra: string | null; // YYYY-MM-DD
+  fecha_vencimiento: string | null; // YYYY-MM-DD (auto)
   meses_pagados: number | null;
   total_pagado: number | null;
   total_pagado_proveedor: number | null;
   total_ganado: number | null;
   estado: string | null;
   comentario: string | null;
+  cuenta_caida: boolean | null;
 };
 type EditState = Partial<Cuenta> & { id: number };
 
@@ -30,27 +31,27 @@ type EditState = Partial<Cuenta> & { id: number };
  * Config
  * ======================================================= */
 const REFETCH_ON_FOCUS = false;
-const STALE_AFTER_MS   = 5 * 60_000;
-const STAMP_TTL_MS     = 5 * 30_000;
+const STALE_AFTER_MS = 5 * 60_000;
+const STAMP_TTL_MS = 5 * 30_000;
 let dateEl: HTMLInputElement | null = null;
 /* =========================================================
  * Cache y sync
  * ======================================================= */
-const LS_CACHE_KEY     = '__cuentas_cache_v3';
-const LS_REMOTE_STAMP  = '__cuentas_remote_stamp';
-const BC_NAME          = 'cuentas_mutations_bc';
+const LS_CACHE_KEY = "__cuentas_cache_v3";
+const LS_REMOTE_STAMP = "__cuentas_remote_stamp";
+const BC_NAME = "cuentas_mutations_bc";
 
 type CacheShape = { rows: Cuenta[]; ts: number };
 
-const hasWindow = () => typeof window !== 'undefined';
+const hasWindow = () => typeof window !== "undefined";
 const n = (x: unknown) =>
-  x == null || x === '' || Number.isNaN(Number(x)) ? null : Number(x);
+  x == null || x === "" || Number.isNaN(Number(x)) ? null : Number(x);
 
 const todayYMDLocal = () => {
   const d = new Date();
   const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
 };
 
@@ -58,7 +59,7 @@ function normalizeRow(r: any): Cuenta {
   return {
     id: Number(r.id),
     plataforma_id: n(r.plataforma_id),
-    contacto: String(r.contacto ?? ''),
+    contacto: String(r.contacto ?? ""),
     nombre: r.nombre ?? null,
     correo: r.correo ?? null,
     contrasena: r.contrasena ?? null,
@@ -68,10 +69,13 @@ function normalizeRow(r: any): Cuenta {
     meses_pagados: n(r.meses_pagados),
     total_pagado: r.total_pagado == null ? null : Number(r.total_pagado),
     total_pagado_proveedor:
-      r.total_pagado_proveedor == null ? null : Number(r.total_pagado_proveedor),
+      r.total_pagado_proveedor == null
+        ? null
+        : Number(r.total_pagado_proveedor),
     total_ganado: r.total_ganado == null ? null : Number(r.total_ganado),
     estado: r.estado ?? null,
     comentario: r.comentario ?? null,
+    cuenta_caida: r.cuenta_caida ?? false,
   };
 }
 
@@ -87,8 +91,11 @@ function readCache(): CacheShape | null {
 function writeCache(rows: Cuenta[], remoteStamp?: number) {
   if (!hasWindow()) return;
   try {
-    localStorage.setItem(LS_CACHE_KEY, JSON.stringify({ rows, ts: Date.now() }));
-    if (typeof remoteStamp === 'number') {
+    localStorage.setItem(
+      LS_CACHE_KEY,
+      JSON.stringify({ rows, ts: Date.now() })
+    );
+    if (typeof remoteStamp === "number") {
       localStorage.setItem(LS_REMOTE_STAMP, String(remoteStamp));
     }
   } catch {}
@@ -117,7 +124,7 @@ function removeFromCache(id: number) {
 function broadcastInvalidate() {
   try {
     const bc = new BroadcastChannel(BC_NAME);
-    bc.postMessage({ type: 'invalidate-cuentas' });
+    bc.postMessage({ type: "invalidate-cuentas" });
     bc.close();
   } catch {}
 }
@@ -127,10 +134,12 @@ function broadcastInvalidate() {
  * ======================================================= */
 async function fetchStamp(): Promise<number> {
   try {
-    const r = await fetch('/api/cuentascompletas/stamp', { cache: 'no-store' });
+    const r = await fetch("/api/cuentascompletas/stamp", { cache: "no-store" });
     const j = (await r.json()) as { stamp?: number };
     return Number(j?.stamp || 0);
-  } catch { return 0; }
+  } catch {
+    return 0;
+  }
 }
 async function fetchAllCuentas(): Promise<Cuenta[]> {
   const out: Cuenta[] = [];
@@ -138,10 +147,10 @@ async function fetchAllCuentas(): Promise<Cuenta[]> {
   let guard = 0;
   while (guard++ < 50) {
     const url =
-      '/api/cuentascompletas?limit=500' +
-      (cursor ? `&cursor=${encodeURIComponent(String(cursor))}` : '');
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error('No se pudieron cargar las cuentas completas');
+      "/api/cuentascompletas?limit=500" +
+      (cursor ? `&cursor=${encodeURIComponent(String(cursor))}` : "");
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error("No se pudieron cargar las cuentas completas");
     const j: any = await res.json();
     const items: any[] = Array.isArray(j?.items) ? j.items : [];
     out.push(...items.map(normalizeRow));
@@ -157,19 +166,18 @@ async function fetchAllCuentas(): Promise<Cuenta[]> {
  * ======================================================= */
 /** Normaliza texto para búsqueda: minúsculas, sin tildes y sin espacios */
 const normSearch = (s?: string | null) =>
-  (s ?? '')
+  (s ?? "")
     .toString()
     .trim()
     .toLowerCase()
-    .normalize('NFD')                 // separa diacríticos
-    .replace(/\p{Diacritic}/gu, '')   // quita tildes
-    .replace(/\s+/g, '');             // quita TODOS los espacios
-
+    .normalize("NFD") // separa diacríticos
+    .replace(/\p{Diacritic}/gu, "") // quita tildes
+    .replace(/\s+/g, ""); // quita TODOS los espacios
 
 const money = (v: number | null) =>
   v == null || Number.isNaN(v)
-    ? '—'
-    : '$\u00A0' + new Intl.NumberFormat('es-CO').format(v);
+    ? "—"
+    : "$\u00A0" + new Intl.NumberFormat("es-CO").format(v);
 
 const clamp = (val: unknown, min: number) => {
   const num = Number(val);
@@ -178,10 +186,10 @@ const clamp = (val: unknown, min: number) => {
 
 /** YYYY-MM-DD + meses (conserva fin de mes) */
 function addMonthsYYYYMMDD(ymd: string, months: number): string {
-  if (!ymd || !Number.isFinite(months)) return '';
-  const [y, m, d] = ymd.split('-').map(Number);
+  if (!ymd || !Number.isFinite(months)) return "";
+  const [y, m, d] = ymd.split("-").map(Number);
   const base = new Date(y, (m ?? 1) - 1, d ?? 1);
-  if (Number.isNaN(base.getTime())) return '';
+  if (Number.isNaN(base.getTime())) return "";
   const target = new Date(base);
   target.setMonth(target.getMonth() + months);
   if (target.getDate() !== (d ?? 1)) target.setDate(0);
@@ -196,8 +204,10 @@ function ModalPortal({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMounted(true);
     const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prevOverflow; };
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
   }, []);
   if (!mounted) return null;
   return createPortal(children, document.body);
@@ -206,23 +216,39 @@ function ModalPortal({ children }: { children: React.ReactNode }) {
 /* =========================================================
  * Helpers Inventario / Conteos
  * ======================================================= */
-const normEmail = (s?: string | null) => (s ?? '').trim().toLowerCase();
+const normEmail = (s?: string | null) => (s ?? "").trim().toLowerCase();
 
-async function existsInInventario(plataforma_id: number | null | undefined, correo: string): Promise<boolean> {
+async function existsInInventario(
+  plataforma_id: number | null | undefined,
+  correo: string
+): Promise<boolean> {
   const email = normEmail(correo);
   try {
     const base = `/api/inventario`;
-    const url = plataforma_id != null
-      ? `${base}?q=${encodeURIComponent(email)}&plataforma_id=${plataforma_id}`
-      : `${base}?q=${encodeURIComponent(email)}`;
-    const res = await fetch(url, { cache: 'no-store' });
+    const url =
+      plataforma_id != null
+        ? `${base}?q=${encodeURIComponent(
+            email
+          )}&plataforma_id=${plataforma_id}`
+        : `${base}?q=${encodeURIComponent(email)}`;
+    const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) return false;
     const data = await res.json();
-    const arr: any[] = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
-    return arr.some((r) => String(r?.correo ?? '').toLowerCase() === email);
-  } catch { return false; }
+    const arr: any[] = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.items)
+      ? data.items
+      : [];
+    return arr.some((r) => String(r?.correo ?? "").toLowerCase() === email);
+  } catch {
+    return false;
+  }
 }
-async function ensureInInventario(plataforma_id?: number | null, correo?: string | null, clave?: string | null) {
+async function ensureInInventario(
+  plataforma_id?: number | null,
+  correo?: string | null,
+  clave?: string | null
+) {
   if (!correo) return;
   const email = normEmail(correo);
   try {
@@ -230,12 +256,14 @@ async function ensureInInventario(plataforma_id?: number | null, correo?: string
     const body: any = { correo: email };
     if (plataforma_id != null) body.plataforma_id = plataforma_id;
     if (clave && clave.trim().length > 0) body.clave = clave;
-    await fetch('/api/inventario', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    await fetch("/api/inventario", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-  } catch { /* best-effort */ }
+  } catch {
+    /* best-effort */
+  }
 }
 
 /** conteo local por (correo + plataforma) sobre la vista cargada */
@@ -245,11 +273,11 @@ function countLocalByEmailAndPlatform(
   plataforma_id: number | null | undefined
 ): number {
   if (!correo || plataforma_id == null) return 0;
-  const email = (correo ?? '').trim().toLowerCase();
+  const email = (correo ?? "").trim().toLowerCase();
   const pid = Number(plataforma_id);
   return all.reduce((acc, r) => {
-    const sameEmail = (r.correo ?? '').trim().toLowerCase() === email;
-    const samePlat  = Number(r.plataforma_id) === pid;
+    const sameEmail = (r.correo ?? "").trim().toLowerCase() === email;
+    const samePlat = Number(r.plataforma_id) === pid;
     return acc + (sameEmail && samePlat ? 1 : 0);
   }, 0);
 }
@@ -257,6 +285,13 @@ function countLocalByEmailAndPlatform(
 /* =========================================================
  * Componente principal
  * ======================================================= */
+
+const calcularTotalGanado = (tp?: number | null, tpp?: number | null) => {
+  const a = Number(tp ?? 0);
+  const b = Number(tpp ?? 0);
+  return Math.round((a - b) * 100) / 100;
+};
+
 export default function CuentasCompletasViewer() {
   const { plataformas } = usePlataformas();
 
@@ -264,8 +299,8 @@ export default function CuentasCompletasViewer() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const [q, setQ] = useState('');
-  const [platFilter, setPlatFilter] = useState<number | 'all'>('all');
+  const [q, setQ] = useState("");
+  const [platFilter, setPlatFilter] = useState<number | "all">("all");
 
   // edición
   const [edit, setEdit] = useState<EditState | null>(null);
@@ -275,12 +310,17 @@ export default function CuentasCompletasViewer() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   // eliminación individual
-  const [deleteTarget, setDeleteTarget] = useState<{ id: number; label?: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: number;
+    label?: string;
+  } | null>(null);
   const [checkingArchive, setCheckingArchive] = useState(false);
   const [canArchive, setCanArchive] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
-  const [deleteAction, setDeleteAction] = useState<'archive' | 'purge' | null>(null);
+  const [deleteAction, setDeleteAction] = useState<"archive" | "purge" | null>(
+    null
+  );
   const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
 
   // eliminación masiva
@@ -298,10 +338,25 @@ export default function CuentasCompletasViewer() {
   const [bulkErr, setBulkErr] = useState<string | null>(null);
   const [bulkProcessing, setBulkProcessing] = useState(false);
   const [bulkProgress, setBulkProgress] = useState(0);
-  const [bulkSummary, setBulkSummary] = useState<{ total: number; archived: number; purged: number; failed: number } | null>(null);
+  const [bulkSummary, setBulkSummary] = useState<{
+    total: number;
+    archived: number;
+    purged: number;
+    failed: number;
+  } | null>(null);
 
   const mounted = useRef(false);
 
+  useEffect(() => {
+    if (!edit) return;
+    const nuevo = calcularTotalGanado(
+      edit.total_pagado,
+      edit.total_pagado_proveedor
+    );
+    if (edit.total_ganado !== nuevo) {
+      setEdit((s) => ({ ...(s as EditState), total_ganado: nuevo }));
+    }
+  }, [edit?.total_pagado, edit?.total_pagado_proveedor]);
   /* ===== Boot ===== */
   useEffect(() => {
     mounted.current = true;
@@ -319,7 +374,9 @@ export default function CuentasCompletasViewer() {
 
       const localStamp = Number(localStorage.getItem(LS_REMOTE_STAMP) || 0);
       const needServer =
-        !cached?.rows?.length || cacheAge > STALE_AFTER_MS || remoteStamp !== localStamp;
+        !cached?.rows?.length ||
+        cacheAge > STALE_AFTER_MS ||
+        remoteStamp !== localStamp;
 
       if (!needServer) return;
 
@@ -330,7 +387,8 @@ export default function CuentasCompletasViewer() {
         setRows(all);
         writeCache(all, remoteStamp);
       } catch (e: any) {
-        if (mounted.current) setErr(e?.message ?? 'Error cargando cuentas completas');
+        if (mounted.current)
+          setErr(e?.message ?? "Error cargando cuentas completas");
       } finally {
         if (mounted.current) setLoading(false);
       }
@@ -340,7 +398,7 @@ export default function CuentasCompletasViewer() {
     try {
       bc = new BroadcastChannel(BC_NAME);
       bc.onmessage = async (ev) => {
-        if (ev?.data?.type === 'invalidate-cuentas') {
+        if (ev?.data?.type === "invalidate-cuentas") {
           try {
             setLoading(true);
             const stamp = await fetchStamp();
@@ -352,7 +410,8 @@ export default function CuentasCompletasViewer() {
               writeCache(all, stamp);
             }
           } catch (e: any) {
-            if (mounted.current) setErr(e?.message ?? 'Error actualizando datos');
+            if (mounted.current)
+              setErr(e?.message ?? "Error actualizando datos");
           } finally {
             if (mounted.current) setLoading(false);
           }
@@ -364,20 +423,25 @@ export default function CuentasCompletasViewer() {
       if (!REFETCH_ON_FOCUS) return;
       const cached = readCache();
       const cacheAge = cached ? Date.now() - cached.ts : Infinity;
-      if (cacheAge > STALE_AFTER_MS) { await forceRefresh(); return; }
+      if (cacheAge > STALE_AFTER_MS) {
+        await forceRefresh();
+        return;
+      }
       try {
         const stamp = await fetchStamp();
         const local = Number(localStorage.getItem(LS_REMOTE_STAMP) || 0);
         if (stamp !== local) await forceRefresh();
       } catch {}
     };
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onFocus);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
     return () => {
       mounted.current = false;
-      try { bc?.close(); } catch {}
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onFocus);
+      try {
+        bc?.close();
+      } catch {}
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
     };
   }, []);
 
@@ -390,36 +454,74 @@ export default function CuentasCompletasViewer() {
       setRows(all);
       writeCache(all, stamp);
     } catch (e: any) {
-      if (mounted.current) setErr(e?.message ?? 'No se pudo refrescar');
+      if (mounted.current) setErr(e?.message ?? "No se pudo refrescar");
     } finally {
       if (mounted.current) setLoading(false);
+    }
+  }
+
+  async function toggleFlagByEmail(target: Cuenta) {
+    const email = normEmail(target.correo);
+    if (!email) return;
+
+    const sameEmailRows = rows.filter((x) => normEmail(x.correo) === email);
+    if (sameEmailRows.length === 0) return;
+
+    // Si todas están ON ⇒ apagar; si alguna está OFF ⇒ encender todas
+    const nextValue = !sameEmailRows.every((x) => !!x.cuenta_caida);
+
+    // Optimistic UI + cache local
+    setRows((prev) =>
+      prev.map((x) =>
+        normEmail(x.correo) === email ? { ...x, cuenta_caida: nextValue } : x
+      )
+    );
+    for (const x of sameEmailRows)
+      mergeIntoCache({ ...x, cuenta_caida: nextValue });
+    broadcastInvalidate();
+
+    try {
+      await Promise.all(
+        sameEmailRows.map((x) =>
+          fetch(`/api/cuentascompletas/${x.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cuenta_caida: nextValue }),
+          }).then((r) => {
+            if (!r.ok) throw new Error("PATCH failed");
+            return r.json().catch(() => ({}));
+          })
+        )
+      );
+    } catch {
+      // (opcional) refetch si quieres garantizar consistencia
+      // await forceRefresh();
     }
   }
 
   // Filtro + búsqueda local
   // Filtro + búsqueda local
   const filtered = useMemo(() => {
-  const term = normSearch(q);
-  const pid: number | null = platFilter === 'all' ? null : Number(platFilter);
+    const term = normSearch(q);
+    const pid: number | null = platFilter === "all" ? null : Number(platFilter);
 
-  if (!term && pid === null) return rows;
+    if (!term && pid === null) return rows;
 
-  return rows.filter((r) => {
-    if (pid !== null && r.plataforma_id !== pid) return false;
-    if (!term) return true;
+    return rows.filter((r) => {
+      if (pid !== null && r.plataforma_id !== pid) return false;
+      if (!term) return true;
 
-    const hay =
-      normSearch(r.nombre).includes(term) ||
-      normSearch(r.contacto).includes(term) ||
-      normSearch(r.correo).includes(term) ||
-      normSearch(r.estado).includes(term) ||
-      normSearch(r.proveedor).includes(term) ||
-      normSearch(r.comentario).includes(term);
+      const hay =
+        normSearch(r.nombre).includes(term) ||
+        normSearch(r.contacto).includes(term) ||
+        normSearch(r.correo).includes(term) ||
+        normSearch(r.estado).includes(term) ||
+        normSearch(r.proveedor).includes(term) ||
+        normSearch(r.comentario).includes(term);
 
-        return hay;
-      });
-    }, [rows, q, platFilter]);
-
+      return hay;
+    });
+  }, [rows, q, platFilter]);
 
   /* =========================================================
    * Editar / Guardar
@@ -427,26 +529,37 @@ export default function CuentasCompletasViewer() {
   function openEdit(row: Cuenta) {
     const seeded: EditState = {
       ...row,
-      nombre: row.nombre ?? '',
-      correo: row.correo ?? '',
-      contrasena: row.contrasena ?? '',
-      proveedor: row.proveedor ?? '',
-      fecha_compra: row.fecha_compra ?? '',
-      fecha_vencimiento: row.fecha_vencimiento ?? '',
-      estado: row.estado ?? '',
-      comentario: row.comentario ?? '',
+      nombre: row.nombre ?? "",
+      correo: row.correo ?? "",
+      contrasena: row.contrasena ?? "",
+      proveedor: row.proveedor ?? "",
+      fecha_compra: row.fecha_compra ?? "",
+      fecha_vencimiento: row.fecha_vencimiento ?? "",
+      estado: row.estado ?? "",
+      comentario: row.comentario ?? "",
     };
-    if (seeded.fecha_compra && seeded.meses_pagados && !seeded.fecha_vencimiento) {
-      const venc = addMonthsYYYYMMDD(seeded.fecha_compra as string, Number(seeded.meses_pagados));
+    if (
+      seeded.fecha_compra &&
+      seeded.meses_pagados &&
+      !seeded.fecha_vencimiento
+    ) {
+      const venc = addMonthsYYYYMMDD(
+        seeded.fecha_compra as string,
+        Number(seeded.meses_pagados)
+      );
       if (venc) seeded.fecha_vencimiento = venc;
     }
+    seeded.total_ganado = calcularTotalGanado(
+      seeded.total_pagado,
+      seeded.total_pagado_proveedor
+    );
     setEdit(seeded);
   }
 
   // recalcula vencimiento cuando cambia compra/meses
   useEffect(() => {
     if (!edit) return;
-    const fc = edit.fecha_compra ?? '';
+    const fc = edit.fecha_compra ?? "";
     const m = edit.meses_pagados ?? null;
     if (fc && m != null && m >= 1) {
       const venc = addMonthsYYYYMMDD(fc, m);
@@ -454,7 +567,7 @@ export default function CuentasCompletasViewer() {
         setEdit((s) => ({ ...(s as EditState), fecha_vencimiento: venc }));
       }
     } else if (edit.fecha_vencimiento) {
-      setEdit((s) => ({ ...(s as EditState), fecha_vencimiento: '' }));
+      setEdit((s) => ({ ...(s as EditState), fecha_vencimiento: "" }));
     }
   }, [edit?.fecha_compra, edit?.meses_pagados]);
 
@@ -464,7 +577,7 @@ export default function CuentasCompletasViewer() {
     setErr(null);
     try {
       const row = rows.find((r) => r.id === edit.id);
-      if (!row) throw new Error('Fila no encontrada');
+      if (!row) throw new Error("Fila no encontrada");
 
       // fecha_vencimiento derivada si hay compra+meses
       let finalVence = edit.fecha_vencimiento ?? null;
@@ -472,43 +585,40 @@ export default function CuentasCompletasViewer() {
         finalVence = addMonthsYYYYMMDD(edit.fecha_compra, edit.meses_pagados);
       }
 
-      // calcular total_ganado si ambos totales vienen
-      let total_ganado = edit.total_ganado ?? null;
-      if (edit.total_pagado != null) {
-        total_ganado =
-          edit.total_pagado -
-          (edit.total_pagado_proveedor != null ? edit.total_pagado_proveedor : 0);
-      }
-
+      const total_ganado_calc = calcularTotalGanado(
+        edit.total_pagado,
+        edit.total_pagado_proveedor
+      );
       const payload: Record<string, unknown> = {
-        contacto: edit.contacto ?? '',
-        nombre: (edit.nombre ?? '') === '' ? null : (edit.nombre ?? ''),
-        proveedor: (edit.proveedor ?? '') === '' ? null : (edit.proveedor ?? ''),
+        contacto: edit.contacto ?? "",
+        nombre: (edit.nombre ?? "") === "" ? null : edit.nombre ?? "",
+        proveedor: (edit.proveedor ?? "") === "" ? null : edit.proveedor ?? "",
         fecha_compra: edit.fecha_compra ?? null,
         fecha_vencimiento: finalVence,
-        meses_pagados: edit.meses_pagados == null ? null : clamp(edit.meses_pagados, 1),
+        meses_pagados:
+          edit.meses_pagados == null ? null : clamp(edit.meses_pagados, 1),
         total_pagado: edit.total_pagado,
         total_pagado_proveedor: edit.total_pagado_proveedor,
-        total_ganado,
-        estado: (edit.estado ?? '') || null,
+        total_ganado: total_ganado_calc,
+        estado: (edit.estado ?? "") || null,
         comentario: (edit.comentario ?? null) as string | null,
         correo: (edit.correo ?? null) as string | null,
       };
 
       // contraseña: enviar si cambió (permitir limpiar => null)
-      if ((edit.contrasena ?? '') !== (row.contrasena ?? '')) {
-        const raw = (edit.contrasena ?? '').toString();
-        payload.contrasena = raw.trim() === '' ? null : raw;
+      if ((edit.contrasena ?? "") !== (row.contrasena ?? "")) {
+        const raw = (edit.contrasena ?? "").toString();
+        payload.contrasena = raw.trim() === "" ? null : raw;
       }
 
       const res = await fetch(`/api/cuentascompletas/${edit.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        throw new Error(j?.error ?? 'No se pudo guardar');
+        throw new Error(j?.error ?? "No se pudo guardar");
       }
       const flat = await res.json();
 
@@ -520,13 +630,20 @@ export default function CuentasCompletasViewer() {
         fecha_compra: flat?.row?.fecha_compra ?? edit.fecha_compra ?? null,
         fecha_vencimiento: flat?.row?.fecha_vencimiento ?? finalVence ?? null,
         meses_pagados:
-          flat?.row?.meses_pagados ?? (edit.meses_pagados == null ? null : edit.meses_pagados),
-        total_pagado: flat?.row?.total_pagado == null ? null : Number(flat.row.total_pagado as any),
+          flat?.row?.meses_pagados ??
+          (edit.meses_pagados == null ? null : edit.meses_pagados),
+        total_pagado:
+          flat?.row?.total_pagado == null
+            ? null
+            : Number(flat.row.total_pagado as any),
         total_pagado_proveedor:
           flat?.row?.total_pagado_proveedor == null
             ? null
             : Number(flat.row.total_pagado_proveedor as any),
-        total_ganado: flat?.row?.total_ganado == null ? null : Number(flat.row.total_ganado as any),
+        total_ganado:
+          flat?.row?.total_ganado == null
+            ? null
+            : Number(flat.row.total_ganado as any),
         estado: flat?.row?.estado ?? edit.estado ?? null,
         comentario: flat?.row?.comentario ?? edit.comentario ?? null,
         plataforma_id: row.plataforma_id,
@@ -539,7 +656,7 @@ export default function CuentasCompletasViewer() {
       broadcastInvalidate();
       setEdit(null);
     } catch (e: any) {
-      setErr(e?.message ?? 'Error guardando');
+      setErr(e?.message ?? "Error guardando");
     } finally {
       setSaving(false);
     }
@@ -557,8 +674,12 @@ export default function CuentasCompletasViewer() {
       return next;
     });
   };
-  const allVisibleIds = filtered.map((r) => r.id).filter((id) => Number.isFinite(id));
-  const allVisibleSelected = allVisibleIds.length > 0 && allVisibleIds.every((id) => selectedIds.has(id));
+  const allVisibleIds = filtered
+    .map((r) => r.id)
+    .filter((id) => Number.isFinite(id));
+  const allVisibleSelected =
+    allVisibleIds.length > 0 &&
+    allVisibleIds.every((id) => selectedIds.has(id));
   const someVisibleSelected = allVisibleIds.some((id) => selectedIds.has(id));
   const toggleAllVisible = (checked: boolean) => {
     setSelectedIds((prev) => {
@@ -587,14 +708,18 @@ export default function CuentasCompletasViewer() {
       if (!correo || plataforma_id == null) {
         const resolved = await (async () => {
           try {
-            const res = await fetch(`/api/cuentascompletas/${id}`, { cache: 'no-store' });
+            const res = await fetch(`/api/cuentascompletas/${id}`, {
+              cache: "no-store",
+            });
             if (!res.ok) return null;
             const j = await res.json();
             return {
               correo: j?.item?.correo ?? j?.correo ?? null,
               plataforma_id: j?.item?.plataforma_id ?? j?.plataforma_id ?? null,
             };
-          } catch { return null; }
+          } catch {
+            return null;
+          }
         })();
         if (resolved) {
           if (!correo) correo = resolved.correo;
@@ -607,13 +732,20 @@ export default function CuentasCompletasViewer() {
         label: label ?? (correo ? correo : `#${id}`),
       });
 
-      if (!correo || plataforma_id == null) { setCanArchive(false); return; }
+      if (!correo || plataforma_id == null) {
+        setCanArchive(false);
+        return;
+      }
 
       // usar SOLO las filas cargadas (lo que "miras")
-      const usesLocal = countLocalByEmailAndPlatform(rows, correo, plataforma_id);
+      const usesLocal = countLocalByEmailAndPlatform(
+        rows,
+        correo,
+        plataforma_id
+      );
       setCanArchive(usesLocal <= 1);
     } catch (e: any) {
-      setDeleteErr(e?.message ?? 'Error al verificar estado del correo.');
+      setDeleteErr(e?.message ?? "Error al verificar estado del correo.");
     } finally {
       setCheckingArchive(false);
     }
@@ -623,7 +755,7 @@ export default function CuentasCompletasViewer() {
     if (!deleteTarget) return;
     setDeleting(true);
     setDeleteErr(null);
-    setDeleteAction(archive ? 'archive' : 'purge');
+    setDeleteAction(archive ? "archive" : "purge");
     try {
       let victim = rows.find((r) => r.id === deleteTarget.id) || null;
       let victimPlataforma = victim?.plataforma_id ?? null;
@@ -632,24 +764,39 @@ export default function CuentasCompletasViewer() {
 
       if ((!victimCorreo || victimPlataforma == null) && archive) {
         try {
-          const resolved = await fetch(`/api/cuentascompletas/${deleteTarget.id}`, { cache: 'no-store' })
-            .then(r => r.ok ? r.json() : null);
+          const resolved = await fetch(
+            `/api/cuentascompletas/${deleteTarget.id}`,
+            { cache: "no-store" }
+          ).then((r) => (r.ok ? r.json() : null));
           if (resolved) {
-            if (!victimCorreo) victimCorreo = resolved?.item?.correo ?? resolved?.correo ?? null;
-            if (victimPlataforma == null) victimPlataforma = resolved?.item?.plataforma_id ?? resolved?.plataforma_id ?? null;
-            if (!victimClave) victimClave = resolved?.item?.contrasena ?? resolved?.contrasena ?? null;
+            if (!victimCorreo)
+              victimCorreo = resolved?.item?.correo ?? resolved?.correo ?? null;
+            if (victimPlataforma == null)
+              victimPlataforma =
+                resolved?.item?.plataforma_id ??
+                resolved?.plataforma_id ??
+                null;
+            if (!victimClave)
+              victimClave =
+                resolved?.item?.contrasena ?? resolved?.contrasena ?? null;
           }
         } catch {}
       }
 
       if (archive && victimCorreo && victimPlataforma != null) {
-        await ensureInInventario(victimPlataforma as number | null, victimCorreo, victimClave);
+        await ensureInInventario(
+          victimPlataforma as number | null,
+          victimCorreo,
+          victimClave
+        );
       }
 
-      const res = await fetch(`/api/cuentascompletas/${deleteTarget.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/cuentascompletas/${deleteTarget.id}`, {
+        method: "DELETE",
+      });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        throw new Error(j?.error ?? 'No se pudo eliminar');
+        throw new Error(j?.error ?? "No se pudo eliminar");
       }
       await res.json().catch(() => ({}));
 
@@ -657,11 +804,15 @@ export default function CuentasCompletasViewer() {
       setRows(next);
       broadcastInvalidate();
 
-      setDeleteMsg('Cuenta completa eliminada correctamente.');
-      setSelectedIds((prev) => { const s = new Set(prev); s.delete(deleteTarget.id); return s; });
+      setDeleteMsg("Cuenta completa eliminada correctamente.");
+      setSelectedIds((prev) => {
+        const s = new Set(prev);
+        s.delete(deleteTarget.id);
+        return s;
+      });
       setDeleteTarget(null);
     } catch (e: any) {
-      setDeleteErr(e?.message ?? 'Error al eliminar');
+      setDeleteErr(e?.message ?? "Error al eliminar");
     } finally {
       setDeleting(false);
       setDeleteAction(null);
@@ -670,8 +821,12 @@ export default function CuentasCompletasViewer() {
 
   // ==== BULK ====
   type Built = {
-    id: number; label?: string; canArchive: boolean;
-    plataforma_id: number | null; correo: string | null; contrasena: string | null;
+    id: number;
+    label?: string;
+    canArchive: boolean;
+    plataforma_id: number | null;
+    correo: string | null;
+    contrasena: string | null;
   };
 
   const buildBulkItem = async (id: number): Promise<Built> => {
@@ -683,7 +838,9 @@ export default function CuentasCompletasViewer() {
     if (!correo || plataforma_id == null) {
       const resolved = await (async () => {
         try {
-          const res = await fetch(`/api/cuentascompletas/${id}`, { cache: 'no-store' });
+          const res = await fetch(`/api/cuentascompletas/${id}`, {
+            cache: "no-store",
+          });
           if (!res.ok) return null;
           const j = await res.json();
           return {
@@ -691,7 +848,9 @@ export default function CuentasCompletasViewer() {
             plataforma_id: j?.item?.plataforma_id ?? j?.plataforma_id ?? null,
             contrasena: j?.item?.contrasena ?? j?.contrasena ?? null,
           };
-        } catch { return null; }
+        } catch {
+          return null;
+        }
       })();
       if (resolved) {
         if (!correo) correo = resolved.correo;
@@ -702,11 +861,22 @@ export default function CuentasCompletasViewer() {
 
     let can = false;
     if (correo && plataforma_id != null) {
-      const usesLocal = countLocalByEmailAndPlatform(rows, correo, plataforma_id);
+      const usesLocal = countLocalByEmailAndPlatform(
+        rows,
+        correo,
+        plataforma_id
+      );
       can = usesLocal <= 1;
     }
     const label = correo ? correo : `#${id}`;
-    return { id, label, canArchive: can, plataforma_id: plataforma_id ?? null, correo: correo ?? null, contrasena: contrasena ?? null };
+    return {
+      id,
+      label,
+      canArchive: can,
+      plataforma_id: plataforma_id ?? null,
+      correo: correo ?? null,
+      contrasena: contrasena ?? null,
+    };
   };
 
   const openBulk = async (ids: number[]) => {
@@ -726,7 +896,7 @@ export default function CuentasCompletasViewer() {
       }
       setBulkItems(items);
     } catch (e: any) {
-      setBulkErr(e?.message ?? 'Error preparando la eliminación masiva.');
+      setBulkErr(e?.message ?? "Error preparando la eliminación masiva.");
     } finally {
       setBulkAssessing(false);
     }
@@ -740,23 +910,47 @@ export default function CuentasCompletasViewer() {
     setBulkErr(null);
     setBulkProgress(0);
     const total = bulkItems.length;
-    let archived = 0, purged = 0, failed = 0;
+    let archived = 0,
+      purged = 0,
+      failed = 0;
 
     for (let i = 0; i < bulkItems.length; i++) {
       const it = bulkItems[i];
       try {
-        if (preferArchive && it.canArchive && it.correo && it.plataforma_id != null) {
+        if (
+          preferArchive &&
+          it.canArchive &&
+          it.correo &&
+          it.plataforma_id != null
+        ) {
           // eslint-disable-next-line no-await-in-loop
-          await ensureInInventario(it.plataforma_id, it.correo, it.contrasena ?? null);
+          await ensureInInventario(
+            it.plataforma_id,
+            it.correo,
+            it.contrasena ?? null
+          );
         }
         // eslint-disable-next-line no-await-in-loop
-        const res = await fetch(`/api/cuentascompletas/${it.id}`, { method: 'DELETE' });
+        const res = await fetch(`/api/cuentascompletas/${it.id}`, {
+          method: "DELETE",
+        });
         if (!res.ok) {
           failed++;
         } else {
-          if (preferArchive && it.canArchive && it.correo && it.plataforma_id != null) archived++; else purged++;
+          if (
+            preferArchive &&
+            it.canArchive &&
+            it.correo &&
+            it.plataforma_id != null
+          )
+            archived++;
+          else purged++;
           setRows((rs) => rs.filter((r) => r.id !== it.id));
-          setSelectedIds((prev) => { const next = new Set(prev); next.delete(it.id); return next; });
+          setSelectedIds((prev) => {
+            const next = new Set(prev);
+            next.delete(it.id);
+            return next;
+          });
           removeFromCache(it.id);
         }
       } catch {
@@ -778,7 +972,9 @@ export default function CuentasCompletasViewer() {
 
   return (
     <div className="p-4">
-      <h2 className="text-xl font-semibold text-neutral-100 mb-3">Ver/Editar Cuentas Completas</h2>
+      <h2 className="text-xl font-semibold text-neutral-100 mb-3">
+        Ver/Editar Cuentas Completas
+      </h2>
 
       {/* Filtros */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center mb-3">
@@ -789,13 +985,17 @@ export default function CuentasCompletasViewer() {
           className="flex-1 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
         />
         <select
-          value={platFilter === 'all' ? '' : String(platFilter)}
-          onChange={(e) => setPlatFilter(e.target.value ? Number(e.target.value) : 'all')}
+          value={platFilter === "all" ? "" : String(platFilter)}
+          onChange={(e) =>
+            setPlatFilter(e.target.value ? Number(e.target.value) : "all")
+          }
           className="w-64 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
         >
           <option value="">Todas</option>
           {plataformas.map((p) => (
-            <option key={p.id} value={p.id}>{p.nombre}</option>
+            <option key={p.id} value={p.id}>
+              {p.nombre}
+            </option>
           ))}
         </select>
 
@@ -804,7 +1004,7 @@ export default function CuentasCompletasViewer() {
           disabled={loading}
           className="px-4 py-2 rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-100 hover:bg-neutral-800 disabled:opacity-60"
         >
-          {loading ? 'Actualizando…' : 'Refrescar'}
+          {loading ? "Actualizando…" : "Refrescar"}
         </button>
       </div>
 
@@ -852,7 +1052,11 @@ export default function CuentasCompletasViewer() {
                   type="checkbox"
                   aria-label="Seleccionar todo"
                   checked={allVisibleSelected}
-                  ref={(el) => { if (el) el.indeterminate = !allVisibleSelected && someVisibleSelected; }}
+                  ref={(el) => {
+                    if (el)
+                      el.indeterminate =
+                        !allVisibleSelected && someVisibleSelected;
+                  }}
                   onChange={(e) => toggleAllVisible(e.target.checked)}
                 />
               </th>
@@ -897,7 +1101,17 @@ export default function CuentasCompletasViewer() {
                       aria-label="Editar"
                     >
                       {/* lápiz */}
-                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <svg
+                        viewBox="0 0 24 24"
+                        width="18"
+                        height="18"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
                         <path d="M12 20h9" />
                         <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
                       </svg>
@@ -909,7 +1123,17 @@ export default function CuentasCompletasViewer() {
                       aria-label="Eliminar"
                     >
                       {/* papelera */}
-                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <svg
+                        viewBox="0 0 24 24"
+                        width="18"
+                        height="18"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
                         <polyline points="3 6 5 6 21 6" />
                         <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
                         <path d="M10 11v6" />
@@ -917,45 +1141,95 @@ export default function CuentasCompletasViewer() {
                         <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
                       </svg>
                     </button>
+                    {/* 🏴 Bandera: cambia TODAS las filas con el mismo correo */}
+                    <button
+                      title={
+                        r.cuenta_caida
+                          ? "Cuenta caída (clic para quitar en todas con este correo)"
+                          : "Marcar como caída en todas con este correo"
+                      }
+                      onClick={() => toggleFlagByEmail(r)}
+                      className={`inline-flex p-1 rounded-md border hover:bg-neutral-800/60 ${
+                        r.cuenta_caida
+                          ? "bg-rose-800/40 border-rose-700 text-rose-200"
+                          : "bg-neutral-800/40 border-neutral-600 text-neutral-300"
+                      }`}
+                      aria-label="Bandera cuenta caída"
+                    >
+                      🏴
+                    </button>
                   </div>
                 </td>
 
                 <td className="px-3 py-2 whitespace-nowrap">
-                  {plataformas.find((p) => p.id === r.plataforma_id)?.nombre ?? '—'}
+                  {plataformas.find((p) => p.id === r.plataforma_id)?.nombre ??
+                    "—"}
                 </td>
-                <td className="px-3 py-2 whitespace-nowrap">{r.contacto || '—'}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{r.nombre || '—'}</td>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  {r.contacto || "—"}
+                </td>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  {r.nombre || "—"}
+                </td>
 
                 <td className="px-3 py-2">
-                  <span className="inline-block max-w-[260px] truncate align-bottom" title={r.correo ?? ''}>
-                    {r.correo || '—'}
+                  <span
+                    className="inline-block max-w-[260px] truncate align-bottom"
+                    title={r.correo ?? ""}
+                  >
+                    {r.correo || "—"}
                   </span>
                 </td>
                 <td className="px-3 py-2">
-                  <span className="inline-block max-w-[200px] truncate align-bottom" title={r.contrasena ?? ''}>
-                    {r.contrasena || '—'}
+                  <span
+                    className="inline-block max-w-[200px] truncate align-bottom"
+                    title={r.contrasena ?? ""}
+                  >
+                    {r.contrasena || "—"}
                   </span>
                 </td>
 
-                <td className="px-3 py-2 text-right whitespace-nowrap">{money(r.total_pagado)}</td>
-                <td className="px-3 py-2 text-right whitespace-nowrap">{money(r.total_pagado_proveedor)}</td>
-                <td className="px-3 py-2 text-right whitespace-nowrap">{money(r.total_ganado)}</td>
-                <td className="px-3 py-2 text-center">{r.meses_pagados ?? '—'}</td>
-                <td className="px-3 py-2 text-center whitespace-nowrap">{r.fecha_compra || '—'}</td>
-                <td className="px-3 py-2 text-center whitespace-nowrap">{r.fecha_vencimiento || '—'}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{r.estado || '—'}</td>
-                <td className="px-3 py-2 whitespace-nowrap">{r.proveedor || '—'}</td>
+                <td className="px-3 py-2 text-right whitespace-nowrap">
+                  {money(r.total_pagado)}
+                </td>
+                <td className="px-3 py-2 text-right whitespace-nowrap">
+                  {money(r.total_pagado_proveedor)}
+                </td>
+                <td className="px-3 py-2 text-right whitespace-nowrap">
+                  {money(r.total_ganado)}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {r.meses_pagados ?? "—"}
+                </td>
+                <td className="px-3 py-2 text-center whitespace-nowrap">
+                  {r.fecha_compra || "—"}
+                </td>
+                <td className="px-3 py-2 text-center whitespace-nowrap">
+                  {r.fecha_vencimiento || "—"}
+                </td>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  {r.estado || "—"}
+                </td>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  {r.proveedor || "—"}
+                </td>
                 <td className="px-3 py-2">
-                  <span className="inline-block max-w-[420px] truncate align-bottom" title={r.comentario ?? ''}>
-                    {r.comentario || '—'}
+                  <span
+                    className="inline-block max-w-[420px] truncate align-bottom"
+                    title={r.comentario ?? ""}
+                  >
+                    {r.comentario || "—"}
                   </span>
                 </td>
               </tr>
             ))}
             {!filtered.length && (
               <tr>
-                <td colSpan={16} className="px-3 py-6 text-center text-neutral-400">
-                  {loading ? 'Cargando…' : 'No se encontraron resultados.'}
+                <td
+                  colSpan={16}
+                  className="px-3 py-6 text-center text-neutral-400"
+                >
+                  {loading ? "Cargando…" : "No se encontraron resultados."}
                 </td>
               </tr>
             )}
@@ -967,7 +1241,9 @@ export default function CuentasCompletasViewer() {
       <div className="mt-2 text-sm text-neutral-400">
         {rows.length} fila(s) en cache · {filtered.length} visible(s)
         {err && <span className="text-rose-400 ml-2">— {err}</span>}
-        {deleteMsg && <span className="text-emerald-400 ml-2">— {deleteMsg}</span>}
+        {deleteMsg && (
+          <span className="text-emerald-400 ml-2">— {deleteMsg}</span>
+        )}
       </div>
 
       {/* Modal edición */}
@@ -975,7 +1251,6 @@ export default function CuentasCompletasViewer() {
         <ModalPortal>
           <div
             className="fixed inset-0 z-50 bg-black/60 overflow-y-auto"
-            onClick={() => !saving && setEdit(null)}
             role="dialog"
             aria-modal="true"
           >
@@ -986,7 +1261,11 @@ export default function CuentasCompletasViewer() {
               >
                 <div className="px-5 py-3 border-b border-neutral-800 flex items-center justify-between sticky top-0 bg-neutral-900 rounded-t-2xl">
                   <h3 className="font-semibold">Editar cuenta #{edit.id}</h3>
-                  <button className="px-2 py-1 hover:text-white" onClick={() => setEdit(null)} disabled={saving}>
+                  <button
+                    className="px-2 py-1 hover:text-white"
+                    onClick={() => setEdit(null)}
+                    disabled={saving}
+                  >
                     ✕
                   </button>
                 </div>
@@ -996,16 +1275,26 @@ export default function CuentasCompletasViewer() {
                     <span className="text-sm text-neutral-300">Contacto</span>
                     <input
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.contacto ?? ''}
-                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), contacto: e.target.value }))}
+                      value={edit.contacto ?? ""}
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          contacto: e.target.value,
+                        }))
+                      }
                     />
                   </label>
                   <label className="grid gap-1">
                     <span className="text-sm text-neutral-300">Nombre</span>
                     <input
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.nombre ?? ''}
-                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), nombre: e.target.value }))}
+                      value={edit.nombre ?? ""}
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          nombre: e.target.value,
+                        }))
+                      }
                     />
                   </label>
 
@@ -1013,90 +1302,114 @@ export default function CuentasCompletasViewer() {
                     <span className="text-sm text-neutral-300">Correo</span>
                     <input
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.correo ?? ''}
-                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), correo: e.target.value }))}
+                      value={edit.correo ?? ""}
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          correo: e.target.value,
+                        }))
+                      }
                     />
                   </label>
                   <label className="grid gap-1">
                     <span className="text-sm text-neutral-300">Contraseña</span>
                     <input
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.contrasena ?? ''}
-                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), contrasena: e.target.value }))}
+                      value={edit.contrasena ?? ""}
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          contrasena: e.target.value,
+                        }))
+                      }
                     />
                   </label>
                   <label className="grid gap-1">
-  <span className="text-sm text-neutral-300">Fecha compra (YYYY-MM-DD)</span>
-  <div className="flex items-center gap-2">
-    <input
-      type="date"
-      className="flex-1 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600"
-      value={edit.fecha_compra ?? ''}
-      onChange={(e) =>
-        setEdit((s) => ({ ...(s as EditState), fecha_compra: e.target.value }))
-      }
-      // 👉 Abre el calendario solo si aún no está enfocado
-      onMouseDown={(e) => {
-        const el = e.currentTarget;
-        if (document.activeElement !== el && el.showPicker) {
-          requestAnimationFrame(() => el.showPicker());
-        }
-      }}
-    />
+                    <span className="text-sm text-neutral-300">
+                      Fecha compra (YYYY-MM-DD)
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        className="flex-1 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600"
+                        value={edit.fecha_compra ?? ""}
+                        onChange={(e) =>
+                          setEdit((s) => ({
+                            ...(s as EditState),
+                            fecha_compra: e.target.value,
+                          }))
+                        }
+                        // 👉 Abre el calendario solo si aún no está enfocado
+                        onMouseDown={(e) => {
+                          const el = e.currentTarget;
+                          if (document.activeElement !== el && el.showPicker) {
+                            requestAnimationFrame(() => el.showPicker());
+                          }
+                        }}
+                      />
 
-    {/* 📅 Botón para abrir el calendario explícitamente */}
-    <button
-      type="button"
-      onClick={() => {
-        const input = document.querySelector('input[type="date"]') as HTMLInputElement;
-        input?.showPicker?.();
-      }}
-      className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
-      title="Abrir calendario"
-    >
-      📅
-    </button>
+                      {/* 📅 Botón para abrir el calendario explícitamente */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const input = document.querySelector(
+                            'input[type="date"]'
+                          ) as HTMLInputElement;
+                          input?.showPicker?.();
+                        }}
+                        className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
+                        title="Abrir calendario"
+                      >
+                        📅
+                      </button>
 
-    <button
-      type="button"
-      onClick={() =>
-        setEdit((s) => ({ ...(s as EditState), fecha_compra: todayYMDLocal() }))
-      }
-      className="whitespace-nowrap rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
-      title="Poner fecha de compra en hoy"
-    >
-      Hoy
-    </button>
-  </div>
-</label>
-
-
-
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEdit((s) => ({
+                            ...(s as EditState),
+                            fecha_compra: todayYMDLocal(),
+                          }))
+                        }
+                        className="whitespace-nowrap rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
+                        title="Poner fecha de compra en hoy"
+                      >
+                        Hoy
+                      </button>
+                    </div>
+                  </label>
 
                   <label className="grid gap-1">
-                    <span className="text-sm text-neutral-300">Meses pagados</span>
+                    <span className="text-sm text-neutral-300">
+                      Meses pagados
+                    </span>
                     <input
                       type="number"
                       min={1}
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={String(edit.meses_pagados ?? '')}
+                      value={String(edit.meses_pagados ?? "")}
                       onChange={(e) =>
                         setEdit((s) => ({
                           ...(s as EditState),
-                          meses_pagados: e.target.value === '' ? null : Number(e.target.value),
+                          meses_pagados:
+                            e.target.value === ""
+                              ? null
+                              : Number(e.target.value),
                         }))
                       }
                     />
                   </label>
 
                   <label className="grid gap-1">
-                    <span className="text-sm text-neutral-300">Fecha vencimiento (auto)</span>
+                    <span className="text-sm text-neutral-300">
+                      Fecha vencimiento (auto)
+                    </span>
                     <input
                       type="date"
                       disabled
                       readOnly
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950/70 text-neutral-400 cursor-not-allowed"
-                      value={edit.fecha_vencimiento ?? ''}
+                      value={edit.fecha_vencimiento ?? ""}
                     />
                   </label>
 
@@ -1104,8 +1417,13 @@ export default function CuentasCompletasViewer() {
                     <span className="text-sm text-neutral-300">Estado</span>
                     <input
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.estado ?? ''}
-                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), estado: e.target.value }))}
+                      value={edit.estado ?? ""}
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          estado: e.target.value,
+                        }))
+                      }
                     />
                   </label>
 
@@ -1113,57 +1431,70 @@ export default function CuentasCompletasViewer() {
                     <span className="text-sm text-neutral-300">Proveedor</span>
                     <input
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.proveedor ?? ''}
-                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), proveedor: e.target.value }))}
+                      value={edit.proveedor ?? ""}
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          proveedor: e.target.value,
+                        }))
+                      }
                     />
                   </label>
 
                   <label className="grid gap-1">
-                    <span className="text-sm text-neutral-300">Total pagado</span>
+                    <span className="text-sm text-neutral-300">
+                      Total pagado
+                    </span>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.total_pagado ?? ''}
+                      value={edit.total_pagado ?? ""}
                       onChange={(e) =>
                         setEdit((s) => ({
                           ...(s as EditState),
-                          total_pagado: e.target.value === '' ? null : Number(e.target.value),
+                          total_pagado:
+                            e.target.value === ""
+                              ? null
+                              : Number(e.target.value),
                         }))
                       }
                     />
                   </label>
                   <label className="grid gap-1">
-                    <span className="text-sm text-neutral-300">Pagado proveedor</span>
+                    <span className="text-sm text-neutral-300">
+                      Pagado proveedor
+                    </span>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.total_pagado_proveedor ?? ''}
+                      value={edit.total_pagado_proveedor ?? ""}
                       onChange={(e) =>
                         setEdit((s) => ({
                           ...(s as EditState),
-                          total_pagado_proveedor: e.target.value === '' ? null : Number(e.target.value),
+                          total_pagado_proveedor:
+                            e.target.value === ""
+                              ? null
+                              : Number(e.target.value),
                         }))
                       }
                     />
                   </label>
                   <label className="grid gap-1">
-                    <span className="text-sm text-neutral-300">Total ganado</span>
+                    <span className="text-sm text-neutral-300">
+                      Total ganado (auto)
+                    </span>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
-                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.total_ganado ?? ''}
-                      onChange={(e) =>
-                        setEdit((s) => ({
-                          ...(s as EditState),
-                          total_ganado: e.target.value === '' ? null : Number(e.target.value),
-                        }))
-                      }
+                      disabled
+                      readOnly
+                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950/70 text-neutral-400 cursor-not-allowed"
+                      value={edit.total_ganado ?? ""}
                     />
                   </label>
 
@@ -1172,8 +1503,13 @@ export default function CuentasCompletasViewer() {
                     <textarea
                       rows={3}
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.comentario ?? ''}
-                      onChange={(e) => setEdit((s) => ({ ...(s as EditState), comentario: e.target.value }))}
+                      value={edit.comentario ?? ""}
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          comentario: e.target.value,
+                        }))
+                      }
                     />
                   </label>
                 </div>
@@ -1191,7 +1527,7 @@ export default function CuentasCompletasViewer() {
                     onClick={saveEdit}
                     disabled={saving}
                   >
-                    {saving ? 'Guardando…' : 'Guardar cambios'}
+                    {saving ? "Guardando…" : "Guardar cambios"}
                   </button>
                 </div>
               </div>
@@ -1203,7 +1539,10 @@ export default function CuentasCompletasViewer() {
       {/* Modal eliminar (individual) */}
       {deleteTarget && (
         <ModalPortal>
-          <div className="fixed inset-0 z-50 bg-black/60 overflow-y-auto" onClick={() => !deleting && setDeleteTarget(null)}>
+          <div
+            className="fixed inset-0 z-50 bg-black/60 overflow-y-auto"
+            onClick={() => !deleting && setDeleteTarget(null)}
+          >
             <div className="min-h-screen flex items-center justify-center p-4">
               <div
                 className="w-full max-w-md rounded-xl border border-neutral-700 bg-neutral-900 p-4 text-neutral-100 shadow-xl"
@@ -1212,21 +1551,36 @@ export default function CuentasCompletasViewer() {
                 aria-labelledby="modal-title"
                 aria-describedby="modal-desc"
               >
-                <h4 id="modal-title" className="text-lg font-semibold mb-2">Eliminar cuenta completa</h4>
+                <h4 id="modal-title" className="text-lg font-semibold mb-2">
+                  Eliminar cuenta completa
+                </h4>
                 <p id="modal-desc" className="text-sm text-neutral-300">
-                  {deleteTarget.label ? <><span className="opacity-80">({deleteTarget.label})</span><br/></> : null}
+                  {deleteTarget.label ? (
+                    <>
+                      <span className="opacity-80">({deleteTarget.label})</span>
+                      <br />
+                    </>
+                  ) : null}
                   {checkingArchive
-                    ? 'Verificando si es la última relación por correo y plataforma…'
+                    ? "Verificando si es la última relación por correo y plataforma…"
                     : canArchive
-                      ? 'Es la última cuenta con este correo en esta plataforma. Puedes enviarla al inventario antes de eliminar.'
-                      : 'Existen más cuentas con este correo en esta plataforma. Solo puedes eliminar definitivamente.'}
+                    ? "Es la última cuenta con este correo en esta plataforma. Puedes enviarla al inventario antes de eliminar."
+                    : "Existen más cuentas con este correo en esta plataforma. Solo puedes eliminar definitivamente."}
                 </p>
 
                 {deleteErr && (
-                  <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">{deleteErr}</div>
+                  <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">
+                    {deleteErr}
+                  </div>
                 )}
 
-                <div className={`mt-4 ${canArchive ? 'grid gap-2 sm:grid-cols-2' : 'flex justify-end gap-2'}`}>
+                <div
+                  className={`mt-4 ${
+                    canArchive
+                      ? "grid gap-2 sm:grid-cols-2"
+                      : "flex justify-end gap-2"
+                  }`}
+                >
                   {canArchive && (
                     <button
                       type="button"
@@ -1235,7 +1589,9 @@ export default function CuentasCompletasViewer() {
                       className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-700 bg-emerald-800/40 px-3 py-2 hover:bg-emerald-800/60 focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:opacity-60"
                       title="Crear/asegurar inventario y eliminar"
                     >
-                      {deleting && deleteAction === 'archive' ? 'Enviando…' : 'Inventario + Eliminar'}
+                      {deleting && deleteAction === "archive"
+                        ? "Enviando…"
+                        : "Inventario + Eliminar"}
                     </button>
                   )}
 
@@ -1246,7 +1602,9 @@ export default function CuentasCompletasViewer() {
                     className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-700 bg-red-800/40 px-3 py-2 hover:bg-red-800/60 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-60"
                     title="Eliminar sin archivar"
                   >
-                    {deleting && deleteAction === 'purge' ? 'Eliminando…' : 'Eliminar definitivamente'}
+                    {deleting && deleteAction === "purge"
+                      ? "Eliminando…"
+                      : "Eliminar definitivamente"}
                   </button>
                 </div>
 
@@ -1269,7 +1627,10 @@ export default function CuentasCompletasViewer() {
       {/* Modal eliminación MASIVA */}
       {bulkOpen && (
         <ModalPortal>
-          <div className="fixed inset-0 z-50 bg-black/60 overflow-y-auto" onClick={() => !bulkProcessing && setBulkOpen(false)}>
+          <div
+            className="fixed inset-0 z-50 bg-black/60 overflow-y-auto"
+            onClick={() => !bulkProcessing && setBulkOpen(false)}
+          >
             <div className="min-h-screen flex items-center justify-center p-4">
               <div
                 className="w-full max-w-xl rounded-xl border border-neutral-700 bg-neutral-900 p-4 text-neutral-100 shadow-xl"
@@ -1278,25 +1639,36 @@ export default function CuentasCompletasViewer() {
                 aria-labelledby="bulk-title"
                 aria-describedby="bulk-desc"
               >
-                <h4 id="bulk-title" className="text-lg font-semibold mb-2">Eliminar {bulkItems.length} cuenta(s)</h4>
+                <h4 id="bulk-title" className="text-lg font-semibold mb-2">
+                  Eliminar {bulkItems.length} cuenta(s)
+                </h4>
 
                 {bulkAssessing ? (
-                  <p className="text-sm text-neutral-300">Analizando registros para decidir inventario/eliminación…</p>
+                  <p className="text-sm text-neutral-300">
+                    Analizando registros para decidir inventario/eliminación…
+                  </p>
                 ) : (
                   <>
                     <p id="bulk-desc" className="text-sm text-neutral-300">
-                      Para cada registro: si es la última relación por <strong>correo + plataforma</strong>, se enviará al inventario y luego se eliminará; en caso contrario, se eliminará definitivamente.
+                      Para cada registro: si es la última relación por{" "}
+                      <strong>correo + plataforma</strong>, se enviará al
+                      inventario y luego se eliminará; en caso contrario, se
+                      eliminará definitivamente.
                     </p>
 
                     {bulkErr && (
-                      <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">{bulkErr}</div>
+                      <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">
+                        {bulkErr}
+                      </div>
                     )}
 
                     {bulkSummary && (
                       <div className="mt-3 rounded-lg border border-neutral-700 bg-neutral-800/40 p-2 text-sm">
                         <div>Total procesados: {bulkSummary.total}</div>
                         <div>Enviados a inventario: {bulkSummary.archived}</div>
-                        <div>Eliminados definitivamente: {bulkSummary.purged}</div>
+                        <div>
+                          Eliminados definitivamente: {bulkSummary.purged}
+                        </div>
                         <div>Fallidos: {bulkSummary.failed}</div>
                       </div>
                     )}
@@ -1304,9 +1676,14 @@ export default function CuentasCompletasViewer() {
                     {bulkProcessing && (
                       <div className="mt-3">
                         <div className="h-2 w-full rounded bg-neutral-800 overflow-hidden">
-                          <div className="h-2 bg-emerald-600" style={{ width: `${bulkProgress}%` }} />
+                          <div
+                            className="h-2 bg-emerald-600"
+                            style={{ width: `${bulkProgress}%` }}
+                          />
                         </div>
-                        <div className="mt-1 text-xs text-neutral-400">{bulkProgress}%</div>
+                        <div className="mt-1 text-xs text-neutral-400">
+                          {bulkProgress}%
+                        </div>
                       </div>
                     )}
 
@@ -1314,7 +1691,11 @@ export default function CuentasCompletasViewer() {
                       <button
                         type="button"
                         onClick={() => runBulk(true)}
-                        disabled={bulkAssessing || bulkProcessing || bulkItems.length === 0}
+                        disabled={
+                          bulkAssessing ||
+                          bulkProcessing ||
+                          bulkItems.length === 0
+                        }
                         className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-700 bg-emerald-800/40 px-3 py-2 hover:bg-emerald-800/60 focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:opacity-60"
                       >
                         Inventario (cuando aplique) + Eliminar
@@ -1323,7 +1704,11 @@ export default function CuentasCompletasViewer() {
                       <button
                         type="button"
                         onClick={() => runBulk(false)}
-                        disabled={bulkAssessing || bulkProcessing || bulkItems.length === 0}
+                        disabled={
+                          bulkAssessing ||
+                          bulkProcessing ||
+                          bulkItems.length === 0
+                        }
                         className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-700 bg-red-800/40 px-3 py-2 hover:bg-red-800/60 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-60"
                       >
                         Eliminar definitivamente

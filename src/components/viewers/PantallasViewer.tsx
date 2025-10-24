@@ -25,6 +25,7 @@ type Pantalla = {
   estado: string | null;
   proveedor: string | null;
   comentario: string | null;
+  cuenta_caida: boolean | null; // 👈 Nueva flag
 };
 type EditState = Partial<Pantalla> & { id: number };
 
@@ -62,6 +63,7 @@ function normalizeRow(r: any): Pantalla {
     cuenta_id: n(r.cuenta_id),
     plataforma_id: n(r.plataforma_id),
     contacto: String(r.contacto ?? ""),
+    cuenta_caida: r.cuenta_caida ?? false,
     nombre: r.nombre ?? null,
     correo: r.correo ?? null,
     contrasena: r.contrasena ?? null,
@@ -166,6 +168,7 @@ async function fetchAllPantallas(): Promise<Pantalla[]> {
 /* =========================================================
  * UI helpers
  * ======================================================= */
+
 const money = (v: number | null) =>
   v == null || Number.isNaN(v) ? "—" : "$ " + new Intl.NumberFormat().format(v);
 
@@ -414,6 +417,12 @@ async function upsertCuentaCompartida(
 /* =========================================================
  * Componente principal
  * ======================================================= */
+const calcGanado = (tp?: number | null, tpp?: number | null) => {
+  const a = Number(tp ?? 0);
+  const b = Number(tpp ?? 0);
+  return Math.round((a - b) * 100) / 100; // diferencia redondeada
+};
+
 export default function PantallasViewer() {
   const { plataformas } = usePlataformas();
 
@@ -468,6 +477,30 @@ export default function PantallasViewer() {
   } | null>(null);
 
   const mounted = useRef(false);
+
+  //recalcular modal
+  useEffect(() => {
+    if (!edit) return;
+    const fc = edit.fecha_compra ?? "";
+    const m = edit.meses_pagados ?? null;
+    if (fc && m != null && m >= 1) {
+      const venc = addMonthsYYYYMMDD(fc, m);
+      if (venc !== edit.fecha_vencimiento) {
+        setEdit((s) => ({ ...(s as EditState), fecha_vencimiento: venc }));
+      }
+    } else if (edit.fecha_vencimiento) {
+      setEdit((s) => ({ ...(s as EditState), fecha_vencimiento: "" }));
+    }
+  }, [edit?.fecha_compra, edit?.meses_pagados]);
+
+  // 👇 Añade esto justo después
+  useEffect(() => {
+    if (!edit) return;
+    const nuevo = calcGanado(edit.total_pagado, edit.total_pagado_proveedor);
+    if (edit.total_ganado !== nuevo) {
+      setEdit((s) => ({ ...(s as EditState), total_ganado: nuevo }));
+    }
+  }, [edit?.total_pagado, edit?.total_pagado_proveedor]);
 
   /* ===== Boot ===== */
   useEffect(() => {
@@ -571,6 +604,49 @@ export default function PantallasViewer() {
       if (mounted.current) setErr(e?.message ?? "No se pudo refrescar");
     } finally {
       if (mounted.current) setLoading(false);
+    }
+  }
+
+  // 👇 Alterna la bandera para TODAS las filas con el mismo correo
+  async function toggleFlagByEmail(target: Pantalla) {
+    const email = normEmail(target.correo);
+    if (!email) return;
+
+    // Todas las filas (en el dataset cargado) con ese correo
+    const sameEmailRows = rows.filter((x) => normEmail(x.correo) === email);
+
+    if (sameEmailRows.length === 0) return;
+
+    // Si TODAS están ON ⇒ apágalas; si alguna está OFF ⇒ enciende TODAS
+    const nextValue = !sameEmailRows.every((x) => !!x.cuenta_caida);
+
+    // ✅ Optimistic UI
+    setRows((prev) =>
+      prev.map((x) =>
+        normEmail(x.correo) === email ? { ...x, cuenta_caida: nextValue } : x
+      )
+    );
+    for (const x of sameEmailRows)
+      mergeIntoCache({ ...x, cuenta_caida: nextValue });
+    broadcastInvalidate();
+
+    try {
+      // 🔄 Persistimos en backend (uno por uno)
+      await Promise.all(
+        sameEmailRows.map((x) =>
+          fetch(`/api/pantallas/${x.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cuenta_caida: nextValue }),
+          }).then((r) => {
+            if (!r.ok) throw new Error("PATCH failed");
+            return r.json().catch(() => ({}));
+          })
+        )
+      );
+    } catch {
+      // (opcional) si quieres, refetch para garantizar consistencia
+      // await forceRefresh();
     }
   }
 
@@ -752,6 +828,11 @@ export default function PantallasViewer() {
       );
       if (venc) seeded.fecha_vencimiento = venc;
     }
+    seeded.total_ganado = calcGanado(
+      seeded.total_pagado,
+      seeded.total_pagado_proveedor
+    );
+
     setEdit(seeded);
   }
 
@@ -789,7 +870,10 @@ export default function PantallasViewer() {
       if (edit.fecha_compra && edit.meses_pagados && edit.meses_pagados >= 1) {
         finalVence = addMonthsYYYYMMDD(edit.fecha_compra, edit.meses_pagados);
       }
-
+      const totalGanadoCalc = calcGanado(
+        edit.total_pagado,
+        edit.total_pagado_proveedor
+      );
       // Payload base
       const payload: Record<string, unknown> = {
         contacto: edit.contacto ?? "",
@@ -801,7 +885,7 @@ export default function PantallasViewer() {
           edit.meses_pagados == null ? null : clamp(edit.meses_pagados, 1),
         total_pagado: edit.total_pagado,
         total_pagado_proveedor: edit.total_pagado_proveedor,
-        total_ganado: edit.total_ganado,
+        total_ganado: totalGanadoCalc, // 👈 este valor calculado se guarda
         estado: edit.estado ?? "",
         comentario: (edit.comentario ?? null) as string | null,
       };
@@ -1336,6 +1420,26 @@ export default function PantallasViewer() {
                               : avail > 0
                               ? "border-emerald-700 bg-emerald-800/40 text-emerald-100"
                               : "border-rose-700 bg-rose-900/40 text-rose-100";
+                          // Antes de retornar el encabezado del grupo:
+                          const allOn = g.rows.every((x) => !!x.cuenta_caida);
+                          const someOn =
+                            !allOn && g.rows.some((x) => !!x.cuenta_caida);
+
+                          // Dentro del encabezado:
+                          {
+                            allOn && (
+                              <span className="ml-2 inline-flex items-center rounded-md border border-rose-700 bg-rose-900/40 px-2 py-0.5 text-xs text-rose-100">
+                                🏴 Cuenta caída (todas)
+                              </span>
+                            );
+                          }
+                          {
+                            !allOn && someOn && (
+                              <span className="ml-2 inline-flex items-center rounded-md border border-amber-700 bg-amber-900/40 px-2 py-0.5 text-xs text-amber-100">
+                                🏴 Algunas caídas
+                              </span>
+                            );
+                          }
 
                           return (
                             <span
@@ -1429,6 +1533,23 @@ export default function PantallasViewer() {
                               <path d="M14 11v6" />
                               <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
                             </svg>
+                          </button>
+                          {/* 🏴 Bandera (aplica a TODO el correo) */}
+                          <button
+                            title={
+                              r.cuenta_caida
+                                ? "Cuenta caída (clic para quitar en todas)"
+                                : "Marcar como caída en todas las de este correo"
+                            }
+                            onClick={() => toggleFlagByEmail(r)}
+                            className={`inline-flex p-1 rounded-md border hover:bg-neutral-800/60 ${
+                              r.cuenta_caida
+                                ? "bg-rose-800/40 border-rose-700 text-rose-200"
+                                : "bg-neutral-800/40 border-neutral-600 text-neutral-300"
+                            }`}
+                            aria-label="Bandera cuenta caída"
+                          >
+                            🏴
                           </button>
                         </div>
                       </td>
@@ -1528,7 +1649,6 @@ export default function PantallasViewer() {
         <ModalPortal>
           <div
             className="fixed inset-0 z-50 bg-black/60 overflow-y-auto"
-            onClick={() => !saving && setEdit(null)}
             role="dialog"
             aria-modal="true"
           >
@@ -1764,23 +1884,16 @@ export default function PantallasViewer() {
                   </label>
                   <label className="grid gap-1">
                     <span className="text-sm text-neutral-300">
-                      Total ganado
+                      Total ganado (auto)
                     </span>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
-                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
+                      disabled
+                      readOnly
+                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950/70 text-neutral-400 cursor-not-allowed"
                       value={edit.total_ganado ?? ""}
-                      onChange={(e) =>
-                        setEdit((s) => ({
-                          ...(s as EditState),
-                          total_ganado:
-                            e.target.value === ""
-                              ? null
-                              : Number(e.target.value),
-                        }))
-                      }
                     />
                   </label>
 
