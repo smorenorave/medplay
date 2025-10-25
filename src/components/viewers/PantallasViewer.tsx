@@ -25,9 +25,12 @@ type Pantalla = {
   estado: string | null;
   proveedor: string | null;
   comentario: string | null;
-  cuenta_caida: boolean | null; // 👈 Nueva flag
+  cuenta_caida: boolean; // 👈 Nueva flag
 };
-type EditState = Partial<Pantalla> & { id: number };
+type EditState = Partial<Pantalla> & {
+  id: number;
+  __applyCorreoToCuenta?: boolean; // ✅ nuevo
+};
 
 /* =========================================================
  * Config
@@ -145,6 +148,7 @@ async function fetchStamp(): Promise<number> {
     return 0;
   }
 }
+
 async function fetchAllPantallas(): Promise<Pantalla[]> {
   const out: Pantalla[] = [];
   let cursor: number | null = null;
@@ -334,6 +338,7 @@ function countLocalByEmailAndPlatform(
 }
 
 /** === cuentascompartidas helpers (para editar correo) === */
+
 async function findCuentaCompartidaByCorreo(
   plataforma_id: number | null | undefined,
   correo: string
@@ -478,6 +483,25 @@ export default function PantallasViewer() {
 
   const mounted = useRef(false);
 
+  useEffect(() => {
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel("pantallas_mutations_bc");
+      bc.onmessage = (ev) => {
+        if (ev?.data?.type === "invalidate-pantallas") {
+          console.log("🔄 Refrescando pantallas por broadcast...");
+          forceRefresh(); // 👈 ya tienes esta función para recargar desde el servidor
+        }
+      };
+    } catch {}
+
+    return () => {
+      try {
+        bc?.close();
+      } catch {}
+    };
+  }, []);
+
   //recalcular modal
   useEffect(() => {
     if (!edit) return;
@@ -608,45 +632,65 @@ export default function PantallasViewer() {
   }
 
   // 👇 Alterna la bandera para TODAS las filas con el mismo correo
+  // persistiendo en cuentascompartidas con un único PATCH bulk.
   async function toggleFlagByEmail(target: Pantalla) {
-    const email = normEmail(target.correo);
+    const email = (target.correo ?? "").trim().toLowerCase();
     if (!email) return;
 
-    // Todas las filas (en el dataset cargado) con ese correo
-    const sameEmailRows = rows.filter((x) => normEmail(x.correo) === email);
+    // Filas visibles con ese correo
+    const sameEmailRows = rows.filter(
+      (x) => (x.correo ?? "").trim().toLowerCase() === email
+    );
 
     if (sameEmailRows.length === 0) return;
 
-    // Si TODAS están ON ⇒ apágalas; si alguna está OFF ⇒ enciende TODAS
+    // Si todas están ON ⇒ apágalas; si alguna OFF ⇒ enciende TODAS
     const nextValue = !sameEmailRows.every((x) => !!x.cuenta_caida);
 
     // ✅ Optimistic UI
     setRows((prev) =>
       prev.map((x) =>
-        normEmail(x.correo) === email ? { ...x, cuenta_caida: nextValue } : x
+        (x.correo ?? "").trim().toLowerCase() === email
+          ? { ...x, cuenta_caida: nextValue }
+          : x
       )
     );
     for (const x of sameEmailRows)
       mergeIntoCache({ ...x, cuenta_caida: nextValue });
-    broadcastInvalidate();
 
     try {
-      // 🔄 Persistimos en backend (uno por uno)
-      await Promise.all(
-        sameEmailRows.map((x) =>
-          fetch(`/api/pantallas/${x.id}`, {
+      // 👉 Persistimos en cuentascompartidas (UNA sola llamada si hay cuenta_id)
+      if (target.cuenta_id) {
+        await fetch(
+          `/api/cuentascompartidas/${target.cuenta_id}?applyToSameEmail=1`,
+          {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ cuenta_caida: nextValue }),
-          }).then((r) => {
-            if (!r.ok) throw new Error("PATCH failed");
-            return r.json().catch(() => ({}));
-          })
-        )
-      );
+          }
+        );
+      } else {
+        // Fallback (si por alguna razón no hay cuenta_id), no debería ocurrir normalmente
+        await Promise.all(
+          sameEmailRows.map((x) =>
+            fetch(`/api/pantallas/${x.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ cuenta_caida: nextValue }),
+            })
+          )
+        );
+      }
+
+      // 🔊 Avisar a otras pestañas/ventanas del MISMO navegador
+      try {
+        const bc = new BroadcastChannel("pantallas_mutations_bc");
+        bc.postMessage({ type: "invalidate-pantallas" });
+        bc.close();
+      } catch {}
     } catch {
-      // (opcional) si quieres, refetch para garantizar consistencia
-      // await forceRefresh();
+      // Si algo falla, fuerza un refetch para no quedar desincronizado
+      await forceRefresh();
     }
   }
 
@@ -816,6 +860,7 @@ export default function PantallasViewer() {
       estado: row.estado ?? "",
       comentario: row.comentario ?? "",
       proveedor: row.proveedor ?? "",
+      __applyCorreoToCuenta: false,
     };
     if (
       seeded.fecha_compra &&
@@ -855,17 +900,22 @@ export default function PantallasViewer() {
     if (!edit) return;
     setSaving(true);
     setErr(null);
+
     try {
       const row = rows.find((r) => r.id === edit.id);
       if (!row) throw new Error("Fila no encontrada");
 
-      // Determinar cambio de correo y plataforma de la fila
+      const applyCorreoCuenta = (edit as any).applyCorreoCuenta === true;
+
       const oldCorreo = normEmail(row.correo);
       const newCorreo = normEmail(edit.correo as string);
-      const pid: number | null =
-        row.plataforma_id == null ? null : Number(row.plataforma_id);
 
-      // fecha_vencimiento derivada si hay compra+meses
+      const oldPid: number | null =
+        row.plataforma_id == null ? null : Number(row.plataforma_id);
+      const newPid: number | null =
+        edit.plataforma_id == null ? oldPid : Number(edit.plataforma_id);
+
+      // ===== Derivados =====
       let finalVence = edit.fecha_vencimiento ?? null;
       if (edit.fecha_compra && edit.meses_pagados && edit.meses_pagados >= 1) {
         finalVence = addMonthsYYYYMMDD(edit.fecha_compra, edit.meses_pagados);
@@ -874,8 +924,9 @@ export default function PantallasViewer() {
         edit.total_pagado,
         edit.total_pagado_proveedor
       );
-      // Payload base
-      const payload: Record<string, unknown> = {
+
+      // ===== Payload base para PANTALLAS (sin correo/plataforma si se aplica a todas) =====
+      const payloadPant: Record<string, unknown> = {
         contacto: edit.contacto ?? "",
         nombre: (edit.nombre ?? "") === "" ? null : edit.nombre ?? "",
         nro_pantalla: edit.nro_pantalla ?? "",
@@ -885,30 +936,188 @@ export default function PantallasViewer() {
           edit.meses_pagados == null ? null : clamp(edit.meses_pagados, 1),
         total_pagado: edit.total_pagado,
         total_pagado_proveedor: edit.total_pagado_proveedor,
-        total_ganado: totalGanadoCalc, // 👈 este valor calculado se guarda
+        total_ganado: totalGanadoCalc,
         estado: edit.estado ?? "",
         comentario: (edit.comentario ?? null) as string | null,
       };
 
-      // *** LÓGICA CUENTASCOMPARTIDAS ***
+      // Si NO aplicamos a todas, sí permitimos cambiar plataforma en pantallas
+      if (!applyCorreoCuenta) {
+        payloadPant.plataforma_id = newPid;
+      }
+
       let cuentaIdToUpdate: number | null = row.cuenta_id ?? null;
 
-      if (newCorreo && newCorreo !== oldCorreo) {
-        // upsert cuentascompartidas en la MISMA plataforma y reasignar cuenta_id
-        const newCuentaId = await upsertCuentaCompartida(
-          pid,
-          newCorreo,
-          (edit.contrasena as string) ?? null
-        );
-        payload.cuenta_id = newCuentaId;
-        payload.correo = newCorreo; // por si el backend lo usa directamente
-        cuentaIdToUpdate = newCuentaId;
-      } else {
-        // Si no cambió correo pero cambió clave y hay cuenta_id ⇒ actualizar clave en cuentascompartidas
+      // ===== A) Checkbox marcado → actualiza la CUENTA (mismo id) =====
+      if (applyCorreoCuenta) {
+        if (!row.cuenta_id) {
+          throw new Error(
+            "No hay cuenta asociada (cuenta_id) para aplicar el correo a todas."
+          );
+        }
+
+        // 1) Actualizar cuentascompartidas (correo/plataforma/clave) en el MISMO id
+        const bodyCuenta: any = {};
+        if (newCorreo && newCorreo !== oldCorreo) bodyCuenta.correo = newCorreo;
+        if (newPid !== oldPid) bodyCuenta.plataforma_id = newPid;
+
         const hasNewPass =
           typeof edit.contrasena === "string" &&
           edit.contrasena.trim() !== "" &&
           edit.contrasena !== row.contrasena;
+        if (hasNewPass) bodyCuenta.contrasena = edit.contrasena;
+
+        if (Object.keys(bodyCuenta).length > 0) {
+          const resC = await fetch(`/api/cuentascompartidas/${row.cuenta_id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(bodyCuenta),
+          });
+          if (!resC.ok) {
+            const j = await resC.json().catch(() => ({}));
+            throw new Error(
+              j?.error ??
+                "No se pudo actualizar la cuenta compartida (correo/plataforma)."
+            );
+          }
+        }
+
+        // 2) Patch de PANTALLAS solo con campos locales (¡sin correo/plataforma!)
+        const resPant = await fetch(`/api/pantallas/${edit.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payloadPant),
+        });
+        if (!resPant.ok) {
+          const j = await resPant.json().catch(() => ({}));
+          throw new Error(j?.error ?? "No se pudo guardar");
+        }
+        const flat = await resPant.json();
+
+        // 3) UI: reflejar el cambio en TODAS las filas con el mismo cuenta_id
+        setRows((prev) => {
+          const next = prev.map((r) =>
+            Number(r.cuenta_id) === Number(row.cuenta_id)
+              ? {
+                  ...r,
+                  correo: newCorreo ? newCorreo : r.correo,
+                  plataforma_id:
+                    newPid !== undefined && newPid !== null
+                      ? newPid
+                      : r.plataforma_id,
+                  contrasena:
+                    hasNewPass && typeof edit.contrasena === "string"
+                      ? edit.contrasena
+                      : r.contrasena,
+                }
+              : r
+          );
+          writeCache(next);
+          return next;
+        });
+
+        // 4) Mezcla la fila editada con lo devuelto por la API
+        mergeIntoCache({
+          id: Number(flat?.row?.id ?? edit.id),
+          cuenta_id: cuentaIdToUpdate,
+          contacto: flat?.row?.contacto ?? edit.contacto,
+          nombre: flat?.row?.usuarios?.nombre ?? edit.nombre ?? null,
+          nro_pantalla: flat?.row?.nro_pantalla ?? edit.nro_pantalla ?? null,
+          fecha_compra: flat?.row?.fecha_compra ?? edit.fecha_compra ?? null,
+          fecha_vencimiento: flat?.row?.fecha_vencimiento ?? finalVence ?? null,
+          meses_pagados:
+            flat?.row?.meses_pagados ??
+            (edit.meses_pagados == null ? null : edit.meses_pagados),
+          total_pagado:
+            flat?.row?.total_pagado == null
+              ? null
+              : Number(flat.row.total_pagado as any),
+          total_pagado_proveedor:
+            flat?.row?.total_pagado_proveedor == null
+              ? null
+              : Number(flat.row.total_pagado_proveedor as any),
+          total_ganado:
+            flat?.row?.total_ganado == null
+              ? null
+              : Number(flat.row.total_ganado as any),
+          estado: flat?.row?.estado ?? edit.estado ?? null,
+          comentario: flat?.row?.comentario ?? edit.comentario ?? null,
+          plataforma_id:
+            newPid !== undefined && newPid !== null
+              ? newPid
+              : row.plataforma_id,
+          correo: newCorreo ? newCorreo : row.correo || null,
+          contrasena:
+            hasNewPass && typeof edit.contrasena === "string"
+              ? edit.contrasena
+              : row.contrasena ?? null,
+          proveedor: edit.proveedor ?? null,
+        });
+
+        broadcastInvalidate();
+        setEdit(null);
+        setSaving(false);
+        return; // ← Detén aquí; no entres a la rama normal
+      }
+
+      // ===== B) Checkbox NO marcado → flujo original (puede crear/reasignar cuentas)
+      if (newCorreo && newCorreo !== oldCorreo) {
+        const existing = await findCuentaCompartidaByCorreo(null, newCorreo);
+
+        if (existing?.id) {
+          (payloadPant as any).cuenta_id = Number(existing.id);
+          (payloadPant as any).correo = newCorreo;
+          cuentaIdToUpdate = Number(existing.id);
+
+          const hasNewPass =
+            typeof edit.contrasena === "string" &&
+            edit.contrasena.trim() !== "";
+          if (hasNewPass) {
+            try {
+              await fetch(`/api/cuentascompartidas/${existing.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contrasena: edit.contrasena }),
+              });
+            } catch {}
+          }
+        } else {
+          const bodyCreate: any = { correo: newCorreo };
+          if (oldPid != null) bodyCreate.plataforma_id = oldPid;
+          if (
+            typeof edit.contrasena === "string" &&
+            edit.contrasena.trim() !== ""
+          ) {
+            bodyCreate.contrasena = edit.contrasena;
+          }
+
+          const rNew = await fetch("/api/cuentascompartidas", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(bodyCreate),
+          });
+          if (!rNew.ok) {
+            const j = await rNew.json().catch(() => ({}));
+            throw new Error(
+              j?.error ?? "No se pudo crear la cuenta compartida"
+            );
+          }
+          const created = await rNew.json();
+          if (!created?.id)
+            throw new Error(
+              "La API no devolvió id al crear cuentascompartidas"
+            );
+
+          (payloadPant as any).cuenta_id = Number(created.id);
+          (payloadPant as any).correo = newCorreo;
+          cuentaIdToUpdate = Number(created.id);
+        }
+      } else {
+        const hasNewPass =
+          typeof edit.contrasena === "string" &&
+          edit.contrasena.trim() !== "" &&
+          edit.contrasena !== row.contrasena;
+
         if (hasNewPass && row.cuenta_id) {
           try {
             await fetch(`/api/cuentascompartidas/${row.cuenta_id}`, {
@@ -918,14 +1127,19 @@ export default function PantallasViewer() {
             });
           } catch {}
         }
-        // Mantener correo original si no cambió
-        payload.correo = newCorreo || oldCorreo || null;
+
+        (payloadPant as any).correo = newCorreo || oldCorreo || null;
+
+        if (!newCorreo) {
+          (payloadPant as any).cuenta_id = null;
+          cuentaIdToUpdate = null;
+        }
       }
 
       const res = await fetch(`/api/pantallas/${edit.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payloadPant),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -958,8 +1172,11 @@ export default function PantallasViewer() {
             : Number(flat.row.total_ganado as any),
         estado: flat?.row?.estado ?? edit.estado ?? null,
         comentario: flat?.row?.comentario ?? edit.comentario ?? null,
-        plataforma_id: row.plataforma_id,
-        correo: newCorreo || row.correo || null,
+        plataforma_id:
+          flat?.row?.plataforma_id != null
+            ? Number(flat.row.plataforma_id)
+            : newPid,
+        correo: newCorreo ? newCorreo : row.correo || null,
         contrasena: (edit.contrasena as string) ?? row.contrasena ?? null,
         proveedor: edit.proveedor ?? null,
       } satisfies Partial<Pantalla> & { id: number };
@@ -1429,14 +1646,14 @@ export default function PantallasViewer() {
                           {
                             allOn && (
                               <span className="ml-2 inline-flex items-center rounded-md border border-rose-700 bg-rose-900/40 px-2 py-0.5 text-xs text-rose-100">
-                                🏴 Cuenta caída (todas)
+                                🏳️ Cuenta caída (todas)
                               </span>
                             );
                           }
                           {
                             !allOn && someOn && (
                               <span className="ml-2 inline-flex items-center rounded-md border border-amber-700 bg-amber-900/40 px-2 py-0.5 text-xs text-amber-100">
-                                🏴 Algunas caídas
+                                🏳️ Algunas caídas
                               </span>
                             );
                           }
@@ -1534,7 +1751,7 @@ export default function PantallasViewer() {
                               <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
                             </svg>
                           </button>
-                          {/* 🏴 Bandera (aplica a TODO el correo) */}
+                          {/* 🏳️ Bandera (aplica a TODO el correo) */}
                           <button
                             title={
                               r.cuenta_caida
@@ -1549,7 +1766,7 @@ export default function PantallasViewer() {
                             }`}
                             aria-label="Bandera cuenta caída"
                           >
-                            🏴
+                            🏳️
                           </button>
                         </div>
                       </td>
@@ -1669,6 +1886,34 @@ export default function PantallasViewer() {
                 </div>
 
                 <div className="p-5 grid gap-4 sm:grid-cols-2">
+                  {/* Plataforma */}
+                  <label className="grid gap-1">
+                    <span className="text-sm text-neutral-300">Plataforma</span>
+                    <select
+                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600 [&>option]:bg-neutral-950 [&>option]:text-neutral-100"
+                      value={
+                        edit.plataforma_id == null
+                          ? ""
+                          : String(edit.plataforma_id)
+                      }
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          plataforma_id: e.target.value
+                            ? Number(e.target.value)
+                            : null,
+                        }))
+                      }
+                    >
+                      <option value="">—</option>
+                      {plataformas.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
                   <label className="grid gap-1">
                     <span className="text-sm text-neutral-300">Contacto</span>
                     <input
@@ -1709,6 +1954,24 @@ export default function PantallasViewer() {
                       }
                     />
                   </label>
+                  {/* dentro del modal edición, por ejemplo arriba de “Guardar” */}
+                  <label className="flex items-center gap-2 sm:col-span-2">
+                    <input
+                      type="checkbox"
+                      checked={Boolean((edit as any).applyCorreoCuenta)}
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as any),
+                          applyCorreoCuenta: e.target.checked,
+                        }))
+                      }
+                    />
+                    <span className="text-sm text-neutral-300">
+                      Aplicar correo (y plataforma) a todas las pantallas de
+                      esta cuenta
+                    </span>
+                  </label>
+
                   <label className="grid gap-1">
                     <span className="text-sm text-neutral-300">Contraseña</span>
                     <input

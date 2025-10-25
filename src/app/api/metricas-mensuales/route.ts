@@ -1,4 +1,3 @@
-// src/app/api/metricas-mensuales/route.ts
 export const runtime = 'nodejs';
 
 import { NextResponse, type NextRequest } from 'next/server';
@@ -7,6 +6,10 @@ import { z } from 'zod';
 import ExcelJS from 'exceljs';
 
 /* ================= Schema de entrada (POST) ================= */
+
+const MM =
+  (prisma as any).metricasmensuales ??
+  (prisma as any).metricasMensuales; // por si en otro entorno está camelCase
 
 const RankingItem = z.object({
   name: z.string(),
@@ -48,7 +51,11 @@ const Body = z
 
 /* ================= Helpers ================= */
 const pad2 = (n: number) => String(n).padStart(2, '0');
-const dec = (n: number) => (Number.isFinite(n) ? n : 0).toFixed(2); // Prisma Decimal → string segura
+// Prisma Decimal → string segura con 2 decimales (guardar como TEXT/DECIMAL en BD)
+const dec = (n: number) => (Number.isFinite(n) ? n : 0).toFixed(2);
+// Prisma Decimal / string / number -> number (para respuestas/Excel)
+const toNum = (v: unknown): number =>
+  v == null ? 0 : Number((v as any).toString?.() ?? v);
 
 /* ================= GET /api/metricas-mensuales?year=&month=&format= ================= */
 
@@ -64,8 +71,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'invalid_query' }, { status: 400 });
     }
 
-    const row = await prisma.metricasMensuales.findUnique({
-      where: { year_month: { year, month } }, // requiere @@unique([year, month], name: "year_month")
+    // ⚠️ sin índice compuesto: usamos findFirst
+    const row = await MM.findFirst({
+      where: { year, month },
     });
 
     if (!row) {
@@ -73,16 +81,18 @@ export async function GET(req: NextRequest) {
     }
 
     // `payload` puede traer campos adicionales (p.ej. ventas_dia_plataforma)
-    const payload = (row as any).payload ?? {};
-    const ventasDiaPlataforma = payload?.ventas_dia_plataforma ?? null;
+    const payload: any = (row as any).payload ?? {};
+    const ventasDiaPlataforma = Array.isArray(payload?.ventas_dia_plataforma)
+      ? payload.ventas_dia_plataforma
+      : null;
 
     // ---- Descargas ----
     if (format === 'csv') {
       const kpis = [
         ['Periodo', row.periodLabel],
-        ['Total general', Number(row.totalGeneral)],
-        ['Total pantallas', Number(row.totalPantallas)],
-        ['Total cuentas completas', Number(row.totalCuentas)],
+        ['Total general', toNum(row.totalGeneral)],
+        ['Total pantallas', toNum(row.totalPantallas)],
+        ['Total cuentas completas', toNum(row.totalCuentas)],
         ['Clientes activos', row.clientesActivos],
         ['Ventas (unidades)', row.ventasCantidad],
       ];
@@ -104,9 +114,9 @@ export async function GET(req: NextRequest) {
       wsKPI.addRows([
         ['KPI', 'Valor'],
         ['Periodo', row.periodLabel],
-        ['Total general', Number(row.totalGeneral)],
-        ['Total pantallas', Number(row.totalPantallas)],
-        ['Total cuentas completas', Number(row.totalCuentas)],
+        ['Total general', toNum(row.totalGeneral)],
+        ['Total pantallas', toNum(row.totalPantallas)],
+        ['Total cuentas completas', toNum(row.totalCuentas)],
         ['Clientes activos', row.clientesActivos],
         ['Ventas (unidades)', row.ventasCantidad],
       ]);
@@ -116,7 +126,7 @@ export async function GET(req: NextRequest) {
       const wsRanking = wb.addWorksheet('Ranking');
       wsRanking.addRows([['Plataforma', 'Unidades', 'Total', 'PlataformaId']]);
       wsRanking.getRow(1).font = { bold: true };
-      (row.ranking as any[] | null ?? []).forEach((r) =>
+      (Array.isArray(row.ranking) ? (row.ranking as any[]) : []).forEach((r) =>
         wsRanking.addRow([r.name, r.count, r.total, r.pid ?? null])
       );
 
@@ -124,7 +134,7 @@ export async function GET(req: NextRequest) {
       const wsDay = wb.addWorksheet('Ventas_dia_total');
       wsDay.addRows([['Dia', 'Total', 'Pantallas', 'Completas']]);
       wsDay.getRow(1).font = { bold: true };
-      (row.ventasDias as any[] | null ?? []).forEach((d) =>
+      (Array.isArray(row.ventasDias) ? (row.ventasDias as any[]) : []).forEach((d) =>
         wsDay.addRow([d.day, d.total, d.pantallas, d.completas])
       );
 
@@ -132,7 +142,7 @@ export async function GET(req: NextRequest) {
       const wsPlat = wb.addWorksheet('Ventas_dia_plataforma');
       wsPlat.addRows([['Dia', 'Tipo', 'PlataformaId', 'Total']]);
       wsPlat.getRow(1).font = { bold: true };
-      (ventasDiaPlataforma as any[] | null ?? []).forEach((v) =>
+      (Array.isArray(ventasDiaPlataforma) ? ventasDiaPlataforma : []).forEach((v: any) =>
         wsPlat.addRow([
           v.day,
           v.tipo === 'C' ? 'Cuentas completas' : 'Pantallas',
@@ -189,9 +199,9 @@ export async function GET(req: NextRequest) {
       year: row.year,
       month: row.month,
       periodLabel: row.periodLabel,
-      total_general: Number(row.totalGeneral),
-      total_pantallas: Number(row.totalPantallas),
-      total_cuentas: Number(row.totalCuentas),
+      total_general: toNum(row.totalGeneral),
+      total_pantallas: toNum(row.totalPantallas),
+      total_cuentas: toNum(row.totalCuentas),
       ventas_cantidad: row.ventasCantidad,
       clientes_activos: row.clientesActivos,
       ranking: row.ranking as unknown,        // JSON
@@ -221,33 +231,44 @@ export async function POST(req: NextRequest) {
     const b = parsed.data;
     const periodLabel = `${b.year}-${pad2(b.month)}`;
 
-    const saved = await prisma.metricasMensuales.upsert({
-      where: { year_month: { year: b.year, month: b.month } },
-      update: {
-        periodLabel,
-        totalGeneral: dec(b.total_general),
-        totalPantallas: dec(b.total_pantallas),
-        totalCuentas: dec(b.total_cuentas),
-        ventasCantidad: b.ventas_cantidad,
-        clientesActivos: b.clientes_activos,
-        ranking: b.ranking,          // JSON
-        ventasDias: b.ventas_dias,   // JSON
-        payload: raw,                // guarda todo lo adicional: ventas_dia_plataforma, etc.
-      },
-      create: {
-        year: b.year,
-        month: b.month,
-        periodLabel,
-        totalGeneral: dec(b.total_general),
-        totalPantallas: dec(b.total_pantallas),
-        totalCuentas: dec(b.total_cuentas),
-        ventasCantidad: b.ventas_cantidad,
-        clientesActivos: b.clientes_activos,
-        ranking: b.ranking,
-        ventasDias: b.ventas_dias,
-        payload: raw,
-      },
+    // ⚠️ sin índice compuesto: upsert manual por (year, month)
+    const existing = await MM.findFirst({
+      where: { year: b.year, month: b.month },
     });
+
+    let saved;
+    if (existing) {
+      saved = await MM.update({
+        where: { id: existing.id },
+        data: {
+          periodLabel,
+          totalGeneral: dec(b.total_general),
+          totalPantallas: dec(b.total_pantallas),
+          totalCuentas: dec(b.total_cuentas),
+          ventasCantidad: b.ventas_cantidad,
+          clientesActivos: b.clientes_activos,
+          ranking: b.ranking,          // JSON
+          ventasDias: b.ventas_dias,   // JSON
+          payload: raw,                // guarda todo lo adicional: ventas_dia_plataforma, etc.
+        },
+      });
+    } else {
+      saved = await MM.create({
+        data: {
+          year: b.year,
+          month: b.month,
+          periodLabel,
+          totalGeneral: dec(b.total_general),
+          totalPantallas: dec(b.total_pantallas),
+          totalCuentas: dec(b.total_cuentas),
+          ventasCantidad: b.ventas_cantidad,
+          clientesActivos: b.clientes_activos,
+          ranking: b.ranking,
+          ventasDias: b.ventas_dias,
+          payload: raw,
+        },
+      });
+    }
 
     return NextResponse.json(
       {
@@ -255,9 +276,9 @@ export async function POST(req: NextRequest) {
         year: saved.year,
         month: saved.month,
         periodLabel: saved.periodLabel,
-        total_general: Number(saved.totalGeneral),
-        total_pantallas: Number(saved.totalPantallas),
-        total_cuentas: Number(saved.totalCuentas),
+        total_general: toNum(saved.totalGeneral),
+        total_pantallas: toNum(saved.totalPantallas),
+        total_cuentas: toNum(saved.totalCuentas),
         ventas_cantidad: saved.ventasCantidad,
         clientes_activos: saved.clientesActivos,
         ranking: saved.ranking,
@@ -267,7 +288,7 @@ export async function POST(req: NextRequest) {
         createdAt: saved.createdAt,
         updatedAt: saved.updatedAt,
       },
-      { status: 201 }
+      { status: existing ? 200 : 201 }
     );
   } catch (e: any) {
     return NextResponse.json({ error: 'save_failed', detail: e?.message }, { status: 500 });

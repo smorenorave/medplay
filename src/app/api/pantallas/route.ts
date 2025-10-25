@@ -81,6 +81,9 @@ const clamp = (n: number | null | undefined, min: number, max: number, fallback:
 /* ========================================================================
  * GET /api/pantallas
  * ======================================================================== */
+/* ========================================================================
+ * GET /api/pantallas
+ * ======================================================================== */
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -141,7 +144,14 @@ export async function GET(req: Request) {
       take: limit,
       include: {
         cuentascompartidas: {
-          select: { id: true, correo: true, plataforma_id: true, contrasena: true, proveedor: true },
+          select: {
+            id: true,
+            correo: true,
+            plataforma_id: true,
+            contrasena: true,
+            proveedor: true,
+            cuenta_caida: true, // 👈 se agrega el booleano
+          },
         },
         usuarios: { select: { nombre: true, contacto: true } },
       },
@@ -163,19 +173,26 @@ export async function GET(req: Request) {
       fecha_vencimiento: toYMDUTC(r.fecha_vencimiento ?? null),
       meses_pagados: r.meses_pagados == null ? null : Number(r.meses_pagados),
       total_pagado: r.total_pagado == null ? null : Number(r.total_pagado),
-      total_pagado_proveedor: r.total_pagado_proveedor == null ? null : Number(r.total_pagado_proveedor),
+      total_pagado_proveedor:
+        r.total_pagado_proveedor == null ? null : Number(r.total_pagado_proveedor),
       total_ganado: r.total_ganado == null ? null : Number(r.total_ganado),
       estado: r.estado ?? null,
       comentario: r.comentario ?? null,
       correo: r.cuentascompartidas?.correo ?? null,
       plataforma_id:
-        r.cuentascompartidas?.plataforma_id == null ? null : Number(r.cuentascompartidas.plataforma_id),
+        r.cuentascompartidas?.plataforma_id == null
+          ? null
+          : Number(r.cuentascompartidas.plataforma_id),
       contrasena: r.cuentascompartidas?.contrasena ?? null,
       proveedor: r.cuentascompartidas?.proveedor ?? null,
       nombre: r.usuarios?.nombre ?? null,
+
+      // 👇 Aquí se proyecta al front el valor real
+      cuenta_caida: !!r.cuentascompartidas?.cuenta_caida,
     }));
 
-    const nextCursor = items.length === limit ? Number(items[items.length - 1]?.id ?? null) : null;
+    const nextCursor =
+      items.length === limit ? Number(items[items.length - 1]?.id ?? null) : null;
 
     return NextResponse.json({ items, nextCursor }, { status: 200 });
   } catch (e: any) {

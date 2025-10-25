@@ -181,7 +181,7 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
     }
     const c = parsed.data;
 
-    // Validación opcional de plataforma
+    // Validación de plataforma si se envía (aquí SÍ se cambia la plataforma de la MISMA cuenta)
     if (c.plataforma_id !== undefined) {
       const plat = await prisma.plataformas.findUnique({ where: { id: c.plataforma_id } });
       if (!plat) return NextResponse.json({ error: 'platform-not-found' }, { status: 404 });
@@ -215,6 +215,7 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
     const wantsChangeContacto = c.contacto !== undefined && c.contacto !== oldContacto;
 
     // Datos escalares para cuentascompletas (con fechas *locales*)
+    // ⚠️ Aquí sí aplicamos `plataforma_id` directamente a ESTA cuenta.
     const scalarData: Record<string, any> = {
       ...(c.correo !== undefined ? { correo: c.correo } : {}),                    // string | null | undefined
       ...(c.contrasena !== undefined ? { contrasena: c.contrasena } : {}),       // string | null | undefined

@@ -23,7 +23,6 @@ type Cuenta = {
   total_ganado: number | null;
   estado: string | null;
   comentario: string | null;
-  cuenta_caida: boolean | null;
 };
 type EditState = Partial<Cuenta> & { id: number };
 
@@ -75,7 +74,6 @@ function normalizeRow(r: any): Cuenta {
     total_ganado: r.total_ganado == null ? null : Number(r.total_ganado),
     estado: r.estado ?? null,
     comentario: r.comentario ?? null,
-    cuenta_caida: r.cuenta_caida ?? false,
   };
 }
 
@@ -460,45 +458,6 @@ export default function CuentasCompletasViewer() {
     }
   }
 
-  async function toggleFlagByEmail(target: Cuenta) {
-    const email = normEmail(target.correo);
-    if (!email) return;
-
-    const sameEmailRows = rows.filter((x) => normEmail(x.correo) === email);
-    if (sameEmailRows.length === 0) return;
-
-    // Si todas están ON ⇒ apagar; si alguna está OFF ⇒ encender todas
-    const nextValue = !sameEmailRows.every((x) => !!x.cuenta_caida);
-
-    // Optimistic UI + cache local
-    setRows((prev) =>
-      prev.map((x) =>
-        normEmail(x.correo) === email ? { ...x, cuenta_caida: nextValue } : x
-      )
-    );
-    for (const x of sameEmailRows)
-      mergeIntoCache({ ...x, cuenta_caida: nextValue });
-    broadcastInvalidate();
-
-    try {
-      await Promise.all(
-        sameEmailRows.map((x) =>
-          fetch(`/api/cuentascompletas/${x.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ cuenta_caida: nextValue }),
-          }).then((r) => {
-            if (!r.ok) throw new Error("PATCH failed");
-            return r.json().catch(() => ({}));
-          })
-        )
-      );
-    } catch {
-      // (opcional) refetch si quieres garantizar consistencia
-      // await forceRefresh();
-    }
-  }
-
   // Filtro + búsqueda local
   // Filtro + búsqueda local
   const filtered = useMemo(() => {
@@ -589,6 +548,7 @@ export default function CuentasCompletasViewer() {
         edit.total_pagado,
         edit.total_pagado_proveedor
       );
+
       const payload: Record<string, unknown> = {
         contacto: edit.contacto ?? "",
         nombre: (edit.nombre ?? "") === "" ? null : edit.nombre ?? "",
@@ -605,6 +565,14 @@ export default function CuentasCompletasViewer() {
         correo: (edit.correo ?? null) as string | null,
       };
 
+      // 👉 plataforma_id: solo si cambió y es número válido
+      if (
+        typeof edit.plataforma_id === "number" &&
+        edit.plataforma_id !== row.plataforma_id
+      ) {
+        payload.plataforma_id = edit.plataforma_id;
+      }
+
       // contraseña: enviar si cambió (permitir limpiar => null)
       if ((edit.contrasena ?? "") !== (row.contrasena ?? "")) {
         const raw = (edit.contrasena ?? "").toString();
@@ -620,36 +588,10 @@ export default function CuentasCompletasViewer() {
         const j = await res.json().catch(() => ({}));
         throw new Error(j?.error ?? "No se pudo guardar");
       }
-      const flat = await res.json();
 
-      const updated = {
-        id: Number(flat?.row?.id ?? edit.id),
-        contacto: flat?.row?.contacto ?? edit.contacto,
-        nombre: flat?.row?.nombre ?? edit.nombre ?? null,
-        proveedor: flat?.row?.proveedor ?? edit.proveedor ?? null,
-        fecha_compra: flat?.row?.fecha_compra ?? edit.fecha_compra ?? null,
-        fecha_vencimiento: flat?.row?.fecha_vencimiento ?? finalVence ?? null,
-        meses_pagados:
-          flat?.row?.meses_pagados ??
-          (edit.meses_pagados == null ? null : edit.meses_pagados),
-        total_pagado:
-          flat?.row?.total_pagado == null
-            ? null
-            : Number(flat.row.total_pagado as any),
-        total_pagado_proveedor:
-          flat?.row?.total_pagado_proveedor == null
-            ? null
-            : Number(flat.row.total_pagado_proveedor as any),
-        total_ganado:
-          flat?.row?.total_ganado == null
-            ? null
-            : Number(flat.row.total_ganado as any),
-        estado: flat?.row?.estado ?? edit.estado ?? null,
-        comentario: flat?.row?.comentario ?? edit.comentario ?? null,
-        plataforma_id: row.plataforma_id,
-        correo: (flat?.row?.correo ?? edit.correo ?? row.correo ?? null) as any,
-        contrasena: (edit.contrasena as string) ?? row.contrasena ?? null,
-      } satisfies Partial<Cuenta> & { id: number };
+      // ⬇️ El endpoint devuelve la FILA PLANA, no {row: ...}
+      const saved = await res.json();
+      const updated = normalizeRow(saved); // reutiliza tu helper
 
       const nextCache = mergeIntoCache(updated);
       setRows(nextCache);
@@ -1141,23 +1083,6 @@ export default function CuentasCompletasViewer() {
                         <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
                       </svg>
                     </button>
-                    {/* 🏴 Bandera: cambia TODAS las filas con el mismo correo */}
-                    <button
-                      title={
-                        r.cuenta_caida
-                          ? "Cuenta caída (clic para quitar en todas con este correo)"
-                          : "Marcar como caída en todas con este correo"
-                      }
-                      onClick={() => toggleFlagByEmail(r)}
-                      className={`inline-flex p-1 rounded-md border hover:bg-neutral-800/60 ${
-                        r.cuenta_caida
-                          ? "bg-rose-800/40 border-rose-700 text-rose-200"
-                          : "bg-neutral-800/40 border-neutral-600 text-neutral-300"
-                      }`}
-                      aria-label="Bandera cuenta caída"
-                    >
-                      🏴
-                    </button>
                   </div>
                 </td>
 
@@ -1271,6 +1196,30 @@ export default function CuentasCompletasViewer() {
                 </div>
 
                 <div className="p-5 grid gap-4 sm:grid-cols-2">
+                  {/* Plataforma */}
+                  <label className="grid gap-1">
+                    <span className="text-sm text-neutral-300">Plataforma</span>
+                    <select
+                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
+                      value={edit.plataforma_id ?? ""}
+                      onChange={(e) =>
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          plataforma_id: e.target.value
+                            ? Number(e.target.value)
+                            : null,
+                        }))
+                      }
+                    >
+                      <option value="">— Selecciona —</option>
+                      {plataformas.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
                   <label className="grid gap-1">
                     <span className="text-sm text-neutral-300">Contacto</span>
                     <input
