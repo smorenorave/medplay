@@ -6,29 +6,24 @@
   - You are about to drop the `monthlymetric` table. If the table is not empty, all the data it contains will be lost.
   - You are about to drop the `monthlyplatform` table. If the table is not empty, all the data it contains will be lost.
 
+  Note: This migration file was adjusted to be idempotent (safe to run even if old tables or foreign keys are missing),
+  fixing Prisma shadow DB errors like P3006 / P3018 during migration.
 */
--- DropForeignKey
-ALTER TABLE `monthlydaily` DROP FOREIGN KEY `MonthlyDaily_metricId_fkey`;
 
--- DropForeignKey
-ALTER TABLE `monthlydailyplatform` DROP FOREIGN KEY `MonthlyDailyPlatform_metricId_fkey`;
+-- ============================================================
+-- SAFE DROPS (avoid errors if old tables or FKs are missing)
+-- ============================================================
 
--- DropForeignKey
-ALTER TABLE `monthlyplatform` DROP FOREIGN KEY `MonthlyPlatform_metricId_fkey`;
+-- Drop old tables if they exist (with cascade of their internal FKs)
+DROP TABLE IF EXISTS `monthlydaily`;
+DROP TABLE IF EXISTS `monthlydailyplatform`;
+DROP TABLE IF EXISTS `monthlymetric`;
+DROP TABLE IF EXISTS `monthlyplatform`;
 
--- DropTable
-DROP TABLE `monthlydaily`;
+-- ============================================================
+-- CREATE NEW TABLE
+-- ============================================================
 
--- DropTable
-DROP TABLE `monthlydailyplatform`;
-
--- DropTable
-DROP TABLE `monthlymetric`;
-
--- DropTable
-DROP TABLE `monthlyplatform`;
-
--- CreateTable
 CREATE TABLE `MetricasMensuales` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `year` INTEGER NOT NULL,
@@ -49,3 +44,4 @@ CREATE TABLE `MetricasMensuales` (
     UNIQUE INDEX `MetricasMensuales_year_month_key`(`year`, `month`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
