@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ThHTMLAttributes, TdHTMLAttributes, ReactNode, FormEvent } from 'react';
+import { useDeferredValue } from 'react';
 
 /* ---------------------------- Tipos ---------------------------- */
 type Plataforma = { id: number; nombre: string; cantidad_pantallas: number };
@@ -578,6 +579,9 @@ function ContactosPane() {
 /* =================================================================== */
 /*                       Pane: Inventario (buscador + lista + form)     */
 /* =================================================================== */
+/* =================================================================== */
+/*                       Pane: Inventario (buscador + lista + form)    */
+/* =================================================================== */
 function InventarioPane() {
   // plataformas
   const [plataformas, setPlataformas] = useState<Plataforma[]>([]);
@@ -606,6 +610,10 @@ function InventarioPane() {
   const [creating, setCreating] = useState(false);
   const [createErr, setCreateErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
+
+  // 🔢 paginación (cliente)
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(200);
 
   /* -------- cargar plataformas -------- */
   useEffect(() => {
@@ -702,12 +710,19 @@ function InventarioPane() {
   const onDelete=async(row:Inventario)=>{
     if(!confirm(`¿Eliminar ${row.correo}?`)) return;
     try{
+      // Optimista + luego confirmación del backend
+      setRows(rs=>rs.filter(r=>r.id!==row.id));
       const res=await fetch(`/api/inventario/${row.id}`,{method:'DELETE'});
-      if(res.ok){ setRows(rs=>rs.filter(r=>r.id!==row.id)); return;}
+      if(res.ok){ return; }
+      // Si falló, reponemos la fila
       const j=await res.json().catch(()=>({} as any));
-      if(res.status===409){ alert(j?.message || 'No se puede eliminar.'); return; }
+      if(res.status===409){ alert(j?.message || 'No se puede eliminar.'); load(); return; }
       throw new Error(j?.error ?? 'No se pudo eliminar');
-    }catch(e:any){ alert(e?.message ?? 'Error al eliminar'); }
+    }catch(e:any){
+      alert(e?.message ?? 'Error al eliminar');
+      // re-sync
+      load();
+    }
   };
 
   /* -------- UI -------- */
@@ -728,6 +743,24 @@ function InventarioPane() {
       return tokens.every(t=>h.includes(t));
     });
   },[rows, q, platformMap]);
+
+  // 👉 reset página si cambian filtros o dataset
+  useEffect(() => { setPage(1); }, [q, fPlataformaId, rows.length]);
+
+  // 👉 cálculos de paginación
+  const total = filteredClient.length;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const pageRows = useMemo(() => {
+    const safePage = Math.min(Math.max(1, page), pageCount);
+    const start = (safePage - 1) * pageSize;
+    return filteredClient.slice(start, start + pageSize);
+  }, [filteredClient, page, pageSize, pageCount]);
+
+  // 👉 helpers paginación
+  const goFirst = () => setPage(1);
+  const goPrev  = () => setPage(p => Math.max(1, p - 1));
+  const goNext  = () => setPage(p => Math.min(pageCount, p + 1));
+  const goLast  = () => setPage(pageCount);
 
   return (
     <Card>
@@ -755,7 +788,7 @@ function InventarioPane() {
             <label className="block text-sm mb-1 text-neutral-300">Correo</label>
             <input type="email" className={input} placeholder="correo@dominio.com" value={correo} onChange={e=>setCorreo(e.target.value)} required/>
           </div>
-            <div>
+          <div>
             <label className="block text-sm mb-1 text-neutral-300">Clave</label>
             <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
               <input type="text" className={input} placeholder="Opcional" value={clave} onChange={e=>setClave(e.target.value)}/>
@@ -766,7 +799,7 @@ function InventarioPane() {
         {okMsg && <div className="text-sm text-emerald-300">{okMsg}</div>}
         {createErr && <div className="text-sm text-red-300">Error: {createErr}</div>}
 
-        {/* Buscador/lista */}
+        {/* Buscador/lista + controles de paginación arriba */}
         <div className="grid gap-2 sm:grid-cols-[minmax(180px,280px)_1fr_auto]">
           <div>
             <label className="block text-sm mb-1 text-neutral-300">Plataforma (filtro)</label>
@@ -784,18 +817,58 @@ function InventarioPane() {
           </div>
           <div>
             <label className="block text-sm mb-1 text-neutral-300">Buscar</label>
-            <input
-              className={input}
-              placeholder="Correo, clave…"
-              value={q}
-              onChange={(e)=>setQ(e.target.value)}
-            />
+            <input className={input} placeholder="Correo, clave…" value={q} onChange={(e)=>setQ(e.target.value)} />
           </div>
-          <div className="flex items-end">
+          <div className="flex items-end gap-2">
             <button type="button" onClick={load} className={btn}>Refrescar</button>
           </div>
         </div>
 
+        {/* Controles de paginación */}
+        <div className="flex flex-wrap items-center gap-2 justify-between border border-neutral-800 rounded-xl px-3 py-2 bg-neutral-950/40">
+          <div className="text-sm text-neutral-300">
+            {total === 0
+              ? '0 resultados'
+              : `Mostrando ${(page-1)*pageSize + 1}–${Math.min(page*pageSize, total)} de ${total}`}
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={goFirst} className={btn} disabled={page<=1}>« Primero</button>
+            <button onClick={goPrev}  className={btn} disabled={page<=1}>‹ Anterior</button>
+            <div className="flex items-center gap-2 text-sm">
+              <span>Página</span>
+              <input
+                className="h-9 w-16 rounded-lg px-2 border border-neutral-700 bg-neutral-900 text-neutral-100 text-center outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+                inputMode="numeric"
+                value={String(page)}
+                onChange={(e)=>{
+                  const n = Number(e.target.value);
+                  if (Number.isInteger(n) && n>=1 && n<=pageCount) setPage(n);
+                }}
+              />
+              <span>de {pageCount}</span>
+            </div>
+            <button onClick={goNext} className={btn} disabled={page>=pageCount}>Siguiente ›</button>
+            <button onClick={goLast} className={btn} disabled={page>=pageCount}>Último »</button>
+            <div className="ml-2 flex items-center gap-2 text-sm">
+              <span>Tamaño</span>
+              <select
+                className="h-9 rounded-lg px-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
+                value={String(pageSize)}
+                onChange={(e)=>{
+                  const n = Number(e.target.value);
+                  setPageSize(n);
+                  setPage(1);
+                }}
+              >
+                {[50,100,200,500,1000].map(n=>(
+                  <option key={n} value={n}>{n}/página</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabla con paginación (usa pageRows) */}
         <div className="max-h-[48vh] overflow-auto custom-scroll">
           {err && <div className="p-3 text-sm text-red-300">Error: {err}</div>}
           {!err && (
@@ -809,7 +882,7 @@ function InventarioPane() {
                 </tr>
               </thead>
               <tbody>
-                {filteredClient.map((row, idx) => {
+                {pageRows.map((row, idx) => {
                   const isEditing = editingId === row.id;
                   return (
                     <tr
@@ -878,7 +951,7 @@ function InventarioPane() {
                     </tr>
                   );
                 })}
-                {filteredClient.length === 0 && (
+                {pageRows.length === 0 && (
                   <tr><Td colSpan={4} className="text-neutral-300 text-sm py-4">No hay resultados.</Td></tr>
                 )}
               </tbody>
@@ -886,10 +959,56 @@ function InventarioPane() {
           )}
           {saveErr && <div className="m-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">{saveErr}</div>}
         </div>
+
+        {/* Controles de paginación (abajo también, opcional) */}
+        <div className="flex flex-wrap items-center gap-2 justify-between border border-neutral-800 rounded-xl px-3 py-2 bg-neutral-950/40">
+          <div className="text-sm text-neutral-300">
+            {total === 0
+              ? '0 resultados'
+              : `Mostrando ${(page-1)*pageSize + 1}–${Math.min(page*pageSize, total)} de ${total}`}
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={goFirst} className={btn} disabled={page<=1}>« Primero</button>
+            <button onClick={goPrev}  className={btn} disabled={page<=1}>‹ Anterior</button>
+            <div className="flex items-center gap-2 text-sm">
+              <span>Página</span>
+              <input
+                className="h-9 w-16 rounded-lg px-2 border border-neutral-700 bg-neutral-900 text-neutral-100 text-center outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+                inputMode="numeric"
+                value={String(page)}
+                onChange={(e)=>{
+                  const n = Number(e.target.value);
+                  if (Number.isInteger(n) && n>=1 && n<=pageCount) setPage(n);
+                }}
+              />
+              <span>de {pageCount}</span>
+            </div>
+            <button onClick={goNext} className={btn} disabled={page>=pageCount}>Siguiente ›</button>
+            <button onClick={goLast} className={btn} disabled={page>=pageCount}>Último »</button>
+            <div className="ml-2 flex items-center gap-2 text-sm">
+              <span>Tamaño</span>
+              <select
+                className="h-9 rounded-lg px-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
+                value={String(pageSize)}
+                onChange={(e)=>{
+                  const n = Number(e.target.value);
+                  setPageSize(n);
+                  setPage(1);
+                }}
+              >
+                {[50,100,200,500,1000].map(n=>(
+                  <option key={n} value={n}>{n}/página</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
       </div>
     </Card>
   );
 }
+
 
 /* =================================================================== */
 /*                         CONTENEDOR CON PESTAÑAS                      */

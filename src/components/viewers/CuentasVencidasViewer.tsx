@@ -772,6 +772,7 @@ export default function CuentasPantallasVencidasPage() {
               kind: r.tipo,
               plataforma_id: r.plataforma_id,
               correo: r.correo,
+              clave: (r.contrasena ?? "") || null,
               comentario: bulkModal.invComment || undefined,
             }),
           });
@@ -1581,6 +1582,7 @@ export default function CuentasPantallasVencidasPage() {
                           kind: r.tipo,
                           plataforma_id: r.plataforma_id,
                           correo: r.correo,
+                          clave: (r.contrasena ?? "") || null,
                           comentario: invModal.comment || undefined,
                         }),
                       });

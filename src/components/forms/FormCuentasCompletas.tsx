@@ -41,12 +41,11 @@ type FormState = {
   comentario: string | "";
 };
 
+// Solo inventario
 type EmailSuggestion = {
   email: string;
-  count: number;
-  source: "db" | "inv";
-  invId?: number;
-  invClave?: string | null;
+  invId: number | null;
+  invClave: string | null;
 };
 
 /* ===================== Constantes ===================== */
@@ -57,16 +56,12 @@ const LAST_PLATFORM_KEY = "cuentascompletas:lastPlatformId";
 
 /* TTLs y claves de LS */
 const USERS_ALL_CACHE_TTL = 30 * 60_000; // 30 min
-const LIST_CACHE_TTL = 5 * 60_000; // 5 min listas de correo/clave
-const COUNT_CACHE_TTL = 5 * 60_000; // 5 min conteos por email
 const STAMP_POLL_MS = 30_000;
 
 const LS_USERS_ALL = "__usuarios_all_cache_v1"; // { map, ts }
-const LS_CC_PREFIX = "__cc_cache_v1:"; // por plataforma { map, ts, stamp }
 const LS_INV_PREFIX = "__cc_inv_cache_v1:"; // por plataforma { map, ts, stamp }
-const LS_COUNTS_PREFIX = "__cc_counts_v1:"; // por plataforma { map: {email:{count,ts,stamp}} }
 const STAMP_KEY_CC = "__stamp_cuentas_all"; // guarda último stamp de /api/cuentascompletas/stamp
-
+const LIST_CACHE_TTL = 5 * 60_000; // 5 min listas de inventario (mantener)
 /* ===================== Utils ===================== */
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const toLocalDateStr = (d: Date) =>
@@ -232,30 +227,6 @@ async function ensureUsersAllLoaded() {
   writeLS(LS_USERS_ALL, { map, ts: Date.now() } as UsersAllCache);
 }
 
-/* ===================== Cache: cuentascompletas por plataforma ===================== */
-type CCEntry = { pass: string | null; count: number };
-type CCCacheShape = { map: Record<string, CCEntry>; ts: number; stamp: number };
-function ccKey(pid: number) {
-  return `${LS_CC_PREFIX}${pid}`;
-}
-function readCCCache(pid: number): CCCacheShape | null {
-  return readLS<CCCacheShape>(ccKey(pid));
-}
-function writeCCCache(pid: number, map: Record<string, CCEntry>) {
-  writeLS(ccKey(pid), {
-    map,
-    ts: Date.now(),
-    stamp: getCurrentCuentasStamp(),
-  } as CCCacheShape);
-}
-function getCCMap(pid: number): Record<string, CCEntry> | null {
-  const c = readCCCache(pid);
-  if (!c) return null;
-  const sameStamp = c.stamp === getCurrentCuentasStamp();
-  const fresh = Date.now() - c.ts <= LIST_CACHE_TTL;
-  return sameStamp && fresh ? c.map : null;
-}
-
 /* ===================== Cache: inventario por plataforma ===================== */
 type InvEntry = { pass: string | null; id?: number };
 type InvCacheShape = {
@@ -284,27 +255,7 @@ function getInvMap(pid: number): Record<string, InvEntry> | null {
   return sameStamp && fresh ? c.map : null;
 }
 
-/* ===================== Cache: conteos por email ===================== */
-type CountEntry = { count: number; ts: number; stamp: number };
-type CountCacheShape = { map: Record<string, CountEntry> };
-function countsKey(pid: number) {
-  return `${LS_COUNTS_PREFIX}${pid}`;
-}
-function getCountFromCache(pid: number, email: string): number | undefined {
-  const all = readLS<CountCacheShape>(countsKey(pid)) || { map: {} };
-  const entry = all.map[email];
-  if (!entry) return undefined;
-  const sameStamp = entry.stamp === getCurrentCuentasStamp();
-  const fresh = Date.now() - entry.ts <= COUNT_CACHE_TTL;
-  return sameStamp && fresh ? entry.count : undefined;
-}
-function setCountInCache(pid: number, email: string, count: number) {
-  const all = readLS<CountCacheShape>(countsKey(pid)) || { map: {} };
-  all.map[email] = { count, ts: Date.now(), stamp: getCurrentCuentasStamp() };
-  writeLS(countsKey(pid), all);
-}
-
-/* ===================== Parser de respuestas ===================== */
+/* ==================== Parser de respuestas ===================== */
 async function parseListResponse(res: Response): Promise<any[]> {
   const data = await res.json().catch(() => null);
   if (!data) return [];
@@ -508,103 +459,83 @@ export default function FormCuentaCompletas() {
   /* ===== Sugerencias y cache de correos/contraseñas ===== */
   const [emailOpen, setEmailOpen] = useState(false);
   const [emailOpts, setEmailOpts] = useState<EmailSuggestion[]>([]);
-  const [emailCounts, setEmailCounts] = useState<Record<string, number>>({});
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
-  const [emailFound, setEmailFound] = useState(false);
-  const [correoCount, setCorreoCount] = useState(0);
   const [selectedInvId, setSelectedInvId] = useState<number | null>(null);
+  const [invIndex, setInvIndex] = useState<Record<string, InvEntry>>({});
+  const [isInvLoading, setIsInvLoading] = useState(false);
 
   // cargar sugerencias (usa caches persistentes primero)
   async function fetchEmailsByPlatform(plataformaId: number) {
-    if (!plataformaId) return;
+    if (!plataformaId) {
+      setInvIndex({});
+      setEmailOpts([]);
+      return;
+    }
+
     try {
-      let ccMap = getCCMap(plataformaId);
-      let invMap = getInvMap(plataformaId);
-
-      if (!ccMap) {
-        // cargar cuentascompletas para plataforma (muchas filas, pero limit razonable)
-        const resDb = await fetch(
-          `/api/cuentascompletas?plataforma_id=${plataformaId}&limit=${
-            SUGGEST_LIMIT * 5
-          }`,
-          { cache: "no-store" }
-        );
-        const rowsDb = resDb.ok ? await parseListResponse(resDb) : [];
-        const m: Record<string, CCEntry> = {};
-        for (const r of rowsDb) {
-          const c = normalizeEmail(r?.correo ?? "");
-          if (!c) continue;
-          const prev = m[c]?.count ?? 0;
-          const pass = (r as any)?.contrasena ?? m[c]?.pass ?? null;
-          m[c] = { count: prev + 1, pass };
-        }
-        writeCCCache(plataformaId, m);
-        ccMap = m;
+      // 1) Cache persistente
+      const invMap = getInvMap(plataformaId);
+      if (invMap) {
+        setInvIndex(invMap);
+        const list: EmailSuggestion[] = Object.entries(invMap)
+          .slice(0, SUGGEST_LIMIT)
+          .map(([email, ent]) => ({
+            email,
+            invId: ent.id ?? null,
+            invClave: ent.pass ?? null,
+          }));
+        setEmailOpts(list);
+        setEmailError(null);
+        return;
       }
 
-      if (!invMap) {
-        const resInv = await fetch(
-          `/api/inventario?plataforma_id=${plataformaId}&limit=${
-            SUGGEST_LIMIT * 3
-          }`,
-          { cache: "no-store" }
-        );
-        const rowsInv: InventarioRow[] = resInv.ok
-          ? ((await parseListResponse(resInv)) as any[])
-          : [];
-        const m: Record<string, InvEntry> = {};
-        for (const it of rowsInv) {
-          const c = normalizeEmail(it?.correo ?? "");
-          if (!c) continue;
-          m[c] = { pass: (it as any)?.clave ?? null, id: Number(it?.id) };
-        }
-        writeInvCache(plataformaId, m);
-        invMap = m;
+      // 2) Carga de /api/inventario una sola vez si no hay cache
+      setIsInvLoading(true);
+      const resInv = await fetch(
+        `/api/inventario?plataforma_id=${plataformaId}&limit=${
+          SUGGEST_LIMIT * 100
+        }`,
+        { cache: "no-store" }
+      );
+      const rowsInv: InventarioRow[] = resInv.ok
+        ? ((await parseListResponse(resInv)) as any[])
+        : [];
+      const m: Record<string, InvEntry> = {};
+      for (const it of rowsInv) {
+        const c = normalizeEmail(it?.correo ?? "");
+        if (!c) continue;
+        m[c] = { pass: (it as any)?.clave ?? null, id: Number(it?.id) };
       }
 
-      // construir sugerencias (primero inventario)
-      const counts: Record<string, number> = {};
-      for (const [email, entry] of Object.entries(ccMap))
-        counts[email] = entry.count;
+      writeInvCache(plataformaId, m);
+      setInvIndex(m);
 
-      const seen = new Set<string>();
-      const list: EmailSuggestion[] = [];
-
-      for (const [email, inv] of Object.entries(invMap)) {
-        if (seen.has(email)) continue;
-        seen.add(email);
-        list.push({
+      const list: EmailSuggestion[] = Object.entries(m)
+        .slice(0, SUGGEST_LIMIT)
+        .map(([email, ent]) => ({
           email,
-          count: counts[email] ?? 0,
-          source: "inv",
-          invId: inv.id,
-          invClave: inv.pass ?? null,
-        });
-        if (list.length >= SUGGEST_LIMIT) break;
-      }
-      if (list.length < SUGGEST_LIMIT) {
-        const popular = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-        for (const [email, count] of popular) {
-          if (seen.has(email)) continue;
-          seen.add(email);
-          list.push({ email, count, source: "db" });
-          if (list.length >= SUGGEST_LIMIT) break;
-        }
-      }
+          invId: ent.id ?? null,
+          invClave: ent.pass ?? null,
+        }));
 
-      setEmailCounts(counts);
       setEmailOpts(list);
       setEmailError(null);
     } catch (e: any) {
-      setEmailError(e?.message ?? "No se pudieron cargar correos");
+      setEmailError(
+        e?.message ?? "No se pudieron cargar correos de inventario"
+      );
+      setInvIndex({});
       setEmailOpts([]);
-      setEmailCounts({});
+    } finally {
+      setIsInvLoading(false);
     }
   }
 
   const onEmailFocus = () => {
     setEmailOpen(true);
+    // Ya precargamos en el useEffect de plataforma;
+    // si no hubiese cache, la función hará la carga una vez.
     if (form.plataforma_id) fetchEmailsByPlatform(form.plataforma_id);
   };
   const onEmailBlur = () => setTimeout(() => setEmailOpen(false), 120);
@@ -612,11 +543,11 @@ export default function FormCuentaCompletas() {
   useEffect(() => {
     setEmailError(null);
     setEmailOpts([]);
-    setEmailCounts({});
     setSelectedInvId(null);
-    setCorreoCount(0);
-    if (emailOpen && form.plataforma_id)
+    if (form.plataforma_id) {
+      // Precarga para que al enfocar ya esté todo listo
       fetchEmailsByPlatform(form.plataforma_id);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.plataforma_id]);
 
@@ -625,97 +556,59 @@ export default function FormCuentaCompletas() {
   }, [form.correo]);
 
   // al escribir correo: intenta completar desde cache; si no, busca puntual y cachea
-  const emailTimer = useRef<number | null>(null);
   useEffect(() => {
-    const correo = form.correo.trim();
-    if (emailTimer.current) window.clearTimeout(emailTimer.current);
+    const correo = normalizeEmail(form.correo.trim());
 
-    if (!correo || !form.plataforma_id || correo.length < EMAIL_MIN_LEN) {
+    // Reseteos de flags ligados a DB (ya no se usan):
+    setSelectedInvId(null);
+    // setCorreoCount(0);    // si lo quitaste del estado, elimina esta línea
+    // setEmailFound(false); // si lo quitaste del estado, elimina esta línea
+
+    if (!form.plataforma_id) {
       setEmailLoading(false);
-      setEmailError(null);
-      setEmailFound(false);
-      setCorreoCount(0);
       return;
     }
 
-    const pid = form.plataforma_id;
-    const key = normalizeEmail(correo);
+    // 1) Autocompletar desde inventario (en memoria)
+    if (correo && invIndex[correo]) {
+      const hit = invIndex[correo];
+      // setEmailFound(true); // si lo quitaste del estado, ignora
+      setSelectedInvId(hit.id ?? null);
 
-    // 1) desde caches persistentes
-    const ccHit = getCCMap(pid)?.[key];
-    const invHit = getInvMap(pid)?.[key];
-
-    if (ccHit) {
-      setEmailFound(true);
-      setCorreoCount(ccHit.count ?? 0);
-      if (ccHit.pass && !form.contrasena) {
-        setForm((s) => ({ ...s, contrasena: ccHit.pass || s.contrasena }));
+      if (hit.pass && !form.contrasena) {
+        setForm((s) => ({ ...s, contrasena: hit.pass || s.contrasena }));
       }
-      setCountInCache(pid, key, ccHit.count ?? 0);
-    } else if (invHit) {
-      setEmailFound(false);
-      setCorreoCount(0);
-      if (invHit.pass && !form.contrasena) {
-        setForm((s) => ({ ...s, contrasena: invHit.pass || s.contrasena }));
-      }
-    } else {
-      // 2) fetch puntual (debounced)
-      emailTimer.current = window.setTimeout(async () => {
-        setEmailLoading(true);
-        setEmailError(null);
-        setEmailFound(false);
-        try {
-          const url = `/api/cuentascompletas?q=${encodeURIComponent(
-            key
-          )}&plataforma_id=${pid}`;
-          const res = await fetch(url, { cache: "no-store" });
-          if (!res.ok) throw new Error("No se pudo buscar el correo");
-          const rows = await parseListResponse(res);
-          const filtered = rows.filter((r) =>
-            r?.plataforma_id == null ? true : Number(r.plataforma_id) === pid
-          );
-
-          const exact = filtered.find(
-            (u: any) => normalizeEmail(u?.correo ?? "") === key
-          ) as CorreoInfo | undefined;
-          const count = filtered
-            .map((r: any) => normalizeEmail(r?.correo ?? ""))
-            .filter((c: string) => !!c && c === key).length;
-
-          // Actualizar cache CC si hay info
-          if (count > 0 || exact?.contrasena != null) {
-            const base = getCCMap(pid) || {};
-            base[key] = {
-              count,
-              pass: exact?.contrasena ?? base[key]?.pass ?? null,
-            };
-            writeCCCache(pid, base);
-          }
-
-          setEmailFound(!!exact);
-          setCorreoCount(count);
-          setCountInCache(pid, key, count);
-
-          if (exact?.contrasena && !form.contrasena) {
-            setForm((s) => ({
-              ...s,
-              contrasena: exact.contrasena || s.contrasena,
-            }));
-          }
-        } catch (e: any) {
-          setEmailError(e?.message ?? "Error al buscar correo");
-          setCorreoCount(0);
-        } finally {
-          setEmailLoading(false);
-        }
-      }, 300);
     }
 
-    return () => {
-      if (emailTimer.current) window.clearTimeout(emailTimer.current);
-    };
+    // 2) Filtrado local para dropdown
+    if (correo.length >= EMAIL_MIN_LEN) {
+      const subset: EmailSuggestion[] = [];
+      for (const [email, ent] of Object.entries(invIndex)) {
+        if (email.includes(correo)) {
+          subset.push({
+            email,
+            invId: ent.id ?? null,
+            invClave: ent.pass ?? null,
+          });
+          if (subset.length >= SUGGEST_LIMIT) break;
+        }
+      }
+      setEmailOpts(subset);
+    } else {
+      const top: EmailSuggestion[] = Object.entries(invIndex)
+        .slice(0, SUGGEST_LIMIT)
+        .map(([email, ent]) => ({
+          email,
+          invId: ent.id ?? null,
+          invClave: ent.pass ?? null,
+        }));
+      setEmailOpts(top);
+    }
+
+    setEmailLoading(false);
+    setEmailError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.correo, form.plataforma_id, form.contrasena]);
+  }, [form.correo, form.plataforma_id, invIndex, form.contrasena]);
 
   /* ===================== Recalcular fecha de vencimiento ===================== */
   useEffect(() => {
@@ -932,7 +825,6 @@ export default function FormCuentaCompletas() {
       });
       setSelectedInvId(null);
       setEmailOpts([]);
-      setCorreoCount(0);
       setNombreDirty(false);
       lastContactoRef.current = "";
     } catch (err: any) {
@@ -1051,20 +943,6 @@ export default function FormCuentaCompletas() {
             <div className="relative">
               <Field
                 label="Correo *"
-                labelRight={
-                  <span
-                    className={[
-                      "text-xs rounded-full px-2 py-[2px] border",
-                      correoCount > 0
-                        ? "border-amber-300 bg-amber-50 text-amber-700"
-                        : "border-emerald-300 bg-emerald-50 text-emerald-700",
-                    ].join(" ")}
-                  >
-                    {correoCount > 0
-                      ? `coincidencias: ${correoCount}`
-                      : "sin coincidencias"}
-                  </span>
-                }
                 type="email"
                 placeholder="correo@dominio.com"
                 value={form.correo}
@@ -1080,7 +958,7 @@ export default function FormCuentaCompletas() {
                   <ul className="max-h-56 overflow-auto">
                     {emailOpts.map((opt) => (
                       <li
-                        key={`${opt.source}:${opt.invId ?? ""}:${opt.email}`}
+                        key={`${opt.invId ?? "x"}:${opt.email}`}
                         className="cursor-pointer px-3 py-2 flex items-center justify-between hover:bg-neutral-800"
                         onMouseDown={(e) => {
                           e.preventDefault();
@@ -1089,28 +967,14 @@ export default function FormCuentaCompletas() {
                             correo: opt.email,
                             contrasena: s.contrasena || (opt.invClave ?? ""),
                           }));
-                          setSelectedInvId(
-                            opt.source === "inv" ? opt.invId ?? null : null
-                          );
+                          setSelectedInvId(opt.invId ?? null);
                           setEmailOpen(false);
                         }}
-                        title={
-                          opt.source === "inv"
-                            ? "Disponible en inventario"
-                            : `${opt.count} coincidencia(s) en cuentas`
-                        }
+                        title="Disponible en inventario"
                       >
                         <span className="truncate">{opt.email}</span>
-                        <span className="flex items-center gap-2">
-                          {opt.source === "inv" ? (
-                            <span className="text-[10px] px-1.5 py-[1px] rounded-full border border-emerald-300 text-emerald-300">
-                              INV
-                            </span>
-                          ) : (
-                            <span className="text-xs opacity-70">
-                              ({opt.count})
-                            </span>
-                          )}
+                        <span className="text-[10px] px-1.5 py-[1px] rounded-full border border-emerald-300 text-emerald-300">
+                          INV
                         </span>
                       </li>
                     ))}
@@ -1119,18 +983,13 @@ export default function FormCuentaCompletas() {
               )}
 
               <div className="mt-1 text-xs">
-                {emailLoading && (
-                  <span className="text-neutral-400">Buscando correo…</span>
+                {isInvLoading && (
+                  <span className="text-neutral-400">Cargando inventario…</span>
                 )}
-                {!emailLoading && emailError && (
+                {!isInvLoading && emailError && (
                   <span className="text-red-300">Error: {emailError}</span>
                 )}
-                {!emailLoading && !emailError && emailFound && (
-                  <span className="text-neutral-300">
-                    Correo existente. Contraseña completada.
-                  </span>
-                )}
-                {!emailLoading && !emailError && selectedInvId != null && (
+                {!isInvLoading && !emailError && selectedInvId != null && (
                   <span className="text-emerald-300">
                     Correo tomado del inventario.
                   </span>
@@ -1300,7 +1159,6 @@ export default function FormCuentaCompletas() {
               });
               setSelectedInvId(null);
               setEmailOpts([]);
-              setCorreoCount(0);
               setNombreDirty(false);
               lastContactoRef.current = "";
             }}

@@ -710,6 +710,7 @@ export default function PantallasViewer() {
         normSearch(r.contacto).includes(term) ||
         normSearch(r.correo).includes(term) ||
         normSearch(r.estado).includes(term) ||
+        normSearch(r.proveedor).includes(term) ||
         normSearch(r.comentario).includes(term) ||
         normSearch(r.nro_pantalla).includes(term);
 
@@ -1610,6 +1611,7 @@ export default function PantallasViewer() {
               <th className="px-3 py-2 text-center w-28">Compra</th>
               <th className="px-3 py-2 text-center w-28">Vence</th>
               <th className="px-3 py-2 text-left w-28">Estado</th>
+               <th className="px-3 py-2 text-left w-36">Proveedor</th>
               <th className="px-3 py-2 text-left">Comentario</th>
             </tr>
           </thead>
@@ -1619,7 +1621,7 @@ export default function PantallasViewer() {
                 <React.Fragment key={`grp-${gi}-${g.email}`}>
                   {/* Encabezado del grupo (correo) + badges de disponibilidad */}
                   <tr className="bg-neutral-950/60 border-b border-neutral-800">
-                    <td colSpan={16} className="px-3 py-2">
+                    <td colSpan={17} className="px-3 py-2">
                       <div className="flex flex-wrap items-center gap-2 text-sm">
                         <span className="font-semibold text-neutral-200">
                           {g.email}
@@ -1826,6 +1828,9 @@ export default function PantallasViewer() {
                       <td className="px-3 py-2 whitespace-nowrap">
                         {r.estado || "—"}
                       </td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+    {r.proveedor || "—"}
+  </td>
                       <td className="px-3 py-2">
                         <span
                           className="inline-block max-w-[420px] truncate align-bottom"

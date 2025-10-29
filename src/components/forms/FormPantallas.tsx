@@ -382,7 +382,7 @@ function getAcctMap(pid: number): Record<string, AcctEntry> | null {
 }
 
 /* ===================== CACHE: Inventario ===================== */
-type InvEntry = { pass: string | null };
+type InvEntry = { id?: number; pass: string | null };
 type InvCacheShape = {
   map: Record<string, InvEntry>;
   ts: number;
@@ -407,6 +407,67 @@ function getInvMap(pid: number): Record<string, InvEntry> | null {
   const sameStamp = c.stamp === getCurrentStamp();
   const fresh = Date.now() - c.ts <= LIST_CACHE_TTL;
   return sameStamp && fresh ? c.map : null;
+}
+
+/* ===================== CACHE: Resumen de pantallas por plataforma (byEmail / byCuenta) ===================== */
+// Guarda contadores precalculados para evitar N+1 requests por correo/cuenta
+const LS_PANT_SUM_PREFIX = "__pantallas_sum_v1:"; // por plataforma
+
+type PantSumCacheShape = {
+  ts: number;
+  stamp: number;
+  byEmail: Record<string, number>; // email normalizado -> usadas
+  byCuenta: Record<number, number>; // cuenta_id -> usadas
+};
+
+function pantSumKey(pid: number) {
+  return `${LS_PANT_SUM_PREFIX}${pid}`;
+}
+function readPantSum(pid: number): PantSumCacheShape | null {
+  return readLS<PantSumCacheShape>(pantSumKey(pid));
+}
+function writePantSum(pid: number, data: PantSumCacheShape) {
+  writeLS(pantSumKey(pid), data);
+}
+function getPantSum(pid: number): PantSumCacheShape | null {
+  const c = readPantSum(pid);
+  if (!c) return null;
+  const sameStamp = c.stamp === getCurrentStamp();
+  const fresh = Date.now() - c.ts <= LIST_CACHE_TTL;
+  return sameStamp && fresh ? c : null;
+}
+
+/** Construye el resumen (byEmail/byCuenta) con UN SOLO fetch de pantallas por plataforma */
+async function buildPantSumForPlatform(
+  pid: number
+): Promise<PantSumCacheShape> {
+  // Trae todas las pantallas de la plataforma UNA vez
+  const rows = await fetchListSafe([
+    `/api/pantallas?plataforma_id=${pid}&limit=50000`,
+    `/api/pantallas?plataforma_id=${pid}&limit=20000`,
+    `/api/pantallas?plataforma_id=${pid}&limit=10000`,
+  ]);
+
+  const byEmail: Record<string, number> = {};
+  const byCuenta: Record<number, number> = {};
+
+  for (const r of rows) {
+    const email = normalizeEmail(r?.correo ?? "");
+    if (email) byEmail[email] = (byEmail[email] ?? 0) + 1;
+
+    const cid = Number(r?.cuenta_id);
+    if (Number.isFinite(cid) && cid > 0) {
+      byCuenta[cid] = (byCuenta[cid] ?? 0) + 1;
+    }
+  }
+
+  const out: PantSumCacheShape = {
+    ts: Date.now(),
+    stamp: getCurrentStamp(),
+    byEmail,
+    byCuenta,
+  };
+  return out;
 }
 
 /* ===================== CACHE: Conteos por email ===================== */
@@ -472,7 +533,6 @@ export default function FormPantallas() {
 
   // arriba, junto a otros useState del módulo de correos
   const [deletingAcctId, setDeletingAcctId] = useState<number | null>(null);
-
   const [availableSlots, setAvailableSlots] = useState<number[]>([]);
   const [maxAllowed, setMaxAllowed] = useState<number>(1);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -480,6 +540,36 @@ export default function FormPantallas() {
   const [freeByEmail, setFreeByEmail] = useState<Record<string, number | null>>(
     {}
   );
+  const [invIdMap, setInvIdMap] = useState<Record<string, number>>({});
+  const [selectedEmailSource, setSelectedEmailSource] = useState<
+    "inv" | "acct" | null
+  >(null);
+
+  /* ===== Mensajería + modal de confirmación ===== */
+  const [loading, setLoading] = useState(false);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
+  const [errMsg, setErrMsg] = useState<string | null>(null);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmPayload, setConfirmPayload] = useState<any>(null);
+  const [confirmText, setConfirmText] = useState<string>("");
+  const [confirmView, setConfirmView] = useState<"resumen" | "json">("resumen");
+
+  /* ===== Sugerencias de CORREO (cuentas compartidas + inventario) con cache ===== */
+  const [open, setOpen] = useState(false);
+  const [loadingEmails, setLoadingEmails] = useState(false);
+  const [errEmails, setErrEmails] = useState<string | null>(null);
+  const [acctIdMap, setAcctIdMap] = useState<Record<string, number>>({});
+  const [acctPassMap, setAcctPassMap] = useState<Record<string, string | null>>(
+    {}
+  );
+  const [invPassMap, setInvPassMap] = useState<Record<string, string | null>>(
+    {}
+  );
+  const [emailCounts, setEmailCounts] = useState<Record<string, number>>({});
+  const [options, setOptions] = useState<
+    Array<{ email: string; source: "acct" | "inv" }>
+  >([]);
 
   const {
     plataformas,
@@ -712,32 +802,6 @@ export default function FormPantallas() {
     }
   }, [plataformasOrdered, platLoading, platError, form.plataforma_id]);
 
-  /* ===== Mensajería + modal de confirmación ===== */
-  const [loading, setLoading] = useState(false);
-  const [okMsg, setOkMsg] = useState<string | null>(null);
-  const [errMsg, setErrMsg] = useState<string | null>(null);
-
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmPayload, setConfirmPayload] = useState<any>(null);
-  const [confirmText, setConfirmText] = useState<string>("");
-  const [confirmView, setConfirmView] = useState<"resumen" | "json">("resumen");
-
-  /* ===== Sugerencias de CORREO (cuentas compartidas + inventario) con cache ===== */
-  const [open, setOpen] = useState(false);
-  const [loadingEmails, setLoadingEmails] = useState(false);
-  const [errEmails, setErrEmails] = useState<string | null>(null);
-
-  const [acctIdMap, setAcctIdMap] = useState<Record<string, number>>({});
-  const [acctPassMap, setAcctPassMap] = useState<Record<string, string | null>>(
-    {}
-  );
-  const [invPassMap, setInvPassMap] = useState<Record<string, string | null>>(
-    {}
-  );
-  const [emailCounts, setEmailCounts] = useState<Record<string, number>>({});
-  const [options, setOptions] = useState<
-    Array<{ email: string; source: "acct" | "inv" }>
-  >([]);
   const boxRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -821,9 +885,11 @@ export default function FormPantallas() {
     setAcctIdMap({});
     setAcctPassMap({});
     setInvPassMap({});
+    setInvIdMap({});
     setEmailCounts({});
     setOptions([]);
     setOpen(false);
+    setSelectedEmailSource(null);
   }, [form.plataforma_id]);
 
   async function deleteCuentaCompartidaByEmail(email: string) {
@@ -889,63 +955,119 @@ export default function FormPantallas() {
     if (!form.plataforma_id) return;
     setLoadingEmails(true);
     setErrEmails(null);
+
     try {
       const pid = form.plataforma_id;
 
-      // 0) Caches persistentes
-      let acctMap = getAcctMap(pid); // { [email]: {id, pass} }
-      let invMap = getInvMap(pid); // { [email]: {pass} }
+      // 0) Cargar caches persistentes en paralelo
+      //    (cuentas compartidas + inventario)
+      let [acctMap, invMap] = await Promise.all([
+        (async () => getAcctMap(pid))(),
+        (async () => getInvMap(pid))(),
+      ]);
 
-      // 1) Completar caches si faltan
-      if (!acctMap) {
-        const rAcct = await fetch(
-          `/api/cuentascompartidas?plataforma_id=${pid}&limit=10000`,
-          { cache: "no-store" }
-        );
-        if (!rAcct.ok) throw new Error("No se pudieron cargar correos");
-        const acctRows: Cuenta[] = await rAcct.json();
-        const m: Record<string, AcctEntry> = {};
-        for (const r of acctRows) {
-          const c = normalizeEmail(r?.correo ?? "");
-          if (!c) continue;
-          m[c] = {
-            id: m[c]?.id != null ? Math.max(m[c].id, r.id) : r.id,
-            pass: (r as any).contrasena ?? null,
-          };
+      // 1) Si falta alguno, fétchalos EN PARALELO y cachea
+      const needsAcct = !acctMap;
+      const needsInv = !invMap;
+
+      if (needsAcct || needsInv) {
+        const [acctRes, invRes] = await Promise.all([
+          needsAcct
+            ? fetch(
+                `/api/cuentascompartidas?plataforma_id=${pid}&limit=10000`,
+                {
+                  cache: "no-store",
+                }
+              )
+            : null,
+          needsInv
+            ? fetch(`/api/inventario?plataforma_id=${pid}&limit=10000`, {
+                cache: "no-store",
+              })
+            : null,
+        ]);
+
+        if (needsAcct) {
+          if (!acctRes || !acctRes.ok)
+            throw new Error("No se pudieron cargar cuentas");
+          const acctRows: Cuenta[] = await acctRes.json();
+          const m: Record<string, AcctEntry> = {};
+          for (const r of acctRows) {
+            const c = normalizeEmail(r?.correo ?? "");
+            if (!c) continue;
+            // último id más alto gana (defensivo)
+            m[c] = {
+              id: Math.max(m[c]?.id ?? 0, r.id),
+              pass: (r as any).contrasena ?? null,
+            };
+          }
+          writeAcctCache(pid, m);
+          acctMap = m;
         }
-        writeAcctCache(pid, m);
-        acctMap = m;
-      }
-      if (!invMap) {
-        const rInv = await fetch(
-          `/api/inventario?plataforma_id=${pid}&limit=10000`,
-          { cache: "no-store" }
-        );
-        const m: Record<string, InvEntry> = {};
-        if (rInv.ok) {
-          const invRows: InventarioItem[] = await rInv.json();
+
+        if (needsInv) {
+          if (!invRes || !invRes.ok)
+            throw new Error("No se pudo cargar inventario");
+          const invRows: InventarioItem[] = await invRes.json();
+          const m: Record<string, InvEntry> = {};
           for (const it of invRows) {
             const c = normalizeEmail(it?.correo ?? "");
             if (!c) continue;
-            m[c] = { pass: (it as any).clave ?? null };
+            m[c] = { id: it.id, pass: (it as any).clave ?? null };
           }
+          writeInvCache(pid, m);
+          invMap = m;
         }
-        writeInvCache(pid, m);
-        invMap = m;
       }
 
-      // 2) Construir candidatos con metadatos (incluye cuenta_id cuando existe)
+      // === [NUEVO] Mapas locales para estado ===
+      const nextAcctId: Record<string, number> = {};
+      const nextAcctPass: Record<string, string | null> = {};
+      for (const [email, entry] of Object.entries(acctMap!)) {
+        nextAcctId[email] = entry.id!;
+        nextAcctPass[email] = entry.pass ?? null;
+      }
+
+      const nextInvPass: Record<string, string | null> = {};
+      const nextInvId: Record<string, number> = {};
+      for (const [email, entry] of Object.entries(invMap!)) {
+        nextInvPass[email] = entry.pass ?? null;
+        if (entry?.id != null) nextInvId[email] = entry.id!;
+      }
+
+      setAcctIdMap(nextAcctId);
+      setAcctPassMap(nextAcctPass);
+      setInvPassMap(nextInvPass);
+      setInvIdMap(nextInvId); // ⬅️ usa este para borrar del inventario tras guardar
+      // === [FIN NUEVO] ===
+
+      // 2) Capacidad real de la plataforma (sin fetch extra)
+      const cap = capacityForPlatform(pid, plataformas) ?? 0;
+      if (!cap || cap <= 0) {
+        setFreeByEmail({});
+        setEmailCounts({});
+        setOptions([]);
+        return;
+      }
+
+      // 3) Obtener resumen de pantallas (byEmail/byCuenta) con cache TTL + stamp
+      let sum = getPantSum(pid);
+      if (!sum) {
+        sum = await buildPantSumForPlatform(pid);
+        writePantSum(pid, sum);
+      }
+
+      // 4) Construir candidatos (prioriza cuentascompartidas, luego inventario)
       type Cand = {
         email: string;
         source: "acct" | "inv";
         cuentaId?: number | null;
       };
-
       const seen = new Set<string>();
       const candidates: Cand[] = [];
 
-      // prioriza cuentascompartidas
-      for (const [email, entry] of Object.entries(acctMap)) {
+      // hasta 50 para tener margen, pero solo procesamos los primeros visibles
+      for (const [email, entry] of Object.entries(acctMap!)) {
         const e = email.toLowerCase();
         if (seen.has(e)) continue;
         seen.add(e);
@@ -957,7 +1079,7 @@ export default function FormPantallas() {
         if (candidates.length >= 50) break;
       }
       if (candidates.length < 50) {
-        for (const email of Object.keys(invMap)) {
+        for (const email of Object.keys(invMap!)) {
           const e = email.toLowerCase();
           if (seen.has(e)) continue;
           seen.add(e);
@@ -966,77 +1088,43 @@ export default function FormPantallas() {
         }
       }
 
-      // 3) Mapas locales de ids/pass (para completar al seleccionar)
-      const nextAcctId: Record<string, number> = {};
-      const nextAcctPass: Record<string, string | null> = {};
-      for (const [email, entry] of Object.entries(acctMap)) {
-        nextAcctId[email] = entry.id;
-        nextAcctPass[email] = entry.pass ?? null;
-      }
-      const nextInvPass: Record<string, string | null> = {};
-      for (const [email, entry] of Object.entries(invMap)) {
-        nextInvPass[email] = entry.pass ?? null;
-      }
-      setAcctIdMap(nextAcctId);
-      setAcctPassMap(nextAcctPass);
-      setInvPassMap(nextInvPass);
-
-      // 4) Capacidad real de la plataforma
-      const cap = capacityForPlatform(pid, plataformas) ?? 0;
+      // 5) Calcular usados y cupos usando SOLO el resumen en memoria (sin N+1)
       const freeMap: Record<string, number | null> = {};
       const emailCountsLocal: Record<string, number> = {};
 
-      if (!cap || cap <= 0) {
-        // sin capacidad definida → no sugerimos nada
-        setFreeByEmail({});
-        setEmailCounts({});
-        setOptions([]);
-        return;
+      for (const c of candidates.slice(0, 40)) {
+        // procesamos 40 máx. por velocidad
+        const used =
+          c.source === "acct" && c.cuentaId
+            ? sum.byCuenta[c.cuentaId] ?? 0
+            : sum.byEmail[c.email] ?? 0;
+
+        const free = Math.max(0, cap - used);
+        const key = `${pid}::${c.source}::${c.email}`;
+        freeMap[key] = free;
+
+        // el badge (hay N registros) usa conteo por correo
+        if (emailCountsLocal[c.email] == null) {
+          emailCountsLocal[c.email] = sum.byEmail[c.email] ?? 0;
+          setCountInCache(pid, c.email, emailCountsLocal[c.email]); // reaprovecha tu LS cache actual
+        }
       }
 
-      // 5) Calcula usados y filtra SOLO los que tengan cupo > 0
-      const withFree: Cand[] = [];
-
-      await Promise.all(
-        candidates.map(async (c) => {
-          const key = `${pid}::${c.source}::${c.email}`;
-          let used = 0;
-
-          if (c.source === "acct" && c.cuentaId) {
-            // 👈 SIEMPRE por cuenta_id para cuentascompartidas
-            used = await fetchPantallasCountByCuentaId(c.cuentaId);
-          } else {
-            // inventario: por correo+plataforma
-            used = await fetchPantallasCountByEmailPlat(c.email, pid);
-          }
-
-          const free = Math.max(0, cap - used);
-          freeMap[key] = free;
-
-          // badge del input: por correo+plataforma (una sola vez)
-          if (emailCountsLocal[c.email] == null) {
-            const countByEmail = await fetchPantallasCountByEmailPlat(
-              c.email,
-              pid
-            );
-            emailCountsLocal[c.email] = countByEmail;
-            setCountInCache(pid, c.email, countByEmail);
-          }
-
-          if (free > 0) withFree.push(c); // 👈 solo pasan los que tienen cupo
-        })
-      );
-
-      // 6) Persistir estados y opciones (solo con cupo)
-      setFreeByEmail(freeMap);
+      // 6) Guardar mapas y opciones (solo con cupo) en el orden pedido
+      setFreeByEmail((prev) => ({ ...prev, ...freeMap }));
       setEmailCounts((prev) => ({ ...prev, ...emailCountsLocal }));
 
-      // Mantén prioridad: primero cuentascompartidas, luego inventario
+      const withFree = candidates.filter(({ email, source }) => {
+        const key = `${pid}::${source}::${email}`;
+        const f = freeMap[key];
+        return typeof f === "number" && f > 0;
+      });
+
       const ordered = withFree.sort((a, b) =>
         a.source === b.source ? 0 : a.source === "acct" ? -1 : 1
       );
 
-      setOptions(ordered.slice(0, 20));
+      setOptions(ordered.slice(0, 20)); // UI ya esperaba 20
     } catch (e: any) {
       setErrEmails(e?.message ?? "No se pudieron cargar correos");
       setOptions([]);
@@ -1069,7 +1157,10 @@ export default function FormPantallas() {
       ...s,
       correo: email,
       contrasena: s.contrasena || pass || "",
+      // por si venías de una cuenta:
+      cuenta_id: null,
     }));
+    setSelectedEmailSource("inv");
     setOpen(false);
   };
 
@@ -1083,6 +1174,7 @@ export default function FormPantallas() {
       cuenta_id: cid ?? s.cuenta_id,
       contrasena: s.contrasena || pass || "",
     }));
+    setSelectedEmailSource("acct");
     setOpen(false);
   };
 
@@ -1457,6 +1549,77 @@ export default function FormPantallas() {
 
       const saved = await res.json().catch(() => ({}));
 
+      // Si el correo seleccionado venía del inventario → eliminarlo del inventario al guardar
+      try {
+        if (selectedEmailSource === "inv") {
+          const pid = confirmPayload?.plataforma_id ?? form.plataforma_id;
+          const emailNorm = normalizeEmail(
+            confirmPayload?.correo ?? form.correo
+          );
+          // intenta por cache
+          let invId = invIdMap[emailNorm];
+
+          // fallback: si no lo tenemos en cache, busca por API puntual
+          if (!invId && pid) {
+            const r = await fetch(
+              `/api/inventario?q=${encodeURIComponent(
+                emailNorm
+              )}&plataforma_id=${pid}`,
+              { cache: "no-store" }
+            );
+            if (r.ok) {
+              const arr: InventarioItem[] = await r.json();
+              const exact = arr.find(
+                (it) => normalizeEmail(it?.correo ?? "") === emailNorm
+              );
+              invId = exact?.id ?? 0;
+            }
+          }
+
+          if (invId) {
+            const del = await fetch(`/api/inventario/${invId}`, {
+              method: "DELETE",
+              cache: "no-store",
+            });
+            if (!del.ok) {
+              // opcional: muestra aviso suave pero no rompe el guardado de la pantalla
+              const j = await del.json().catch(() => ({}));
+              console.warn(
+                "No se pudo eliminar inventario:",
+                j?.error ?? del.statusText
+              );
+            } else {
+              // ✅ limpia caches/estado locales para que no vuelva a aparecer
+              const map = getInvMap(pid) || {};
+              delete map[emailNorm];
+              writeInvCache(pid, map);
+
+              setInvPassMap((m) => {
+                const { [emailNorm]: _, ...rest } = m;
+                return rest;
+              });
+              setInvIdMap((m) => {
+                const { [emailNorm]: _, ...rest } = m;
+                return rest;
+              });
+              setOptions((opts) =>
+                opts.filter(
+                  (o) => !(o.source === "inv" && o.email === emailNorm)
+                )
+              );
+              setFreeByEmail((m) => {
+                const copy = { ...m };
+                delete copy[`${pid}::inv::${emailNorm}`];
+                return copy;
+              });
+              // el resumen por email quedará actualizado al renovar el stamp
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("Error eliminando del inventario tras guardar:", e);
+      }
+
       // ✅ Actualiza caché local y notifica al viewer
       try {
         mergePantallaIntoCache(saved);
@@ -1645,9 +1808,10 @@ export default function FormPantallas() {
                 type="email"
                 placeholder="correo@dominio.com"
                 value={form.correo}
-                onChange={(v: string) =>
-                  setForm((s) => ({ ...s, correo: v, nro_pantalla: "" }))
-                }
+                onChange={(v: string) => {
+                  setForm((s) => ({ ...s, correo: v, nro_pantalla: "" }));
+                  setSelectedEmailSource(null);
+                }}
                 onFocus={onFocusCorreo}
                 required
                 onInvalid={(e: any) =>
