@@ -1,11 +1,41 @@
 #!/usr/bin/env node
 require('dotenv').config({ path: '/home/medplay/medplayapp/medplay/.env' });
 
+const fs = require('fs');
 const { spawn } = require('child_process');
 const http = require('http');
 const { chromium } = require('playwright');
 const mysql = require('mysql2/promise');
 const path = require('path');
+
+/* =========================
+ * LOGS A ARCHIVOS
+ * ========================= */
+const LOG_DIR = '/home/medplay/medplayapp/medplay/.logs';
+try { fs.mkdirSync(LOG_DIR, { recursive: true }); } catch {}
+const appOut = fs.createWriteStream(path.join(LOG_DIR, 'app.out.log'), { flags: 'a' });
+const appErr = fs.createWriteStream(path.join(LOG_DIR, 'app.err.log'), { flags: 'a' });
+const ts = () => new Date().toISOString().replace('T', ' ').replace('Z', '');
+
+const _clog = console.log.bind(console);
+const _cwarn = console.warn.bind(console);
+const _cerr = console.error.bind(console);
+
+console.log = (...args) => {
+  const line = `[${ts()}] ${args.map(String).join(' ')}\n`;
+  try { appOut.write(line); } catch {}
+  _clog(...args);
+};
+console.warn = (...args) => {
+  const line = `[${ts()}] ${args.map(String).join(' ')}\n`;
+  try { appErr.write(line); } catch {}
+  _cwarn(...args);
+};
+console.error = (...args) => {
+  const line = `[${ts()}] ${args.map(String).join(' ')}\n`;
+  try { appErr.write(line); } catch {}
+  _cerr(...args);
+};
 
 const START_SH_RESOLVED = process.env.START_SH
   ? path.resolve(process.env.START_SH)
@@ -32,7 +62,7 @@ const FIRST_BOOT_SW_MS      = 60_000;    // SW controlado (↑)
 const FIRST_BOOT_READY_MS   = 120_000;   // waitForWhatsAppReady (↑)
 const FIRST_BOOT_QUIET_MS   = 2_500;     // quiet más exigente
 const FIRST_BOOT_QUIET_TO   = 40_000;    // timeout para quiet
-const FIRST_BOOT_PAD_MS     = 20_000;    // colchón extra al final
+const FIRST_BOOT_PAD_MS     = 60_000;    // colchón extra al final
 
 // Antes y después de enviar (máx. 1 min)
 const PRE_SEND_TIMEOUT_MS   = 75_000;    // (↑ de 60s a 75s)
@@ -477,12 +507,20 @@ function groupByPhone(rows) {
  * ========================= */
 async function sendAll(recipients) {
   console.log('🚀 Lanzando start-chrome-wa.sh…');
+
+  // Logs del script START_SH a archivos dedicados
+  const scOut = fs.createWriteStream(path.join(LOG_DIR, 'start-chrome.out.log'), { flags: 'a' });
+  const scErr = fs.createWriteStream(path.join(LOG_DIR, 'start-chrome.err.log'), { flags: 'a' });
+
   const child = spawn('bash', ['-lc', START_SH_RESOLVED], {
-    stdio: 'ignore',
+    stdio: ['ignore', 'pipe', 'pipe'], // << capturamos stdout/err
     env: process.env,
     cwd: path.dirname(START_SH_RESOLVED),
     detached: true
   });
+  // Pipe de logs del proceso hijo
+  if (child.stdout) child.stdout.on('data', (d) => { try { scOut.write(`[${ts()}] ${d}`); } catch {} });
+  if (child.stderr) child.stderr.on('data', (d) => { try { scErr.write(`[${ts()}] ${d}`); } catch {} });
   child.unref();
 
   console.log('⏳ Esperando CDP…');
@@ -522,10 +560,9 @@ async function sendAll(recipients) {
     console.log('✉️  Enviando (un solo intento, solo URL)…');
     await sendMessage(page);
 
-    if (i < recipients.length - 1) {
-      console.log(`⏳ Pausa entre contactos: ${GAP_BETWEEN_CONTACTS / 1000}s…`);
-      await sleep(GAP_BETWEEN_CONTACTS);
-    }
+    // ⏳ Siempre esperar el mismo GAP, incluso para el ÚLTIMO contacto
+    console.log(`⏳ Pausa post-envío: ${GAP_BETWEEN_CONTACTS / 1000}s…`);
+    await sleep(GAP_BETWEEN_CONTACTS);
   }
 
   console.log('\n✅ Finalizado.');
@@ -559,6 +596,8 @@ async function sendAll(recipients) {
       await sendAll(recipients);
     } finally {
       try { await conn.end(); } catch {}
+      try { appOut.end(); } catch {}
+      try { appErr.end(); } catch {}
     }
   } catch (err) {
     console.error('❌ Error:', err?.message || err);

@@ -1,6 +1,6 @@
 /* scripts/notify-password-changes-proton.js
  * Notifica cambio de contraseña (Disney / Disney Premium) a todos los usuarios
- * asociados a un correo dado, enviando 1 mensaje por usuario (teléfono).
+ * con plataforma_id 3 o 4 y fecha de vencimiento futura, enviando 1 mensaje por usuario (teléfono).
  *
  * Payload esperado (desde /api/proton/notify):
  *   { "correo": "email@dominio.com", "clave": "NuevaClave123" }
@@ -38,7 +38,7 @@ flog(`LOG_FILE=${LOG_FILE}`);
 const {
   DATABASE_URL,
   DEBUG_PORT = '9222',
-  OPEN_SPACING_MS = '8000',
+  OPEN_SPACING_MS = '60000',
   START_SH = './start-chrome-wa.sh',
 } = process.env;
 
@@ -72,6 +72,15 @@ const FIRST_BOOT_QUIET_TO   = 40_000;
 const FIRST_BOOT_PAD_MS     = 20_000;
 
 /* ========= Helpers: lectura del payload ========= */
+async function getPlatformIds(conn, names = ['Disney', 'Disney Premium']) {
+  const [rows] = await conn.query(
+    `SELECT id, nombre FROM plataformas WHERE nombre IN (${names.map(()=>'?').join(',')})`,
+    names
+  );
+  const idMap = new Map(rows.map(r => [r.nombre, r.id]));
+  return names.map(n => idMap.get(n)).filter(Boolean);
+}
+
 async function readPayload() {
   const arg = process.argv.find((a) => a.startsWith('--payload='));
   if (arg) {
@@ -389,57 +398,77 @@ async function sendMessage(page) {
 }
 
 /* ========= DB ========= */
-/** Solo Disney / Disney Premium; excluye vencidos y que vencen HOY */
-async function fetchDisneyByCorreo(conn, correoLower) {
-  if (!correoLower) return [];
+/** Trae Disney / Disney Premium; excluye vencidos y (opcionalmente) incluye los que vencen HOY.
+ *  ⚠️ IMPORTANTE: ya NO filtra por correo. Agrupa como en tus queries “que sí funcionan”.
+ */
+async function fetchDisneyByCorreo(conn, _correoLower, { includeToday = false } = {}) {
+  // Obtenemos los ids reales de 'Disney' y 'Disney Premium'
+  const platformIds = await getPlatformIds(conn, ['Disney', 'Disney Premium']);
+  if (!platformIds.length) {
+    flog('⚠️ No se encontraron plataformas "Disney"/"Disney Premium" en la tabla plataformas.');
+    return [];
+  }
 
-  // Pantallas (cuentas compartidas) para plataformas 3 y 4
+  const compDateOp = includeToday ? '>=' : '>'; // usa >= para incluir los que vencen HOY
+
+  // === CUENTAS COMPLETAS === (agrupadas SIN filtrar por correo)
+  const [ccRows] = await conn.query(
+    `
+    SELECT
+      'Cuenta completa'                          AS servicio,
+      c.contacto                                  AS contacto,
+      u.nombre                                    AS nombre,
+      NULL                                        AS nro_pantalla,
+      MAX(DATE(c.fecha_vencimiento))             AS fecha_vencimiento,
+      pl.nombre                                   AS plataforma_nombre
+    FROM cuentascompletas c
+    LEFT JOIN usuarios u       ON u.contacto   = c.contacto
+    JOIN plataformas pl        ON pl.id        = c.plataforma_id
+    WHERE c.plataforma_id IN (${platformIds.map(()=>'?').join(',')})
+      AND DATE(c.fecha_vencimiento) ${compDateOp} CURDATE()
+      -- AND (c.estado IS NULL OR c.estado <> 'CANCELADA')
+    GROUP BY c.contacto, c.plataforma_id, pl.nombre
+    `,
+    [...platformIds]
+  );
+
+  // === PANTALLAS === (agrupadas SIN filtrar por correo)
   const [pRows] = await conn.query(
     `
     SELECT
-      'Pantalla' AS servicio,
-      p.contacto,
-      u.nombre,
-      p.nro_pantalla,
-      DATE(p.fecha_vencimiento) AS fecha_vencimiento,
-      pl.nombre AS plataforma_nombre,
-      cc.correo AS correo
+      'Pantalla'                                  AS servicio,
+      p.contacto                                   AS contacto,
+      u.nombre                                     AS nombre,
+      MAX(p.nro_pantalla)                          AS nro_pantalla,
+      MAX(DATE(p.fecha_vencimiento))              AS fecha_vencimiento,
+      pl.nombre                                    AS plataforma_nombre
     FROM pantallas p
-    LEFT JOIN usuarios u           ON u.contacto = p.contacto
-    LEFT JOIN cuentascompartidas cc ON cc.id = p.cuenta_id
-    LEFT JOIN plataformas pl        ON pl.id = cc.plataforma_id
-    WHERE LOWER(cc.correo) = ?
-      AND cc.plataforma_id IN (3,4)
-      AND (p.estado IS NULL OR p.estado <> 'CANCELADA')
-      AND DATE(p.fecha_vencimiento) > CURDATE()
+    JOIN cuentascompartidas cc ON cc.id = p.cuenta_id
+    LEFT JOIN usuarios u        ON u.contacto = p.contacto
+    JOIN plataformas pl         ON pl.id      = cc.plataforma_id
+    WHERE cc.plataforma_id IN (${platformIds.map(()=>'?').join(',')})
+      AND DATE(p.fecha_vencimiento) ${compDateOp} CURDATE()
+      -- AND (p.estado IS NULL OR p.estado <> 'CANCELADA')
+      -- AND (cc.cuenta_caida IS NULL OR cc.cuenta_caida = 0)
+    GROUP BY p.contacto, cc.plataforma_id, pl.nombre
     `,
-    [correoLower]
+    [...platformIds]
   );
 
-  // Cuentas completas para plataformas 3 y 4
-  const [cRows] = await conn.query(
-    `
-    SELECT
-      'Cuenta completa' AS servicio,
-      c.contacto,
-      u.nombre,
-      NULL AS nro_pantalla,
-      DATE(c.fecha_vencimiento) AS fecha_vencimiento,
-      pl.nombre AS plataforma_nombre,
-      c.correo AS correo
-    FROM cuentascompletas c
-    LEFT JOIN usuarios u    ON u.contacto = c.contacto
-    LEFT JOIN plataformas pl ON pl.id = c.plataforma_id
-    WHERE LOWER(c.correo) = ?
-      AND c.plataforma_id IN (3,4)
-      AND (c.estado IS NULL OR c.estado <> 'CANCELADA')
-      AND DATE(c.fecha_vencimiento) > CURDATE()
-    `,
-    [correoLower]
-  );
+  // Normaliza a la estructura que usa el resto del script
+  const normalize = (r) => ({
+    servicio: r.servicio,
+    contacto: r.contacto,
+    nombre: r.nombre || null,
+    nro_pantalla: r.nro_pantalla || null,
+    fecha_vencimiento: r.fecha_vencimiento,       // YYYY-MM-DD
+    plataforma_nombre: r.plataforma_nombre || 'Disney',
+    // correo NO se usa desde BD; se tomará del payload
+  });
 
-  return [...pRows, ...cRows];
+  return [...ccRows.map(normalize), ...pRows.map(normalize)];
 }
+
 
 /* ========= Mensajes ========= */
 function toE164(contacto) {
@@ -469,11 +498,9 @@ function buildMessage(nombre, items, correo, nuevaClave) {
     })
     .join('\n');
 
-  const notaPantalla = itemtipss.some((it) => it.servicio === 'Pantalla')
+  const notaPantalla = items.some((it) => it.servicio === 'Pantalla')
     ? '\n*Recuerda tu pantalla es la que ves arriba; solo puedes utilizar esa.*'
     : '';
-
-
 
   return `Hola ${first}, te notificamos el *cambio de contraseña* de PROTON: *${correo}*.
 
@@ -522,13 +549,40 @@ No la compartas con nadie; ¡que estés súper bien!${notaPantalla}
     page = context.pages()[0] || (await context.newPage());
     flog('CDP conectado.');
 
-    // 3) DB y consulta solo Disney(3)/Disney Premium(4)
     conn = await mysql.createConnection(DATABASE_URL);
     flog('DB: conectado');
 
     let rows = [];
     try {
-      rows = await fetchDisneyByCorreo(conn, correoRaw);
+      // Diagnóstico: qué plataforma IDs vemos
+      const platformIds = await getPlatformIds(conn, ['Disney', 'Disney Premium']);
+      flog(`Plataformas Disney IDs detectadas: ${JSON.stringify(platformIds)}`);
+
+      // Diagnóstico (sin filtrar por correo): totales futuros en 3/4
+      const [dbg] = await conn.query(
+        `
+        SELECT
+          SUM(CASE WHEN tabla='pantallas' THEN n ELSE 0 END) AS pantallas_futuro,
+          SUM(CASE WHEN tabla='cuentas'   THEN n ELSE 0 END) AS cuentas_futuro
+        FROM (
+          SELECT 'pantallas' AS tabla, COUNT(*) AS n
+          FROM pantallas p
+          JOIN cuentascompartidas cc ON cc.id = p.cuenta_id
+          WHERE cc.plataforma_id IN (${platformIds.map(()=>'?').join(',')})
+            AND DATE(p.fecha_vencimiento) > CURDATE()
+          UNION ALL
+          SELECT 'cuentas' AS tabla, COUNT(*) AS n
+          FROM cuentascompletas c
+          WHERE c.plataforma_id IN (${platformIds.map(()=>'?').join(',')})
+            AND DATE(c.fecha_vencimiento) > CURDATE()
+        ) x
+        `,
+        [...platformIds, ...platformIds]
+      );
+      flog(`DBG: conteos futuros sin correo: ${JSON.stringify(dbg && dbg[0])}`);
+
+      // Consulta “oficial”: trae TODO Disney/Premium futuro (sin filtrar por correo)
+      rows = await fetchDisneyByCorreo(conn, correoRaw, { includeToday: false }); // el 2º arg ya no se usa para filtrar
       flog(`Filas Disney/+Premium (futuras): ${rows.length}`);
     } catch (e) {
       flog(`Error fetchDisneyByCorreo: ${e?.message || e}`);
@@ -554,8 +608,8 @@ No la compartas con nadie; ¡que estés súper bien!${notaPantalla}
       const cur =
         grouped.get(phone) || {
           phone,
-          correo: correoRaw,       // mismo correo del payload
-          nuevaClave,              // misma clave para todos los asociados a ese correo
+          correo: correoRaw,       // correo del payload (front)
+          nuevaClave,              // clave del payload (front)
           nombre: r.nombre || null,
           items: [],
           _kset: new Set(),
@@ -580,6 +634,17 @@ No la compartas con nadie; ¡que estés súper bien!${notaPantalla}
 
     flog(`grouped.size=${grouped.size} skippedPhone=${skippedPhone}`);
 
+    if (rows.length) {
+      const byPlat = rows.reduce((acc, r) => {
+        const k = r.plataforma_nombre || 'desconocida';
+        acc[k] = (acc[k] || 0) + 1;
+        return acc;
+      }, {});
+      flog(`DBG: desglose por plataforma: ${JSON.stringify(byPlat)}`);
+    }
+    flog(`DBG: teléfonos inválidos (skippedPhone) = ${skippedPhone}`);
+
+    // Deduplicados por contacto: Map ya garantiza 1 por phone
     const recipients = Array.from(grouped.values())
       .map((r) => { delete r._kset; return r; })
       .sort((a, b) => a.phone.localeCompare(b.phone));
@@ -649,3 +714,4 @@ No la compartas con nadie; ¡que estés súper bien!${notaPantalla}
     try { if (conn) await conn.end(); } catch {}
   }
 })();
+
