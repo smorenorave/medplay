@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { usePlataformas } from "@/hooks/usePlataformas";
 import { normalizeContacto } from "@/lib/strings";
 import { todayStr } from "@/lib/dates";
 import { FieldPantallas } from "@/components/ui/FieldPantallas";
 import TextArea from "@/components/ui/TextArea";
-import { fetchPantallasCountByCuentaId } from "@/lib/pantallas";
 import type { Usuario, Cuenta, FormState } from "@/types/pantallas";
 
 // Reutiliza tu bus de mutaciones / cache
@@ -17,20 +16,81 @@ import {
   BC_NAME,
 } from "@/lib/pantallasMutationBus";
 
-/** Texto final que se muestra, copia y descarga (datos + agradecimiento) */
-function buildHandoffFull(
-  payload: any,
+
+
+/* ===================== Ticket cliente ===================== */
+const fmtDateHuman = (isoOrYYYYMMDD?: string | null) => {
+  if (!isoOrYYYYMMDD) return "—";
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(isoOrYYYYMMDD)
+    ? parseLocalDateStr(isoOrYYYYMMDD)
+    : new Date(isoOrYYYYMMDD);
+  if (!d || Number.isNaN(d.getTime())) return "—";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yy = d.getFullYear();
+  return `${dd}/${mm}/${yy}`;
+};
+const fmtMoneyClient = (n: number | null | undefined) =>
+  n == null || Number.isNaN(Number(n))
+    ? "—"
+    : new Intl.NumberFormat("es-CO").format(Number(n));
+
+
+function buildPedidoResumenText(
+  payloads: any[],
   plataformaMap: Map<number, string>,
-  form: any
+  orders: any[]
+) {
+  const lineas: string[] = [];
+
+  lineas.push("✅ RESUMEN DE TU PEDIDO");
+  lineas.push("");
+
+  payloads.forEach((p, i) => {
+    const platName =
+      plataformaMap.get(p?.plataforma_id) ?? `#${p?.plataforma_id ?? "—"}`;
+
+    const order = orders?.[i] ?? null;
+
+    lineas.push(`• COMPRA #${i + 1}`);
+    lineas.push(`Plataforma: ${platName}`);
+    lineas.push(`Pantalla: ${p?.nro_pantalla ?? "—"}`);
+    lineas.push(`Correo: ${p?.correo ?? "—"}`);
+    lineas.push(`Clave: ${p?.contrasena ?? "—"}`);
+    lineas.push(`Fecha de compra: ${fmtDateHuman(order?.fecha_compra)}`);
+    lineas.push(`Fecha de vencimiento: ${fmtDateHuman(order?.fecha_vencimiento)}`);
+    lineas.push(`Meses pagados: ${order?.meses_pagados ?? "—"}`);
+    lineas.push(`Total: ${fmtMoneyClient(p?.total_pagado)}`);
+    lineas.push(""); // separador entre compras
+  });
+
+  // Totales del pedido (sumados)
+  const totalPagado = payloads.reduce((acc, p) => acc + (Number(p?.total_pagado) || 0), 0);
+  lineas.push("💰 TOTAL DEL PEDIDO");
+  lineas.push(`Total: ${fmtMoneyClient(totalPagado)}`);
+
+  return lineas.join("\n");
+}
+
+function buildPedidoResumenFull(
+  payloads: any[],
+  plataformaMap: Map<number, string>,
+  orders: any[]
 ) {
   return (
-    buildHandoffText(payload, plataformaMap, form) +
-    `\n\n` +
+    buildPedidoResumenText(payloads, plataformaMap, orders) +
+     `\n\n` +
+    `✨ ¡Para que no se te escape nada! ✨\n` +
+    `Te recomendamos guardar nuestros números en tus contactos, por si las moscas, así siempre podrás comunicarte con nosotros y verificar el estado de promociones, soporte, beneficios y novedades cuando lo necesites.\n\n` +
+    `📲 +57 304 676 0115\n` +
+    `📲 +57 322 532 4142\n\n` +
+    `📌 Mejor tenerlos guardados… ¡por si acaso! 😄\n\n` +
     `Gracias por tu compra! 🥳\n` +
-    `Recuerda que puedes disfrutar de tu servicio hasta la fecha indicada.\n` +
     `Si tienes dudas o necesitas soporte, estamos para ayudarte.`
   );
 }
+
+
 /* ===================== Fecha ===================== */
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const toLocalDateStr = (d: Date) =>
@@ -57,16 +117,13 @@ const toNumOrNull = (v: unknown): number | null => {
   const n = Number(v);
   return Number.isNaN(n) ? null : n;
 };
-const toMoney = (n: number | null) =>
-  n == null || Number.isNaN(n) ? "—" : new Intl.NumberFormat().format(n);
 
-/* ===================== Constantes ===================== */
+/* ===================== Constantes / LS ===================== */
 const LAST_PLATFORM_KEY = "pantallas:lastPlatformId";
 
 // TTLs
 const USERS_ALL_CACHE_TTL = 30 * 60_000; // 30 min catálogo completo de usuarios
 const LIST_CACHE_TTL = 5 * 60_000; // 5 min para cuentas/inventario
-const COUNT_CACHE_TTL = 5 * 60_000; // 5 min para conteos por email
 const STAMP_POLL_MS = 30_000;
 
 // Stamps & LS keys
@@ -74,13 +131,22 @@ const STAMP_KEY_ALL = "__stamp_all_combined";
 const LS_USERS_ALL = "__usuarios_all_cache_v1"; // { map, ts, stamp }
 const LS_ACCT_PREFIX = "__cuentas_cache_v2:"; // por plataforma: { map, ts, stamp }
 const LS_INV_PREFIX = "__inventario_cache_v2:"; // por plataforma: { map, ts, stamp }
-const LS_COUNTS_PREFIX = "__email_counts_v2:"; // por plataforma: { map }
+const LS_PANT_SUM_PREFIX = "__pantallas_sum_v1:"; // por plataforma
 
-/* ===================== Tipos extras ===================== */
+/* ===================== Tipos ===================== */
 type FormStateEx = FormState & {
   total_pagado_proveedor?: string;
   total_ganado?: string;
 };
+
+type UserState = { contacto: string; nombre: string | "" };
+
+type OrderState = Omit<FormStateEx, "contacto" | "nombre" | "meses_pagados"> & {
+  meses_pagados: number;
+  selectedEmailSource?: "inv" | "acct" | null;
+  selectedInvId?: number | null;
+};
+
 type InventarioItem = {
   id: number;
   plataforma_id?: number | null;
@@ -88,46 +154,43 @@ type InventarioItem = {
   clave?: string | null;
 };
 
-/* ===== Ticket para el cliente (helpers) ===== */
-const fmtDateHuman = (isoOrYYYYMMDD?: string | null) => {
-  if (!isoOrYYYYMMDD) return "—";
-  const d = /^\d{4}-\d{2}-\d{2}$/.test(isoOrYYYYMMDD)
-    ? parseLocalDateStr(isoOrYYYYMMDD)
-    : new Date(isoOrYYYYMMDD);
-  if (!d || Number.isNaN(d.getTime())) return "—";
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yy = d.getFullYear();
-  return `${dd}/${mm}/${yy}`;
+type AcctEntry = { id: number; pass: string | null };
+type AcctCacheShape = { map: Record<string, AcctEntry>; ts: number; stamp: number };
+
+type InvEntry = { id?: number; pass: string | null };
+type InvCacheShape = { map: Record<string, InvEntry>; ts: number; stamp: number };
+
+type PantSumCacheShape = {
+  ts: number;
+  stamp: number;
+  byEmail: Record<string, number>;
+  byCuenta: Record<number, number>;
 };
 
-const fmtMoneyClient = (n: number | null | undefined) =>
-  n == null || Number.isNaN(Number(n))
-    ? "—"
-    : new Intl.NumberFormat("es-CO").format(Number(n));
+type PerPidEmailCache = {
+  // dropdown
+  options: Array<{ email: string; source: "acct" | "inv" }>;
+  // maps
+  acctIdMap: Record<string, number>;
+  acctPassMap: Record<string, string | null>;
+  invPassMap: Record<string, string | null>;
+  invIdMap: Record<string, number>;
+  // cupos por email+fuente
+  freeByEmail: Record<string, number | null>; // key: `${pid}::${source}::${email}`
+  // badge registros por email
+  emailCounts: Record<string, number>;
+  // flags
+  loading: boolean;
+  error: string | null;
+};
 
-function buildHandoffText(
-  payload: any,
-  plataformaMap: Map<number, string>,
-  form: any
-) {
-  const platName =
-    plataformaMap.get(payload?.plataforma_id) ??
-    `#${payload?.plataforma_id ?? "—"}`;
-  const lineas = [
-    `Plataforma: ${platName}`,
-    `Pantalla: ${payload?.nro_pantalla ?? "—"}`,
-    `Correo: ${payload?.correo ?? "—"}`,
-    `Clave: ${payload?.contrasena ?? "—"}`,
-    `Fecha de compra: ${fmtDateHuman(form?.fecha_compra)}`,
-    `Fecha de vencimiento: ${fmtDateHuman(form?.fecha_vencimiento)}`,
-    `Meses pagados: ${form?.meses_pagados ?? "—"}`,
-    `Total pagado: ${fmtMoneyClient(payload?.total_pagado)}`,
-  ];
-  return lineas.join("\n");
-}
+type UsersAllCache = {
+  map: Record<string, Usuario>; // key: normalizeContacto(u.contacto)
+  ts: number;
+  stamp: number;
+};
 
-/* ===================== Helpers LS/Stamp ===================== */
+/* ===================== Helpers ===================== */
 const hasWindow = () => typeof window !== "undefined";
 const normalizeEmail = (s: string) => s.trim().toLowerCase();
 
@@ -165,8 +228,6 @@ async function refreshStampOnce(): Promise<number> {
   }
 }
 
-/* ===================== Fetch helpers ===================== */
-
 async function fetchListSafe(urls: string[]): Promise<any[]> {
   for (const url of urls) {
     try {
@@ -183,38 +244,6 @@ async function fetchListSafe(urls: string[]): Promise<any[]> {
   return [];
 }
 
-async function fetchPantallasByEmailOrCuenta(
-  email: string,
-  cuentaId?: number,
-  plataformaId?: number
-): Promise<Array<{ nro_pantalla: any }>> {
-  const key = normalizeEmail(email);
-  const base = "/api/pantallas";
-  const urls = plataformaId
-    ? [
-        `${base}?plataforma_id=${plataformaId}&correo=${encodeURIComponent(
-          key
-        )}&limit=5000`,
-        `${base}?plataforma_id=${plataformaId}&q=${encodeURIComponent(
-          key
-        )}&limit=5000`,
-        `${base}?plataforma_id=${plataformaId}&limit=5000`,
-      ]
-    : [
-        `${base}?correo=${encodeURIComponent(key)}&limit=5000`,
-        `${base}?q=${encodeURIComponent(key)}&limit=5000`,
-        `${base}?limit=5000`,
-      ];
-
-  // Si tenemos cuentaId, priorizamos esa consulta
-  const urlsWithCuenta = cuentaId
-    ? [`${base}?cuenta_id=${cuentaId}&limit=5000`, ...urls]
-    : urls;
-
-  const arr = await fetchListSafe(urlsWithCuenta);
-  return Array.isArray(arr) ? arr : [];
-}
-
 /** Detecta el campo correcto de “pantallas permitidas” en la plataforma. */
 function resolveMaxPantallas(p: any): number {
   const toNum = (x: any) => {
@@ -222,7 +251,6 @@ function resolveMaxPantallas(p: any): number {
     return Number.isFinite(n) ? n : undefined;
   };
 
-  // 👉 incluye tu nombre de columna real: cantidad_pantallas
   const candidates = [
     toNum(p?.cantidad_pantallas),
     toNum(p?.cantidadPantallas),
@@ -235,19 +263,13 @@ function resolveMaxPantallas(p: any): number {
   ];
 
   const val = candidates.find((n) => typeof n === "number" && n > 0);
-  // ⚠️ Evita el fallback a 6; usa 1 si no hay dato para no sobre-asignar
   return val ?? 1;
 }
 
-function capacityForPlatform(
-  pid: number | null | undefined,
-  plataformas: any[]
-): number | null {
+function capacityForPlatform(pid: number | null | undefined, plataformas: any[]): number | null {
   if (!pid) return null;
   const p = plataformas.find((x) => Number(x.id) === Number(pid));
   if (!p) return null;
-
-  // igual que en el viewer: acepta snake/camel y castea
   const raw =
     (p as any).cantidad_pantallas ??
     (p as any).cantidadPantallas ??
@@ -255,65 +277,44 @@ function capacityForPlatform(
     (p as any).pantallas ??
     (p as any).perfiles ??
     null;
-
-  if (raw === null || raw === undefined || raw === "") return null; // desconocida
+  if (raw === null || raw === undefined || raw === "") return null;
   const cap = Number(raw);
   return Number.isFinite(cap) && cap > 0 ? cap : null;
 }
 
-async function fetchPantallasCountByEmailPlat(
+async function fetchPantallasByEmailOrCuenta(
   email: string,
+  cuentaId?: number,
   plataformaId?: number
-): Promise<number> {
+): Promise<Array<{ nro_pantalla: any } & any>> {
   const key = normalizeEmail(email);
   const base = "/api/pantallas";
   const urls = plataformaId
     ? [
-        `${base}?plataforma_id=${plataformaId}&correo=${encodeURIComponent(
-          key
-        )}`,
-        `${base}?plataforma_id=${plataformaId}&q=${encodeURIComponent(key)}`,
+        `${base}?plataforma_id=${plataformaId}&correo=${encodeURIComponent(key)}&limit=5000`,
+        `${base}?plataforma_id=${plataformaId}&q=${encodeURIComponent(key)}&limit=5000`,
         `${base}?plataforma_id=${plataformaId}&limit=5000`,
       ]
     : [
-        `${base}?correo=${encodeURIComponent(key)}`,
-        `${base}?q=${encodeURIComponent(key)}`,
+        `${base}?correo=${encodeURIComponent(key)}&limit=5000`,
+        `${base}?q=${encodeURIComponent(key)}&limit=5000`,
         `${base}?limit=5000`,
       ];
-  const arr = await fetchListSafe(urls);
-  return arr.filter((r: any) => String(r?.correo ?? "").toLowerCase() === key)
-    .length;
+
+  const urlsWithCuenta = cuentaId
+    ? [`${base}?cuenta_id=${cuentaId}&limit=5000`, ...urls]
+    : urls;
+
+  const arr = await fetchListSafe(urlsWithCuenta);
+  return Array.isArray(arr) ? arr : [];
 }
 
-async function countPantallasSmart(
-  email: string,
-  _cuentaId?: number, // ignorado
-  plataformaId?: number
-): Promise<number> {
-  try {
-    // Contar SIEMPRE por correo + plataforma
-    return await fetchPantallasCountByEmailPlat(email, plataformaId);
-  } catch {
-    return 0;
-  }
-}
-
-/* ===================== CACHE: Usuarios (catálogo completo) ===================== */
-type UsersAllCache = {
-  map: Record<string, Usuario>; // key: normalizeContacto(u.contacto)
-  ts: number;
-  stamp: number;
-};
-
+/* ===== LS: Users All ===== */
 function readUsersAll(): UsersAllCache | null {
   return readLS<UsersAllCache>(LS_USERS_ALL);
 }
 function writeUsersAll(map: Record<string, Usuario>) {
-  writeLS(LS_USERS_ALL, {
-    map,
-    ts: Date.now(),
-    stamp: getCurrentStamp(),
-  } as UsersAllCache);
+  writeLS(LS_USERS_ALL, { map, ts: Date.now(), stamp: getCurrentStamp() } as UsersAllCache);
 }
 function usersAllFresh(c: UsersAllCache | null): boolean {
   if (!c) return false;
@@ -321,19 +322,12 @@ function usersAllFresh(c: UsersAllCache | null): boolean {
   const fresh = Date.now() - c.ts <= USERS_ALL_CACHE_TTL;
   return sameStamp && fresh;
 }
-
-/** Devuelve:
- *  - Usuario si está en cache,
- *  - null si el cache dice que no existe,
- *  - undefined si aún no hay cache o está vencido.
- */
 function getUserFromAllCache(norm: string): Usuario | null | undefined {
   const c = readUsersAll();
   if (!usersAllFresh(c)) return undefined;
   const u = c!.map[norm];
   return u ?? null;
 }
-
 async function ensureUsersAllLoaded() {
   const c = readUsersAll();
   if (usersAllFresh(c)) return;
@@ -348,18 +342,12 @@ async function ensureUsersAllLoaded() {
   for (const u of arr) {
     const k = normalizeContacto(String(u.contacto ?? ""));
     if (!k) continue;
-    map[k] = u; // último gana
+    map[k] = u;
   }
   writeUsersAll(map);
 }
 
-/* ===================== CACHE: Cuentas compartidas ===================== */
-type AcctEntry = { id: number; pass: string | null };
-type AcctCacheShape = {
-  map: Record<string, AcctEntry>;
-  ts: number;
-  stamp: number;
-};
+/* ===== LS: cuentas compartidas cache ===== */
 function acctKey(pid: number) {
   return `${LS_ACCT_PREFIX}${pid}`;
 }
@@ -367,11 +355,7 @@ function readAcctCache(pid: number): AcctCacheShape | null {
   return readLS<AcctCacheShape>(acctKey(pid));
 }
 function writeAcctCache(pid: number, map: Record<string, AcctEntry>) {
-  writeLS(acctKey(pid), {
-    map,
-    ts: Date.now(),
-    stamp: getCurrentStamp(),
-  } as AcctCacheShape);
+  writeLS(acctKey(pid), { map, ts: Date.now(), stamp: getCurrentStamp() } as AcctCacheShape);
 }
 function getAcctMap(pid: number): Record<string, AcctEntry> | null {
   const c = readAcctCache(pid);
@@ -381,13 +365,7 @@ function getAcctMap(pid: number): Record<string, AcctEntry> | null {
   return sameStamp && fresh ? c.map : null;
 }
 
-/* ===================== CACHE: Inventario ===================== */
-type InvEntry = { id?: number; pass: string | null };
-type InvCacheShape = {
-  map: Record<string, InvEntry>;
-  ts: number;
-  stamp: number;
-};
+/* ===== LS: inventario cache ===== */
 function invKey(pid: number) {
   return `${LS_INV_PREFIX}${pid}`;
 }
@@ -395,11 +373,7 @@ function readInvCache(pid: number): InvCacheShape | null {
   return readLS<InvCacheShape>(invKey(pid));
 }
 function writeInvCache(pid: number, map: Record<string, InvEntry>) {
-  writeLS(invKey(pid), {
-    map,
-    ts: Date.now(),
-    stamp: getCurrentStamp(),
-  } as InvCacheShape);
+  writeLS(invKey(pid), { map, ts: Date.now(), stamp: getCurrentStamp() } as InvCacheShape);
 }
 function getInvMap(pid: number): Record<string, InvEntry> | null {
   const c = readInvCache(pid);
@@ -409,17 +383,7 @@ function getInvMap(pid: number): Record<string, InvEntry> | null {
   return sameStamp && fresh ? c.map : null;
 }
 
-/* ===================== CACHE: Resumen de pantallas por plataforma (byEmail / byCuenta) ===================== */
-// Guarda contadores precalculados para evitar N+1 requests por correo/cuenta
-const LS_PANT_SUM_PREFIX = "__pantallas_sum_v1:"; // por plataforma
-
-type PantSumCacheShape = {
-  ts: number;
-  stamp: number;
-  byEmail: Record<string, number>; // email normalizado -> usadas
-  byCuenta: Record<number, number>; // cuenta_id -> usadas
-};
-
+/* ===== LS: pantallas resumen por plataforma (1 fetch) ===== */
 function pantSumKey(pid: number) {
   return `${LS_PANT_SUM_PREFIX}${pid}`;
 }
@@ -436,12 +400,7 @@ function getPantSum(pid: number): PantSumCacheShape | null {
   const fresh = Date.now() - c.ts <= LIST_CACHE_TTL;
   return sameStamp && fresh ? c : null;
 }
-
-/** Construye el resumen (byEmail/byCuenta) con UN SOLO fetch de pantallas por plataforma */
-async function buildPantSumForPlatform(
-  pid: number
-): Promise<PantSumCacheShape> {
-  // Trae todas las pantallas de la plataforma UNA vez
+async function buildPantSumForPlatform(pid: number): Promise<PantSumCacheShape> {
   const rows = await fetchListSafe([
     `/api/pantallas?plataforma_id=${pid}&limit=50000`,
     `/api/pantallas?plataforma_id=${pid}&limit=20000`,
@@ -454,53 +413,23 @@ async function buildPantSumForPlatform(
   for (const r of rows) {
     const email = normalizeEmail(r?.correo ?? "");
     if (email) byEmail[email] = (byEmail[email] ?? 0) + 1;
-
     const cid = Number(r?.cuenta_id);
     if (Number.isFinite(cid) && cid > 0) {
       byCuenta[cid] = (byCuenta[cid] ?? 0) + 1;
     }
   }
 
-  const out: PantSumCacheShape = {
-    ts: Date.now(),
-    stamp: getCurrentStamp(),
-    byEmail,
-    byCuenta,
-  };
-  return out;
-}
-
-/* ===================== CACHE: Conteos por email ===================== */
-type CountEntry = { count: number; ts: number; stamp: number };
-type CountCacheShape = { map: Record<string, CountEntry> };
-function countsKey(pid: number) {
-  return `${LS_COUNTS_PREFIX}${pid}`;
-}
-function getCountFromCache(pid: number, email: string): number | undefined {
-  const all = readLS<CountCacheShape>(countsKey(pid)) || { map: {} };
-  const entry = all.map[email];
-  if (!entry) return undefined;
-  const sameStamp = entry.stamp === getCurrentStamp();
-  const fresh = Date.now() - entry.ts <= COUNT_CACHE_TTL;
-  return sameStamp && fresh ? entry.count : undefined;
-}
-function setCountInCache(pid: number, email: string, count: number) {
-  const all = readLS<CountCacheShape>(countsKey(pid)) || { map: {} };
-  all.map[email] = { count, ts: Date.now(), stamp: getCurrentStamp() };
-  writeLS(countsKey(pid), all);
+  return { ts: Date.now(), stamp: getCurrentStamp(), byEmail, byCuenta };
 }
 
 /* ===================== UI helpers ===================== */
-const isEmpty = (v: any) => v == null || v === "";
 function copyToClipboard(text: string) {
   try {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard?.writeText?.(text);
   } catch {}
 }
 function downloadJson(filename: string, obj: any) {
-  const blob = new Blob([JSON.stringify(obj, null, 2)], {
-    type: "application/json",
-  });
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -512,275 +441,18 @@ function downloadJson(filename: string, obj: any) {
 /* ===================== Componente ===================== */
 export default function FormPantallas() {
   const compraHoy = todayStr();
-  const [form, setForm] = useState<FormStateEx>({
-    contacto: "",
-    nombre: "",
-    plataforma_id: 0,
-    cuenta_id: null,
-    nro_pantalla: "",
-    correo: "",
-    contrasena: "",
-    proveedor: "",
-    fecha_compra: compraHoy,
-    fecha_vencimiento: addMonthsLocal(compraHoy, 1),
-    meses_pagados: 1,
-    total_pagado: "",
-    total_pagado_proveedor: "",
-    total_ganado: "",
-    estado: "ACTIVA",
-    comentario: "",
-  });
 
-  // arriba, junto a otros useState del módulo de correos
-  const [deletingAcctId, setDeletingAcctId] = useState<number | null>(null);
-  const [availableSlots, setAvailableSlots] = useState<number[]>([]);
-  const [maxAllowed, setMaxAllowed] = useState<number>(1);
-  const [loadingSlots, setLoadingSlots] = useState(false);
-  const [slotsError, setSlotsError] = useState<string | null>(null);
-  const [freeByEmail, setFreeByEmail] = useState<Record<string, number | null>>(
-    {}
-  );
-  const [invIdMap, setInvIdMap] = useState<Record<string, number>>({});
-  const [selectedEmailSource, setSelectedEmailSource] = useState<
-    "inv" | "acct" | null
-  >(null);
+  const { plataformas, loading: platLoading, error: platError } = usePlataformas();
 
-  /* ===== Mensajería + modal de confirmación ===== */
-  const [loading, setLoading] = useState(false);
-  const [okMsg, setOkMsg] = useState<string | null>(null);
-  const [errMsg, setErrMsg] = useState<string | null>(null);
-
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmPayload, setConfirmPayload] = useState<any>(null);
-  const [confirmText, setConfirmText] = useState<string>("");
-  const [confirmView, setConfirmView] = useState<"resumen" | "json">("resumen");
-
-  /* ===== Sugerencias de CORREO (cuentas compartidas + inventario) con cache ===== */
-  const [open, setOpen] = useState(false);
-  const [loadingEmails, setLoadingEmails] = useState(false);
-  const [errEmails, setErrEmails] = useState<string | null>(null);
-  const [acctIdMap, setAcctIdMap] = useState<Record<string, number>>({});
-  const [acctPassMap, setAcctPassMap] = useState<Record<string, string | null>>(
-    {}
-  );
-  const [invPassMap, setInvPassMap] = useState<Record<string, string | null>>(
-    {}
-  );
-  const [emailCounts, setEmailCounts] = useState<Record<string, number>>({});
-  const [options, setOptions] = useState<
-    Array<{ email: string; source: "acct" | "inv" }>
-  >([]);
-
-  const {
-    plataformas,
-    loading: platLoading,
-    error: platError,
-  } = usePlataformas();
-
-  // ⬇ NUEVO: controla si el nombre fue editado manualmente
-  const [nombreDirty, setNombreDirty] = useState(false);
-  // ⬇ NUEVO: recuerda el último contacto normalizado para detectar cambios reales
-  const lastContactoRef = useRef<string>("");
-
-  // Prefetch del catálogo para acelerar el primer autocompletado
-  useEffect(() => {
-    ensureUsersAllLoaded();
-  }, []);
-
-  /* ====== Stamp polling + invalidación pasiva ====== */
-  useEffect(() => {
-    let alive = true;
-    refreshStampOnce(); // primer fetch
-
-    const onStorage = (e: StorageEvent) => {
-      if (!alive) return;
-      if (e.key === LS_STAMP_P || e.key === STAMP_KEY_ALL) {
-        // El sello en LS hace expirar entradas en lectura.
-      }
-    };
-    window.addEventListener("storage", onStorage);
-
-    // BroadcastChannel del bus existente
-    let bc: BroadcastChannel | null = null;
-    try {
-      bc = new BroadcastChannel(BC_NAME);
-      bc.onmessage = (ev) => {
-        if (ev?.data?.type === "invalidate-pantallas") {
-          refreshStampOnce();
-        }
-      };
-    } catch {}
-
-    const onFocus = () => refreshStampOnce();
-    window.addEventListener("focus", onFocus);
-
-    const id = window.setInterval(() => {
-      refreshStampOnce();
-    }, STAMP_POLL_MS);
-
-    return () => {
-      alive = false;
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("focus", onFocus);
-      if (id) clearInterval(id);
-      try {
-        bc?.close();
-      } catch {}
-    };
-  }, []);
-
-  /* ====== Autocompletar NOMBRE con cache de usuarios ====== */
-  /* ====== Autocompletar NOMBRE con cache + fallbacks (pantallas / cuentascompletas) ====== */
-  useEffect(() => {
-    const raw = form.contacto.trim();
-    const norm = normalizeContacto(raw);
-
-    // Si el contacto cambió (comparando normalizado), reseteamos estado de nombre
-    if ((norm || "") !== lastContactoRef.current) {
-      lastContactoRef.current = norm || "";
-      setNombreDirty(false); // permitir nuevo autocompletado
-      setForm((s) => ({ ...s, nombre: "" })); // limpiar nombre anterior
-    }
-
-    if (!norm || norm.length < 5) return;
-
-    let canceled = false;
-
-    const pickBestName = (
-      candidatos: string[],
-      respaldoOrdenado: any[] = []
-    ) => {
-      const names = candidatos
-        .map((n) => (n ?? "").toString().trim())
-        .filter((n) => n.length > 0);
-      if (names.length) {
-        const freq = new Map<string, number>();
-        for (const n of names) freq.set(n, (freq.get(n) || 0) + 1);
-        return [...freq.entries()].sort((a, b) => b[1] - a[1])[0]![0];
-      }
-      // respaldo: toma el último con nombre no vacío
-      const withName = respaldoOrdenado
-        .map((r) => (r?.nombre ?? "").toString().trim())
-        .filter((n) => n.length > 0);
-      return withName.length ? withName[0] : "";
-    };
-
-    const run = async () => {
-      // 1) Catálogo rápido (cache de usuarios)
-      if (getUserFromAllCache(norm) === undefined) {
-        await ensureUsersAllLoaded();
-      }
-      const u = getUserFromAllCache(norm);
-      if (!canceled && !nombreDirty && u && (u.nombre ?? "") !== "") {
-        setForm((s) => ({ ...s, nombre: u.nombre ?? "" }));
-        return;
-      }
-
-      // 2) Fallback #1: buscar en /api/pantallas por contacto exacto
-      try {
-        const rowsP = await fetchListSafe([
-          `/api/pantallas?q=${encodeURIComponent(norm)}&limit=2000`,
-          `/api/pantallas?limit=5000`,
-        ]);
-        const sameP = rowsP.filter(
-          (r: any) => normalizeContacto(String(r?.contacto ?? "")) === norm
-        );
-        const bestFromP = pickBestName(
-          sameP.map((r: any) => r?.nombre ?? ""),
-          sameP
-        );
-
-        if (!canceled && !nombreDirty && bestFromP) {
-          setForm((s) => ({ ...s, nombre: bestFromP }));
-
-          // Calienta el cache de usuarios para futuras veces
-          const cur = readUsersAll();
-          const map = cur?.map ?? {};
-          map[norm] = { contacto: norm, nombre: bestFromP } as any;
-          writeUsersAll(map); // actualiza ts + stamp
-          return;
-        }
-      } catch {
-        /* best-effort */
-      }
-
-      // 3) Fallback #2: buscar en /api/cuentascompletas por contacto exacto
-      try {
-        const rowsC = await fetchListSafe([
-          `/api/cuentascompletas?q=${encodeURIComponent(norm)}&limit=2000`,
-          `/api/cuentascompletas?limit=5000`,
-        ]);
-        const sameC = rowsC.filter(
-          (r: any) => normalizeContacto(String(r?.contacto ?? "")) === norm
-        );
-        const bestFromC = pickBestName(
-          sameC.map((r: any) => r?.nombre ?? ""),
-          sameC
-        );
-
-        if (!canceled && !nombreDirty && bestFromC) {
-          setForm((s) => ({ ...s, nombre: bestFromC }));
-
-          // Calienta el cache de usuarios
-          const cur = readUsersAll();
-          const map = cur?.map ?? {};
-          map[norm] = { contacto: norm, nombre: bestFromC } as any;
-          writeUsersAll(map);
-          return;
-        }
-      } catch {
-        /* best-effort */
-      }
-    };
-
-    const id = window.setTimeout(run, 150);
-    return () => {
-      canceled = true;
-      clearTimeout(id);
-    };
-  }, [form.contacto, nombreDirty]);
-
-  /* ====== Map id->nombre y orden priorizando último usado ====== */
+  /* ====== Map id->nombre ====== */
   const plataformaMap = useMemo(() => {
     const m = new Map<number, string>();
     for (const p of plataformas) m.set(p.id, (p as any).nombre ?? String(p.id));
     return m;
   }, [plataformas]);
 
-  // 📊 Mapa de capacidades por plataforma (sin fetch extra)
-  const platformCapacity = useMemo(() => {
-    const m = new Map<number, number>();
-    for (const p of plataformas) {
-      const raw =
-        (p as any).cantidad_pantallas ??
-        (p as any).cantidadPantallas ??
-        (p as any).max_pantallas ??
-        (p as any).pantallas ??
-        (p as any).perfiles ??
-        null;
-      const cap = Number(raw);
-      m.set(Number(p.id), Number.isFinite(cap) && cap > 0 ? cap : 0);
-    }
-    return m;
-  }, [plataformas]);
-
-  useEffect(() => {
-    if (!form.plataforma_id) {
-      setMaxAllowed(0);
-      return;
-    }
-    const plat = plataformas.find(
-      (p) => Number(p.id) === Number(form.plataforma_id)
-    );
-    const cap = plat ? resolveMaxPantallas(plat as any) : 0;
-    setMaxAllowed(cap);
-  }, [form.plataforma_id, plataformas]);
-
   const lastPlatformId = useMemo<number | null>(() => {
-    const raw =
-      typeof window !== "undefined"
-        ? window.localStorage.getItem(LAST_PLATFORM_KEY)
-        : null;
+    const raw = typeof window !== "undefined" ? window.localStorage.getItem(LAST_PLATFORM_KEY) : null;
     const n = raw ? Number(raw) : NaN;
     return Number.isFinite(n) && n > 0 ? n : null;
   }, []);
@@ -794,191 +466,434 @@ export default function FormPantallas() {
     return [fav, ...rest];
   }, [plataformas, lastPlatformId]);
 
-  /* ===== Autoselección inicial (usa última plataforma si hay) ===== */
+  const makeEmptyOrder = (pid: number): OrderState => ({
+    plataforma_id: pid || 0,
+    cuenta_id: null,
+    nro_pantalla: "",
+    correo: "",
+    contrasena: "",
+    proveedor: "",
+    fecha_compra: compraHoy,
+    fecha_vencimiento: addMonthsLocal(compraHoy, 1),
+    meses_pagados: 1,
+    total_pagado: "",
+    total_pagado_proveedor: "",
+    total_ganado: "",
+    estado: "ACTIVA",
+    comentario: "",
+    selectedEmailSource: null,
+    selectedInvId: null,
+  });
+
+  /* ✅ usuario separado */
+  const [user, setUser] = useState<UserState>({ contacto: "", nombre: "" });
+
+  /* ✅ múltiples compras */
+  const [orders, setOrders] = useState<OrderState[]>(() => [makeEmptyOrder(0)]);
+
+  const setOrder = (idx: number, patch: Partial<OrderState>) => {
+    setOrders((prev) => prev.map((o, i) => (i === idx ? { ...o, ...patch } : o)));
+  };
+
+  /* ===== Autoselección inicial de plataforma en el primer bloque ===== */
   useEffect(() => {
     if (platLoading || platError || !plataformasOrdered.length) return;
-    if (form.plataforma_id === 0) {
-      setForm((s) => ({ ...s, plataforma_id: plataformasOrdered[0]!.id }));
-    }
-  }, [plataformasOrdered, platLoading, platError, form.plataforma_id]);
+    setOrders((prev) => {
+      if (!prev.length) return [makeEmptyOrder(plataformasOrdered[0]!.id)];
+      const first = prev[0]!;
+      if (first.plataforma_id !== 0) return prev;
+      return [{ ...first, plataforma_id: plataformasOrdered[0]!.id }, ...prev.slice(1)];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plataformasOrdered, platLoading, platError]);
 
-  const boxRef = useRef<HTMLDivElement | null>(null);
+  /* ===== Prefetch usuarios + stamp polling ===== */
+  useEffect(() => {
+    ensureUsersAllLoaded();
+  }, []);
 
   useEffect(() => {
-    function onDocClick(e: MouseEvent) {
-      if (!boxRef.current) return;
-      if (!boxRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
+    let alive = true;
+    refreshStampOnce();
+
+    const onStorage = (e: StorageEvent) => {
+      if (!alive) return;
+      if (e.key === LS_STAMP_P || e.key === STAMP_KEY_ALL) {
+        // lectura de caches ya verifica stamp
+      }
+    };
+    window.addEventListener("storage", onStorage);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel(BC_NAME);
+      bc.onmessage = (ev) => {
+        if (ev?.data?.type === "invalidate-pantallas") {
+          refreshStampOnce();
+        }
+      };
+    } catch {}
+
+    const onFocus = () => refreshStampOnce();
+    window.addEventListener("focus", onFocus);
+
+    const id = window.setInterval(() => refreshStampOnce(), STAMP_POLL_MS);
+
+    return () => {
+      alive = false;
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", onFocus);
+      clearInterval(id);
+      try {
+        bc?.close();
+      } catch {}
+    };
   }, []);
+
+  /* ===== Nombre autocompletar (user) ===== */
+  const [nombreDirty, setNombreDirty] = useState(false);
+  const lastContactoRef = useRef<string>("");
+
+  useEffect(() => {
+    const raw = user.contacto.trim();
+    const norm = normalizeContacto(raw);
+
+    if ((norm || "") !== lastContactoRef.current) {
+      lastContactoRef.current = norm || "";
+      setNombreDirty(false);
+      setUser((s) => ({ ...s, nombre: "" }));
+    }
+    if (!norm || norm.length < 5) return;
+
+    let canceled = false;
+
+    const run = async () => {
+      if (getUserFromAllCache(norm) === undefined) await ensureUsersAllLoaded();
+      const u = getUserFromAllCache(norm);
+      if (!canceled && !nombreDirty && u && (u.nombre ?? "") !== "") {
+        setUser((s) => ({ ...s, nombre: u.nombre ?? "" }));
+        return;
+      }
+
+      // fallback: pantallas
+      try {
+        const rowsP = await fetchListSafe([
+          `/api/pantallas?q=${encodeURIComponent(norm)}&limit=2000`,
+          `/api/pantallas?limit=5000`,
+        ]);
+        const sameP = rowsP.filter(
+          (r: any) => normalizeContacto(String(r?.contacto ?? "")) === norm
+        );
+        const names = sameP
+          .map((r: any) => String(r?.nombre ?? "").trim())
+          .filter((n: string) => n.length > 0);
+
+        let bestName = "";
+        if (names.length) {
+          const freq = new Map<string, number>();
+          for (const n of names) freq.set(n, (freq.get(n) || 0) + 1);
+          bestName = [...freq.entries()].sort((a, b) => b[1] - a[1])[0]![0];
+        } else {
+          const withName = sameP
+            .filter((r: any) => String(r?.nombre ?? "").trim().length > 0)
+            .sort((a: any, b: any) => Number(b?.id ?? 0) - Number(a?.id ?? 0));
+          if (withName.length) bestName = String(withName[0].nombre).trim();
+        }
+
+        if (!canceled && !nombreDirty && bestName) {
+          setUser((s) => ({ ...s, nombre: bestName }));
+          const cur = readUsersAll();
+          const map = cur?.map ?? {};
+          map[norm] = { contacto: norm, nombre: bestName } as any;
+          writeUsersAll(map);
+        }
+      } catch {
+        /* best-effort */
+      }
+    };
+
+    const id = window.setTimeout(run, 150);
+    return () => {
+      canceled = true;
+      clearTimeout(id);
+    };
+  }, [user.contacto, nombreDirty]);
+
+
+  
+  /* ===== Ensure usuario ===== */
+  async function ensureUsuario(contactoRaw: string, nombre: string | null) {
+    const raw = contactoRaw.trim();
+    const norm = normalizeContacto(raw);
+    if (!norm) return;
+
+    try {
+      await ensureUsersAllLoaded();
+      const current = readUsersAll();
+      const exists = !!current?.map?.[norm];
+      if (exists) return;
+
+      const res = await fetch("/api/usuarios", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contacto: raw, nombre: nombre || null }),
+      });
+      if (res.ok) {
+        const created: Usuario = await res.json();
+        const next = readUsersAll();
+        const map = next?.map ?? {};
+        map[norm] = created;
+        writeUsersAll(map);
+        await refreshStampOnce();
+      }
+    } catch {}
+  }
+
+  /* ===== Ensure cuenta compartida ===== */
+  async function ensureCuentaCompartida(
+    correo: string,
+    plataformaId: number,
+    pass: string | null,
+    proveedor: string | null
+  ) {
+    const key = normalizeEmail(correo);
+    const pid = plataformaId;
+
+    const cached = getAcctMap(pid)?.[key];
+    if (cached?.id) return { id: cached.id };
+
+    const res = await fetch("/api/cuentascompartidas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        plataforma_id: pid,
+        correo,
+        contrasena: pass || null,
+        proveedor: proveedor || null,
+      }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j?.error ?? "No se pudo crear la cuenta compartida");
+    }
+    const saved: Cuenta = await res.json();
+
+    const base = getAcctMap(pid) || {};
+    base[key] = { id: saved.id, pass: pass || null };
+    writeAcctCache(pid, base);
+
+    await refreshStampOnce();
+    return { id: saved.id };
+  }
+
+  /* ===== Slots por bloque ===== */
+  const [availableSlotsByIdx, setAvailableSlotsByIdx] = useState<number[][]>([]);
+  const [loadingSlotsByIdx, setLoadingSlotsByIdx] = useState<boolean[]>([]);
+  const [slotsErrorByIdx, setSlotsErrorByIdx] = useState<(string | null)[]>([]);
+
+  const ensureIdxArrays = (len: number) => {
+    setAvailableSlotsByIdx((p) => (p.length >= len ? p : [...p, ...Array(len - p.length).fill([])]));
+    setLoadingSlotsByIdx((p) => (p.length >= len ? p : [...p, ...Array(len - p.length).fill(false)]));
+    setSlotsErrorByIdx((p) => (p.length >= len ? p : [...p, ...Array(len - p.length).fill(null)]));
+  };
+  useEffect(() => {
+    ensureIdxArrays(orders.length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders.length]);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function computeSlots() {
-      setSlotsError(null);
-      setAvailableSlots([]);
+    const run = async () => {
+      for (let idx = 0; idx < orders.length; idx++) {
+        const o = orders[idx];
+        const pid = o.plataforma_id;
+        const email = normalizeEmail(o.correo);
 
-      // 🧭 1) Definir pid aquí:
-      const pid = form.plataforma_id;
-      const email = normalizeEmail(form.correo);
-      if (!pid || !email) return; // si falta plataforma o correo, no sigue
-
-      setLoadingSlots(true);
-      try {
-        // 🧮 2) Obtener la capacidad máxima desde plataformas (sin fetch)
-        const plat = plataformas.find((p) => Number(p.id) === Number(pid));
-        const maxAllowed = plat ? resolveMaxPantallas(plat as any) : 0;
-        setMaxAllowed(maxAllowed);
-
-        // 📊 3) Traer pantallas ya usadas por ese correo/cuenta
-        const rows = await fetchPantallasByEmailOrCuenta(
-          email,
-          form.cuenta_id ?? undefined,
-          pid
-        );
-
-        // 🧼 4) Construir set de pantallas ocupadas
-        const taken = new Set<number>();
-        for (const r of rows) {
-          const raw = (r?.nro_pantalla ?? "").toString().trim();
-          const n = Number(raw);
-          if (Number.isInteger(n) && n >= 1) taken.add(n);
+        if (!pid || !email) {
+          setAvailableSlotsByIdx((p) => {
+            const a = [...p];
+            a[idx] = [];
+            return a;
+          });
+          setSlotsErrorByIdx((p) => {
+            const a = [...p];
+            a[idx] = null;
+            return a;
+          });
+          continue;
         }
 
-        // 🆓 5) Calcular pantallas disponibles
-        const free: number[] = [];
-        for (let i = 1; i <= maxAllowed; i++) {
-          if (!taken.has(i)) free.push(i);
-        }
+        setLoadingSlotsByIdx((p) => {
+          const a = [...p];
+          a[idx] = true;
+          return a;
+        });
+        setSlotsErrorByIdx((p) => {
+          const a = [...p];
+          a[idx] = null;
+          return a;
+        });
 
-        // ✍️ 6) Actualizar estado
-        setAvailableSlots(free);
+        try {
+          const plat = plataformas.find((p) => Number(p.id) === Number(pid));
+          const maxAllowed = plat ? resolveMaxPantallas(plat as any) : 0;
 
-        // Si el nro_pantalla actual no es válido, se limpia
-        if (
-          form.nro_pantalla &&
-          (!free.includes(Number(form.nro_pantalla)) ||
-            !Number(form.nro_pantalla))
-        ) {
-          setForm((s) => ({ ...s, nro_pantalla: "" }));
+          const rows = await fetchPantallasByEmailOrCuenta(
+            email,
+            o.cuenta_id ?? undefined,
+            pid
+          );
+
+          const taken = new Set<number>();
+          for (const r of rows) {
+            const raw = (r?.nro_pantalla ?? "").toString().trim();
+            const n = Number(raw);
+            if (Number.isInteger(n) && n >= 1) taken.add(n);
+          }
+
+          const free: number[] = [];
+          for (let i = 1; i <= maxAllowed; i++) if (!taken.has(i)) free.push(i);
+
+          if (cancelled) return;
+
+          setAvailableSlotsByIdx((p) => {
+            const a = [...p];
+            a[idx] = free;
+            return a;
+          });
+
+          if (o.nro_pantalla && !free.includes(Number(o.nro_pantalla))) {
+            setOrder(idx, { nro_pantalla: "" });
+          }
+        } catch (e: any) {
+          setSlotsErrorByIdx((p) => {
+            const a = [...p];
+            a[idx] = e?.message ?? "No se pudieron calcular pantallas disponibles";
+            return a;
+          });
+          setAvailableSlotsByIdx((p) => {
+            const a = [...p];
+            a[idx] = [];
+            return a;
+          });
+        } finally {
+          setLoadingSlotsByIdx((p) => {
+            const a = [...p];
+            a[idx] = false;
+            return a;
+          });
         }
-      } catch (e: any) {
-        setSlotsError(
-          e?.message ?? "No se pudieron calcular las pantallas disponibles"
-        );
-      } finally {
-        setLoadingSlots(false);
       }
-    }
+    };
 
-    computeSlots();
+    run();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.plataforma_id, form.correo, form.cuenta_id, plataformas]);
+  }, [
+    orders.map((o) => `${o.plataforma_id}:${o.correo}:${o.cuenta_id}`).join("|"),
+    plataformas,
+  ]);
 
+  /* ===== Fecha vencimiento por bloque ===== */
   useEffect(() => {
-    // reset al cambiar plataforma
-    setAcctIdMap({});
-    setAcctPassMap({});
-    setInvPassMap({});
-    setInvIdMap({});
-    setEmailCounts({});
-    setOptions([]);
-    setOpen(false);
-    setSelectedEmailSource(null);
-  }, [form.plataforma_id]);
+    setOrders((prev) =>
+      prev.map((o) => {
+        if (!o.fecha_compra) return o;
+        const months =
+          typeof o.meses_pagados === "number" &&
+          Number.isFinite(o.meses_pagados) &&
+          o.meses_pagados >= 1
+            ? o.meses_pagados
+            : 1;
+        const fv = addMonthsLocal(o.fecha_compra, months);
+        return fv !== o.fecha_vencimiento ? { ...o, fecha_vencimiento: fv } : o;
+      })
+    );
+  }, [orders.map((o) => `${o.fecha_compra}:${o.meses_pagados}`).join("|")]);
 
-  async function deleteCuentaCompartidaByEmail(email: string) {
-    const pid = form.plataforma_id;
-    const id = acctIdMap[email];
-    if (!pid || !id) return;
+  /* ===== Total ganado por bloque ===== */
+  useEffect(() => {
+    setOrders((prev) =>
+      prev.map((o) => {
+        const tp = toNumOrNull(o.total_pagado);
+        if (tp == null) {
+          return o.total_ganado !== "" ? { ...o, total_ganado: "" } : o;
+        }
+        const tpp = toNumOrNull(o.total_pagado_proveedor);
+        const ganado = tpp == null ? tp : tp - tpp;
+        const txt = ganado.toString();
+        return o.total_ganado !== txt ? { ...o, total_ganado: txt } : o;
+      })
+    );
+  }, [orders.map((o) => `${o.total_pagado}:${o.total_pagado_proveedor}`).join("|")]);
 
-    // confirmación simple
-    if (!window.confirm(`¿Eliminar la cuenta compartida\n${email}?`)) return;
+  /* ===== Dropdown correos: cache por plataforma ===== */
+  const [perPid, setPerPid] = useState<Record<number, PerPidEmailCache>>({});
+  const [emailOpenIdx, setEmailOpenIdx] = useState<number | null>(null);
+  const dropdownBoxRef = useRef<HTMLDivElement | null>(null);
 
-    setDeletingAcctId(id);
-    setErrEmails(null);
 
-    try {
-      const res = await fetch(`/api/cuentascompartidas/${id}`, {
-        method: "DELETE",
-        cache: "no-store",
-      });
-
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        // 409: tiene pantallas asociadas
-        throw new Error(j?.error ?? "No se pudo eliminar la cuenta");
-      }
-
-      // ✅ Quitar de caches persistentes
-      const map = getAcctMap(pid) || {};
-      delete map[email];
-      writeAcctCache(pid, map);
-
-      // ✅ Quitar de estados en memoria
-      setAcctIdMap((m) => {
-        const { [email]: _, ...rest } = m;
-        return rest;
-      });
-      setAcctPassMap((m) => {
-        const { [email]: _, ...rest } = m;
-        return rest;
-      });
-
-      // quitar opción del dropdown
-      setOptions((opts) =>
-        opts.filter((o) => !(o.source === "acct" && o.email === email))
-      );
-
-      // limpiar cupos calculados para esa opción
-      setFreeByEmail((m) => {
-        const copy = { ...m };
-        delete copy[`${pid}::acct::${email}`];
-        return copy;
-      });
-
-      // refrescar sello para invalidar vistas en otras pestañas
-      await refreshStampOnce();
-    } catch (e: any) {
-      setErrEmails(e?.message ?? "Error eliminando cuenta");
-    } finally {
-      setDeletingAcctId(null);
+  
+useEffect(() => {
+  function onDocClick(e: MouseEvent) {
+    if (!dropdownBoxRef.current) return;
+    if (!dropdownBoxRef.current.contains(e.target as Node)) {
+      setEmailOpenIdx(null);
     }
   }
 
-  async function loadEmails() {
-    if (!form.plataforma_id) return;
-    setLoadingEmails(true);
-    setErrEmails(null);
+  // ✅ IMPORTANTE: usar "click", NO "mousedown"
+  document.addEventListener("click", onDocClick);
+  return () => document.removeEventListener("click", onDocClick);
+}, []);
+
+
+  const ensurePerPidInit = (pid: number) => {
+    setPerPid((s) => {
+      if (s[pid]) return s;
+      return {
+        ...s,
+        [pid]: {
+          options: [],
+          acctIdMap: {},
+          acctPassMap: {},
+          invPassMap: {},
+          invIdMap: {},
+          freeByEmail: {},
+          emailCounts: {},
+          loading: false,
+          error: null,
+        },
+      };
+    });
+  };
+
+  async function loadEmailsForPid(pid: number) {
+    if (!pid) return;
+    ensurePerPidInit(pid);
+
+    setPerPid((s) => ({
+      ...s,
+      [pid]: { ...(s[pid] ?? ({} as any)), loading: true, error: null },
+    }));
 
     try {
-      const pid = form.plataforma_id;
+      // caches LS
+      let acctMap = getAcctMap(pid);
+      let invMap = getInvMap(pid);
 
-      // 0) Cargar caches persistentes en paralelo
-      //    (cuentas compartidas + inventario)
-      let [acctMap, invMap] = await Promise.all([
-        (async () => getAcctMap(pid))(),
-        (async () => getInvMap(pid))(),
-      ]);
-
-      // 1) Si falta alguno, fétchalos EN PARALELO y cachea
       const needsAcct = !acctMap;
       const needsInv = !invMap;
 
       if (needsAcct || needsInv) {
         const [acctRes, invRes] = await Promise.all([
           needsAcct
-            ? fetch(
-                `/api/cuentascompartidas?plataforma_id=${pid}&limit=10000`,
-                {
-                  cache: "no-store",
-                }
-              )
+            ? fetch(`/api/cuentascompartidas?plataforma_id=${pid}&limit=10000`, {
+                cache: "no-store",
+              })
             : null,
           needsInv
             ? fetch(`/api/inventario?plataforma_id=${pid}&limit=10000`, {
@@ -988,26 +903,20 @@ export default function FormPantallas() {
         ]);
 
         if (needsAcct) {
-          if (!acctRes || !acctRes.ok)
-            throw new Error("No se pudieron cargar cuentas");
+          if (!acctRes || !acctRes.ok) throw new Error("No se pudieron cargar cuentas");
           const acctRows: Cuenta[] = await acctRes.json();
           const m: Record<string, AcctEntry> = {};
           for (const r of acctRows) {
-            const c = normalizeEmail(r?.correo ?? "");
+            const c = normalizeEmail((r as any)?.correo ?? "");
             if (!c) continue;
-            // último id más alto gana (defensivo)
-            m[c] = {
-              id: Math.max(m[c]?.id ?? 0, r.id),
-              pass: (r as any).contrasena ?? null,
-            };
+            m[c] = { id: Math.max(m[c]?.id ?? 0, r.id), pass: (r as any).contrasena ?? null };
           }
           writeAcctCache(pid, m);
           acctMap = m;
         }
 
         if (needsInv) {
-          if (!invRes || !invRes.ok)
-            throw new Error("No se pudo cargar inventario");
+          if (!invRes || !invRes.ok) throw new Error("No se pudo cargar inventario");
           const invRows: InventarioItem[] = await invRes.json();
           const m: Record<string, InvEntry> = {};
           for (const it of invRows) {
@@ -1020,7 +929,6 @@ export default function FormPantallas() {
         }
       }
 
-      // === [NUEVO] Mapas locales para estado ===
       const nextAcctId: Record<string, number> = {};
       const nextAcctPass: Record<string, string | null> = {};
       for (const [email, entry] of Object.entries(acctMap!)) {
@@ -1035,47 +943,41 @@ export default function FormPantallas() {
         if (entry?.id != null) nextInvId[email] = entry.id!;
       }
 
-      setAcctIdMap(nextAcctId);
-      setAcctPassMap(nextAcctPass);
-      setInvPassMap(nextInvPass);
-      setInvIdMap(nextInvId); // ⬅️ usa este para borrar del inventario tras guardar
-      // === [FIN NUEVO] ===
-
-      // 2) Capacidad real de la plataforma (sin fetch extra)
       const cap = capacityForPlatform(pid, plataformas) ?? 0;
       if (!cap || cap <= 0) {
-        setFreeByEmail({});
-        setEmailCounts({});
-        setOptions([]);
+        setPerPid((s) => ({
+          ...s,
+          [pid]: {
+            ...(s[pid] ?? ({} as any)),
+            acctIdMap: nextAcctId,
+            acctPassMap: nextAcctPass,
+            invPassMap: nextInvPass,
+            invIdMap: nextInvId,
+            options: [],
+            freeByEmail: {},
+            emailCounts: {},
+            loading: false,
+            error: null,
+          },
+        }));
         return;
       }
 
-      // 3) Obtener resumen de pantallas (byEmail/byCuenta) con cache TTL + stamp
       let sum = getPantSum(pid);
       if (!sum) {
         sum = await buildPantSumForPlatform(pid);
         writePantSum(pid, sum);
       }
 
-      // 4) Construir candidatos (prioriza cuentascompartidas, luego inventario)
-      type Cand = {
-        email: string;
-        source: "acct" | "inv";
-        cuentaId?: number | null;
-      };
+      type Cand = { email: string; source: "acct" | "inv"; cuentaId?: number | null };
       const seen = new Set<string>();
       const candidates: Cand[] = [];
 
-      // hasta 50 para tener margen, pero solo procesamos los primeros visibles
       for (const [email, entry] of Object.entries(acctMap!)) {
         const e = email.toLowerCase();
         if (seen.has(e)) continue;
         seen.add(e);
-        candidates.push({
-          email: e,
-          source: "acct",
-          cuentaId: entry.id ?? null,
-        });
+        candidates.push({ email: e, source: "acct", cuentaId: entry.id ?? null });
         if (candidates.length >= 50) break;
       }
       if (candidates.length < 50) {
@@ -1088,12 +990,10 @@ export default function FormPantallas() {
         }
       }
 
-      // 5) Calcular usados y cupos usando SOLO el resumen en memoria (sin N+1)
       const freeMap: Record<string, number | null> = {};
       const emailCountsLocal: Record<string, number> = {};
 
       for (const c of candidates.slice(0, 40)) {
-        // procesamos 40 máx. por velocidad
         const used =
           c.source === "acct" && c.cuentaId
             ? sum.byCuenta[c.cuentaId] ?? 0
@@ -1103,16 +1003,10 @@ export default function FormPantallas() {
         const key = `${pid}::${c.source}::${c.email}`;
         freeMap[key] = free;
 
-        // el badge (hay N registros) usa conteo por correo
         if (emailCountsLocal[c.email] == null) {
           emailCountsLocal[c.email] = sum.byEmail[c.email] ?? 0;
-          setCountInCache(pid, c.email, emailCountsLocal[c.email]); // reaprovecha tu LS cache actual
         }
       }
-
-      // 6) Guardar mapas y opciones (solo con cupo) en el orden pedido
-      setFreeByEmail((prev) => ({ ...prev, ...freeMap }));
-      setEmailCounts((prev) => ({ ...prev, ...emailCountsLocal }));
 
       const withFree = candidates.filter(({ email, source }) => {
         const key = `${pid}::${source}::${email}`;
@@ -1124,401 +1018,261 @@ export default function FormPantallas() {
         a.source === b.source ? 0 : a.source === "acct" ? -1 : 1
       );
 
-      setOptions(ordered.slice(0, 20)); // UI ya esperaba 20
+      setPerPid((s) => ({
+        ...s,
+        [pid]: {
+          ...(s[pid] ?? ({} as any)),
+          acctIdMap: nextAcctId,
+          acctPassMap: nextAcctPass,
+          invPassMap: nextInvPass,
+          invIdMap: nextInvId,
+          options: ordered.slice(0, 20),
+          freeByEmail: freeMap,
+          emailCounts: emailCountsLocal,
+          loading: false,
+          error: null,
+        },
+      }));
     } catch (e: any) {
-      setErrEmails(e?.message ?? "No se pudieron cargar correos");
-      setOptions([]);
-      setAcctIdMap({});
-      setAcctPassMap({});
-      setInvPassMap({});
-      setEmailCounts({});
-    } finally {
-      setLoadingEmails(false);
+      setPerPid((s) => ({
+        ...s,
+        [pid]: {
+          ...(s[pid] ?? ({} as any)),
+          options: [],
+          loading: false,
+          error: e?.message ?? "No se pudieron cargar correos",
+        },
+      }));
     }
   }
 
-  const onFocusCorreo = () => {
-    loadEmails();
-    setOpen(true);
-  };
+  async function deleteCuentaCompartidaByEmail(pid: number, email: string) {
+    const cache = perPid[pid];
+    const id = cache?.acctIdMap?.[email];
+    if (!pid || !id) return;
 
-  const ensureHasFree = (email: string, source: "acct" | "inv") => {
-    const pid = form.plataforma_id;
-    if (!pid) return false;
-    const key = `${pid}::${source}::${email}`;
-    const free = freeByEmail[key];
-    return typeof free === "number" && free > 0;
-  };
+    if (!window.confirm(`¿Eliminar la cuenta compartida\n${email}?`)) return;
 
-  const pickFromInv = (email: string) => {
-    if (!ensureHasFree(email, "inv")) return;
-    const pass = invPassMap[email] ?? null;
-    setForm((s) => ({
-      ...s,
-      correo: email,
-      contrasena: s.contrasena || pass || "",
-      // por si venías de una cuenta:
-      cuenta_id: null,
-    }));
-    setSelectedEmailSource("inv");
-    setOpen(false);
-  };
-
-  const pickFromAcct = (email: string) => {
-    if (!ensureHasFree(email, "acct")) return;
-    const cid = acctIdMap[email];
-    const pass = acctPassMap[email];
-    setForm((s) => ({
-      ...s,
-      correo: email,
-      cuenta_id: cid ?? s.cuenta_id,
-      contrasena: s.contrasena || pass || "",
-    }));
-    setSelectedEmailSource("acct");
-    setOpen(false);
-  };
-
-  // Al escribir correo manualmente, intenta completar desde cache cuentas/inventario y actualizar contador
-  const emailDetailTimer = useRef<number | null>(null);
-  useEffect(() => {
-    const key = normalizeEmail(form.correo);
-    if (!key || !form.plataforma_id) return;
-
-    const pid = form.plataforma_id;
-
-    // Completar desde cache persistente si existe
-    const acct = getAcctMap(pid)?.[key];
-    const inv = getInvMap(pid)?.[key];
-    if (acct?.id && form.cuenta_id == null)
-      setForm((s) => ({ ...s, cuenta_id: acct.id }));
-    const candidatePass = acct?.pass ?? inv?.pass ?? null;
-    if (!form.contrasena && candidatePass)
-      setForm((s) => ({ ...s, contrasena: candidatePass || "" }));
-
-    // Conteo desde cache o servidor
-    const cachedCount = getCountFromCache(pid, key);
-    if (cachedCount !== undefined) {
-      setEmailCounts((m) => ({ ...m, [key]: cachedCount }));
-    } else {
-      countPantallasSmart(key, acct?.id, pid).then((n) => {
-        setEmailCounts((m) => ({ ...m, [key]: n }));
-        setCountInCache(pid, key, n);
-      });
-    }
-
-    // Si no existía en caches, intentamos fetch puntual (debounced) y cacheamos
-    const needAcct = !acct;
-    const needInv = !inv;
-    if (!needAcct && !needInv) return;
-
-    if (emailDetailTimer.current) {
-      clearTimeout(emailDetailTimer.current);
-      emailDetailTimer.current = null;
-    }
-    emailDetailTimer.current = window.setTimeout(async () => {
-      try {
-        if (needAcct) {
-          const r1 = await fetch(
-            `/api/cuentascompartidas?q=${encodeURIComponent(
-              key
-            )}&plataforma_id=${pid}`,
-            { cache: "no-store" }
-          );
-          if (r1.ok) {
-            const arr: Cuenta[] = await r1.json();
-            const exact = arr.find(
-              (r) => normalizeEmail(r?.correo ?? "") === key
-            );
-            if (exact) {
-              // actualizar cache persistente de cuentas
-              const base = getAcctMap(pid) || {};
-              base[key] = {
-                id: exact.id,
-                pass: (exact as any).contrasena ?? null,
-              };
-              writeAcctCache(pid, base);
-
-              setAcctIdMap((m) => ({ ...m, [key]: exact.id }));
-              if ((exact as any).contrasena !== undefined) {
-                setAcctPassMap((m) => ({
-                  ...m,
-                  [key]: (exact as any).contrasena ?? null,
-                }));
-              }
-              setForm((s) => ({
-                ...s,
-                cuenta_id: s.cuenta_id ?? exact.id,
-                contrasena: s.contrasena || (exact as any).contrasena || "",
-              }));
-              const n = await countPantallasSmart(key, exact.id, pid);
-              setEmailCounts((m) => ({ ...m, [key]: n }));
-              setCountInCache(pid, key, n);
-              return;
-            }
-          }
-        }
-        if (needInv) {
-          const r2 = await fetch(
-            `/api/inventario?q=${encodeURIComponent(key)}&plataforma_id=${pid}`,
-            { cache: "no-store" }
-          );
-          if (r2.ok) {
-            const arr: InventarioItem[] = await r2.json();
-            const exact = arr.find(
-              (it) => normalizeEmail(it?.correo ?? "") === key
-            );
-            if (exact) {
-              const base = getInvMap(pid) || {};
-              base[key] = { pass: (exact as any).clave ?? null };
-              writeInvCache(pid, base);
-
-              if ((exact as any).clave != null && !form.contrasena) {
-                setInvPassMap((m) => ({
-                  ...m,
-                  [key]: (exact as any).clave ?? null,
-                }));
-                setForm((s) => ({
-                  ...s,
-                  contrasena: (exact as any).clave || "",
-                }));
-              }
-              const n = await countPantallasSmart(key, undefined, pid);
-              setEmailCounts((m) => ({ ...m, [key]: n }));
-              setCountInCache(pid, key, n);
-            }
-          }
-        }
-      } catch {}
-    }, 350);
-
-    return () => {
-      if (emailDetailTimer.current) clearTimeout(emailDetailTimer.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.correo, form.plataforma_id]);
-
-  /* ===== Crear Usuario / Cuenta ===== */
-  async function ensureUsuario(contactoRaw: string, nombre: string | null) {
-    const raw = contactoRaw.trim();
-    const norm = normalizeContacto(raw);
-    if (!norm) return;
     try {
-      await ensureUsersAllLoaded(); // aseguramos catálogo en cache
-      const current = readUsersAll();
-      const exists = !!current?.map?.[norm];
-      if (exists) return;
-
-      // No existe: crearlo y actualizar cache local sin pedir todo de nuevo
-      const res = await fetch("/api/usuarios", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contacto: raw, nombre: nombre || null }),
+      const res = await fetch(`/api/cuentascompartidas/${id}`, {
+        method: "DELETE",
+        cache: "no-store",
       });
-      if (res.ok) {
-        const created: Usuario = await res.json();
-        const next = readUsersAll();
-        const map = next?.map ?? {};
-        map[norm] = created;
-        writeUsersAll(map);
-        await refreshStampOnce(); // para invalidar caches en otras pestañas
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error ?? "No se pudo eliminar la cuenta");
       }
-    } catch {}
+
+      // LS
+      const map = getAcctMap(pid) || {};
+      delete map[email];
+      writeAcctCache(pid, map);
+
+      // Estado
+      setPerPid((s) => {
+        const cur = s[pid];
+        if (!cur) return s;
+
+        const nextAcctId = { ...cur.acctIdMap };
+        const nextAcctPass = { ...cur.acctPassMap };
+        delete nextAcctId[email];
+        delete nextAcctPass[email];
+
+        const nextOptions = cur.options.filter(
+          (o) => !(o.source === "acct" && o.email === email)
+        );
+
+        const nextFree = { ...cur.freeByEmail };
+        delete nextFree[`${pid}::acct::${email}`];
+
+        return {
+          ...s,
+          [pid]: {
+            ...cur,
+            acctIdMap: nextAcctId,
+            acctPassMap: nextAcctPass,
+            options: nextOptions,
+            freeByEmail: nextFree,
+          },
+        };
+      });
+
+      await refreshStampOnce();
+    } catch (e: any) {
+      alert(e?.message ?? "Error eliminando cuenta");
+    }
   }
 
-  async function ensureCuentaCompartida(correo: string, plataformaId: number) {
-    const key = normalizeEmail(correo);
-    const pid = plataformaId;
-
-    // cache primero
-    const cached = getAcctMap(pid)?.[key];
-    if (cached?.id) {
-      const count = await countPantallasSmart(key, cached.id, pid);
-      setEmailCounts((m) => ({ ...m, [key]: count }));
-      setCountInCache(pid, key, count);
-      return { id: cached.id, countAfter: count };
-    }
-
-    const res = await fetch("/api/cuentascompartidas", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        plataforma_id: pid,
-        correo,
-        contrasena: form.contrasena || null,
-        proveedor: form.proveedor || null,
-      }),
-    });
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      throw new Error(j?.error ?? "No se pudo crear la cuenta compartida");
-    }
-    const saved: Cuenta = await res.json();
-
-    // Actualizar cache persistente
-    const base = getAcctMap(pid) || {};
-    base[key] = { id: saved.id, pass: form.contrasena || null };
-    writeAcctCache(pid, base);
-
-    const count = await countPantallasSmart(key, saved.id, pid);
-    setEmailCounts((m) => ({ ...m, [key]: count }));
-    setCountInCache(pid, key, count);
-
-    // sello
-    await refreshStampOnce();
-
-    return { id: saved.id, countAfter: count };
-  }
-
-  /* ===== Auto fechas / ganado ===== */
-  useEffect(() => {
-    if (!form.fecha_compra) return;
-    const months =
-      typeof form.meses_pagados === "number" &&
-      Number.isFinite(form.meses_pagados) &&
-      form.meses_pagados >= 1
-        ? form.meses_pagados
-        : 1;
-    const fv = addMonthsLocal(form.fecha_compra, months);
-    if (fv !== form.fecha_vencimiento)
-      setForm((s) => ({ ...s, fecha_vencimiento: fv }));
-  }, [form.fecha_compra, form.meses_pagados]);
-
-  useEffect(() => {
-    const tp = toNumOrNull(form.total_pagado);
-    if (tp == null) {
-      if (form.total_ganado !== "")
-        setForm((s) => ({ ...s, total_ganado: "" }));
-      return;
-    }
-    const tpp = toNumOrNull(form.total_pagado_proveedor);
-    const ganado = tpp == null ? tp : tp - tpp;
-    const txt = ganado.toString();
-    if (form.total_ganado !== txt)
-      setForm((s) => ({ ...s, total_ganado: txt }));
-  }, [form.total_pagado, form.total_pagado_proveedor]);
-
-  const isValidPantalla = (val: string, available: number[]) => {
-    const n = Number(val);
-    return Number.isInteger(n) && available.includes(n);
-  };
-
-  /* ===== Validación (correo y contraseña obligatorios) ===== */
+  /* ===== Validación ===== */
   const canSubmit = useMemo(() => {
-    const pantallaOk = isValidPantalla(
-      String(form.nro_pantalla || ""),
-      availableSlots
-    );
-    const plataformaOk =
-      Number.isInteger(form.plataforma_id) && form.plataforma_id > 0;
-    const contactoOk = form.contacto.trim() !== "";
-    const fechasOk = !!form.fecha_compra && !!form.fecha_vencimiento;
-    const estadoOk = form.estado.trim() !== "";
-    const mesesOk =
-      typeof form.meses_pagados === "number" &&
-      Number.isInteger(form.meses_pagados) &&
-      form.meses_pagados >= 1;
-    const totalOk =
-      form.total_pagado === "" ||
-      (!Number.isNaN(Number(form.total_pagado)) &&
-        Number(form.total_pagado) >= 0);
-    const totalProvOk =
-      !form.total_pagado_proveedor ||
-      (!Number.isNaN(Number(form.total_pagado_proveedor)) &&
-        Number(form.total_pagado_proveedor) >= 0);
+    const contactoOk = user.contacto.trim() !== "";
+    if (!contactoOk) return false;
+    if (!orders.length) return false;
 
-    const correoOk =
-      form.correo.trim() !== "" &&
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo.trim());
-    const passOk = (form.contrasena ?? "").trim() !== "";
+    for (let i = 0; i < orders.length; i++) {
+      const o = orders[i];
+      const available = availableSlotsByIdx[i] ?? [];
+      const isLoadingSlots = loadingSlotsByIdx[i] ?? false;
+      const pantallaOk = (() => {
+        const n = Number(o.nro_pantalla);
+        if (!Number.isInteger(n)) return false;
+        // mientras carga, no bloquees submit por availableSlots vacío
+        if (isLoadingSlots) return true;
+        return available.includes(n);
+      })();
 
-    return (
-      plataformaOk &&
-      contactoOk &&
-      fechasOk &&
-      estadoOk &&
-      mesesOk &&
-      totalOk &&
-      totalProvOk &&
-      correoOk &&
-      passOk &&
-      pantallaOk
-    );
-  }, [form]);
 
-  /* ===== Payload & submit (abre modal) ===== */
-  const buildPayload = () => {
-    const totalPag = toNumOrNull(form.total_pagado);
-    const totalProv = toNumOrNull(form.total_pagado_proveedor);
+      const plataformaOk = Number.isInteger(o.plataforma_id) && o.plataforma_id > 0;
+      const fechasOk = !!o.fecha_compra && !!o.fecha_vencimiento;
+      const estadoOk = (o.estado ?? "").trim() !== "";
+      const mesesOk = Number.isInteger(o.meses_pagados) && o.meses_pagados >= 1;
+
+      const correoOk =
+        o.correo.trim() !== "" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o.correo.trim());
+      const passOk = (o.contrasena ?? "").trim() !== "";
+
+      const totalOk =
+        o.total_pagado === "" ||
+        (!Number.isNaN(Number(o.total_pagado)) && Number(o.total_pagado) >= 0);
+      const totalProvOk =
+        !o.total_pagado_proveedor ||
+        (!Number.isNaN(Number(o.total_pagado_proveedor)) &&
+          Number(o.total_pagado_proveedor) >= 0);
+
+      if (
+        !(
+          plataformaOk &&
+          fechasOk &&
+          estadoOk &&
+          mesesOk &&
+          correoOk &&
+          passOk &&
+          pantallaOk &&
+          totalOk &&
+          totalProvOk
+        )
+      )
+        return false;
+    }
+
+    return true;
+  }, [user, orders, availableSlotsByIdx,loadingSlotsByIdx]);
+
+  /* ===== Payload por bloque ===== */
+  const buildPayloadFor = (o: OrderState, cuentaIdFinal: number | null) => {
+    const totalPag = toNumOrNull(o.total_pagado);
+    const totalProv = toNumOrNull(o.total_pagado_proveedor);
     const totalGan =
-      totalPag == null
-        ? null
-        : totalProv == null
-        ? totalPag
-        : totalPag - totalProv;
+      totalPag == null ? null : totalProv == null ? totalPag : totalPag - totalProv;
 
     return {
-      cuenta_id: form.cuenta_id ?? null,
-      contacto: normalizeContacto(form.contacto.trim()),
-      nombre: (form.nombre ?? "").trim() || null,
-      nro_pantalla: String(form.nro_pantalla ?? "").trim() || null,
-      plataforma_id: form.plataforma_id,
-      correo: form.correo.trim().toLowerCase() || null,
-      contrasena: form.contrasena || null,
-      proveedor: form.proveedor.trim() || null,
-      fecha_compra: form.fecha_compra
-        ? new Date(form.fecha_compra).toISOString()
+      cuenta_id: cuentaIdFinal ?? null,
+      contacto: normalizeContacto(user.contacto.trim()),
+      nombre: (user.nombre ?? "").trim() || null,
+
+      nro_pantalla: String(o.nro_pantalla ?? "").trim() || null,
+      plataforma_id: o.plataforma_id,
+      correo: o.correo.trim().toLowerCase() || null,
+      contrasena: o.contrasena || null,
+      proveedor: (o.proveedor ?? "").trim() || null,
+
+      fecha_compra: o.fecha_compra ? new Date(o.fecha_compra).toISOString() : null,
+      fecha_vencimiento: o.fecha_vencimiento
+        ? new Date(o.fecha_vencimiento).toISOString()
         : null,
-      fecha_vencimiento: form.fecha_vencimiento
-        ? new Date(form.fecha_vencimiento).toISOString()
-        : null,
-      meses_pagados: form.meses_pagados,
+
+      meses_pagados: o.meses_pagados,
+
       total_pagado: totalPag == null ? null : Number(totalPag.toFixed(2)),
-      total_pagado_proveedor:
-        totalProv == null ? null : Number(totalProv.toFixed(2)),
-      pago_total_proveedor:
-        totalProv == null ? null : Number(totalProv.toFixed(2)),
+      total_pagado_proveedor: totalProv == null ? null : Number(totalProv.toFixed(2)),
+      pago_total_proveedor: totalProv == null ? null : Number(totalProv.toFixed(2)),
       pagado_proveedor: totalProv == null ? null : Number(totalProv.toFixed(2)),
+
       total_ganado: totalGan == null ? null : Number(totalGan.toFixed(2)),
       ganado: totalGan == null ? null : Number(totalGan.toFixed(2)),
-      estado: form.estado.trim(),
-      comentario: form.comentario.trim() || null,
+
+      estado: (o.estado ?? "").trim(),
+      comentario: (o.comentario ?? "").trim() || null,
     };
   };
+
+  /* ===== Mensajería + modal confirmación ===== */
+  const [loading, setLoading] = useState(false);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
+  const [errMsg, setErrMsg] = useState<string | null>(null);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmPayload, setConfirmPayload] = useState<any[] | null>(null);
+  const [confirmText, setConfirmText] = useState<string>("");
+  const [confirmView, setConfirmView] = useState<"resumen" | "json">("resumen");
+  const [confirmOrders, setConfirmOrders] = useState<OrderState[]>([]);
+
+  const modalBoxRef = useRef<HTMLDivElement | null>(null);
+  const modalScrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!confirmOpen) return;
+
+    // 1) asegura que el modal quede centrado en la pantalla
+    requestAnimationFrame(() => {
+      modalBoxRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "nearest",
+      });
+
+      // 2) manda el scroll interno del modal al inicio (donde está el resumen)
+      if (modalScrollRef.current) {
+        modalScrollRef.current.scrollTop = 0;
+      }
+    });
+  }, [confirmOpen]);
+
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setOkMsg(null);
     setErrMsg(null);
 
-    const correoTrim = form.correo.trim();
-    if (!correoTrim || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoTrim)) {
-      setErrMsg("El correo es obligatorio y debe ser válido.");
-      return;
-    }
-    if (!form.contrasena?.trim()) {
-      setErrMsg("La contraseña es obligatoria.");
-      return;
-    }
     if (!canSubmit) {
-      setErrMsg("Revisa los campos obligatorios y formatos numéricos.");
+      setErrMsg("Revisa los campos obligatorios y cupos/pantallas disponibles.");
       return;
     }
 
     try {
-      await ensureUsersAllLoaded(); // cache de usuarios listo
-      await ensureUsuario(form.contacto, form.nombre || null);
+      await ensureUsersAllLoaded();
+      await ensureUsuario(user.contacto, user.nombre || null);
 
-      let cuentaId: number | null = form.cuenta_id ?? null;
-      const correo = correoTrim;
-      if (correo && form.plataforma_id > 0) {
-        const { id } = await ensureCuentaCompartida(correo, form.plataforma_id);
-        cuentaId = id;
-        setForm((s) => ({ ...s, cuenta_id: id }));
+      // evitar duplicados plataforma+correo+nro_pantalla en el mismo guardado
+      const keyset = new Set<string>();
+      for (const o of orders) {
+        const k = `${o.plataforma_id}:${normalizeEmail(o.correo)}:${String(o.nro_pantalla)}`;
+        if (keyset.has(k)) {
+          setErrMsg(`Duplicado en el mismo guardado: ${k}`);
+          return;
+        }
+        keyset.add(k);
       }
 
-      const payload = { ...buildPayload(), cuenta_id: cuentaId };
-      setConfirmPayload(payload);
-      setConfirmText(JSON.stringify(payload, null, 2));
+      // asegurar cuenta compartida por bloque y construir payload
+      const payloads: any[] = [];
+      for (const o of orders) {
+        let cuentaId: number | null = o.cuenta_id ?? null;
+        if (o.correo && o.plataforma_id > 0) {
+          const { id } = await ensureCuentaCompartida(
+            o.correo,
+            o.plataforma_id,
+            o.contrasena || null,
+            (o.proveedor ?? "") || null
+          );
+          cuentaId = id;
+        }
+        payloads.push(buildPayloadFor(o, cuentaId));
+      }
+
+      setConfirmPayload(payloads);
+      setConfirmOrders(orders);
+      setConfirmText(JSON.stringify(payloads, null, 2));
       setConfirmView("resumen");
       setConfirmOpen(true);
     } catch (e: any) {
@@ -1526,179 +1280,116 @@ export default function FormPantallas() {
     }
   }
 
-  /* ===== Confirmar y guardar ===== */
   async function confirmAndSave() {
     if (!confirmPayload) return;
     setLoading(true);
     setErrMsg(null);
+
     try {
-      let toSend = confirmPayload;
+      let toSend: any[] = confirmPayload;
       try {
-        toSend = JSON.parse(confirmText);
+        const maybe = JSON.parse(confirmText);
+        if (Array.isArray(maybe)) toSend = maybe;
       } catch {}
 
-      const res = await fetch("/api/pantallas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(toSend),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j?.error ?? "No se pudo guardar");
-      }
+      const results = await Promise.allSettled(
+        toSend.map((p) =>
+          fetch("/api/pantallas", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(p),
+          }).then(async (res) => {
+            const j = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(j?.error ?? "No se pudo guardar");
+            return { saved: j, sent: p };
+          })
+        )
+      );
 
-      const saved = await res.json().catch(() => ({}));
+      const ok = results.filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<any>[];
+      const bad = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
 
-      // Si el correo seleccionado venía del inventario → eliminarlo del inventario al guardar
-      try {
-        if (selectedEmailSource === "inv") {
-          const pid = confirmPayload?.plataforma_id ?? form.plataforma_id;
-          const emailNorm = normalizeEmail(
-            confirmPayload?.correo ?? form.correo
-          );
-          // intenta por cache
-          let invId = invIdMap[emailNorm];
-
-          // fallback: si no lo tenemos en cache, busca por API puntual
-          if (!invId && pid) {
-            const r = await fetch(
-              `/api/inventario?q=${encodeURIComponent(
-                emailNorm
-              )}&plataforma_id=${pid}`,
-              { cache: "no-store" }
-            );
-            if (r.ok) {
-              const arr: InventarioItem[] = await r.json();
-              const exact = arr.find(
-                (it) => normalizeEmail(it?.correo ?? "") === emailNorm
-              );
-              invId = exact?.id ?? 0;
-            }
-          }
-
-          if (invId) {
-            const del = await fetch(`/api/inventario/${invId}`, {
-              method: "DELETE",
-              cache: "no-store",
-            });
-            if (!del.ok) {
-              // opcional: muestra aviso suave pero no rompe el guardado de la pantalla
-              const j = await del.json().catch(() => ({}));
-              console.warn(
-                "No se pudo eliminar inventario:",
-                j?.error ?? del.statusText
-              );
-            } else {
-              // ✅ limpia caches/estado locales para que no vuelva a aparecer
-              const map = getInvMap(pid) || {};
-              delete map[emailNorm];
-              writeInvCache(pid, map);
-
-              setInvPassMap((m) => {
-                const { [emailNorm]: _, ...rest } = m;
-                return rest;
+      // si venían de inventario: borrar por bloque usando selectedInvId
+      for (let i = 0; i < ok.length; i++) {
+        const sent = ok[i].value.sent;
+        // buscamos el índice por match plataforma+correo+nro_pantalla (mejor esfuerzo)
+        const idx = confirmOrders.findIndex(
+          (o) =>
+            Number(o.plataforma_id) === Number(sent?.plataforma_id) &&
+            normalizeEmail(o.correo) === normalizeEmail(sent?.correo ?? "") &&
+            String(o.nro_pantalla) === String(sent?.nro_pantalla ?? "")
+        );
+        if (idx >= 0) {
+          const o = confirmOrders[idx];
+          if (o.selectedEmailSource === "inv" && o.selectedInvId != null) {
+            try {
+              await fetch(`/api/inventario/${o.selectedInvId}`, {
+                method: "DELETE",
+                cache: "no-store",
               });
-              setInvIdMap((m) => {
-                const { [emailNorm]: _, ...rest } = m;
-                return rest;
-              });
-              setOptions((opts) =>
-                opts.filter(
-                  (o) => !(o.source === "inv" && o.email === emailNorm)
-                )
-              );
-              setFreeByEmail((m) => {
-                const copy = { ...m };
-                delete copy[`${pid}::inv::${emailNorm}`];
-                return copy;
-              });
-              // el resumen por email quedará actualizado al renovar el stamp
-            }
+            } catch {}
           }
         }
-      } catch (e) {
-        console.warn("Error eliminando del inventario tras guardar:", e);
       }
 
-      // ✅ Actualiza caché local y notifica al viewer
-      try {
-        mergePantallaIntoCache(saved);
-        notifyPantallasChanged();
-      } catch {}
+      for (const f of ok) {
+        try {
+          mergePantallaIntoCache(f.value.saved);
+          notifyPantallasChanged();
+        } catch {}
+      }
 
-      // sello combinado (expira caches dependientes)
       await refreshStampOnce();
 
-      setOkMsg(`Guardado correctamente (id: ${saved?.id ?? "—"}).`);
+      if (bad.length) {
+        setErrMsg(
+          `Se guardaron ${ok.length}/${toSend.length}. Fallaron: ` +
+            bad
+              .map((b: any, i) => `#${i + 1} (${b.reason?.message ?? "error"})`)
+              .join(" | ")
+        );
+      } else {
+        const ids = ok.map((x) => x.value.saved?.id).filter(Boolean).join(", ");
+        setOkMsg(`Guardado correctamente (${ok.length}). IDs: ${ids}`);
+      }
+
       setConfirmOpen(false);
 
-      // limpiar maps auxiliares
+      // recordar última plataforma del lote
       try {
-        setAcctIdMap({});
-        setAcctPassMap({});
-        setInvPassMap({});
-        setEmailCounts({});
+        const last = toSend[toSend.length - 1];
+        if (last?.plataforma_id) {
+          window.localStorage.setItem(LAST_PLATFORM_KEY, String(last.plataforma_id));
+        }
       } catch {}
 
-      // Recordar última plataforma
-      try {
-        window.localStorage.setItem(
-          LAST_PLATFORM_KEY,
-          String(toSend.plataforma_id)
-        );
-      } catch {}
-
-      // Reset con plataforma priorizada
+      // reset UI
       const base = todayStr();
       const stored =
-        typeof window !== "undefined"
-          ? window.localStorage.getItem(LAST_PLATFORM_KEY)
-          : null;
+        typeof window !== "undefined" ? window.localStorage.getItem(LAST_PLATFORM_KEY) : null;
       const lastId = stored ? Number(stored) : NaN;
       const nextPlat =
-        Number.isFinite(lastId) && lastId > 0
-          ? lastId
-          : plataformasOrdered[0]?.id ?? 0;
+        Number.isFinite(lastId) && lastId > 0 ? lastId : plataformasOrdered[0]?.id ?? 0;
 
-      setForm({
-        contacto: "",
-        nombre: "",
-        plataforma_id: nextPlat,
-        cuenta_id: null,
-        nro_pantalla: "",
-        correo: "",
-        contrasena: "",
-        proveedor: "",
-        fecha_compra: base,
-        fecha_vencimiento: addMonthsLocal(base, 1),
-        meses_pagados: 1,
-        total_pagado: "",
-        total_pagado_proveedor: "",
-        total_ganado: "",
-        estado: "ACTIVA",
-        comentario: "",
-      });
-      setOptions([]);
-      setEmailCounts({});
+      setUser({ contacto: "", nombre: "" });
+      setOrders([makeEmptyOrder(nextPlat)]);
+      setNombreDirty(false);
+      lastContactoRef.current = "";
+      setEmailOpenIdx(null);
     } catch (err: any) {
       setErrMsg(err?.message ?? "Error desconocido");
     } finally {
       setLoading(false);
     }
   }
-  const visibleOptions = useMemo(() => {
-    const pid = form.plataforma_id;
-    if (!pid || !options.length) return [];
-    return options.filter(({ email, source }) => {
-      const key = `${pid}::${source}::${email}`;
-      const free = freeByEmail[key];
-      return typeof free === "number" && free > 0;
-    });
-  }, [options, freeByEmail, form.plataforma_id]);
 
-  const badge = (() => {
-    const key = normalizeEmail(form.correo);
-    const count = emailCounts[key] ?? 0;
+  /* ===== UI: badge por bloque ===== */
+  const badgeFor = (idx: number) => {
+    const o = orders[idx];
+    const pid = o?.plataforma_id;
+    const email = normalizeEmail(o?.correo ?? "");
+    const count = pid && perPid[pid]?.emailCounts?.[email] != null ? perPid[pid]!.emailCounts[email] : 0;
+
     const cls =
       count > 0
         ? "border-amber-300 bg-amber-50 text-amber-700"
@@ -1709,8 +1400,9 @@ export default function FormPantallas() {
         hay {count} {count === 1 ? "registro" : "registros"}
       </span>
     );
-  })();
+  };
 
+  /* ===================== Render ===================== */
   return (
     <>
       <form onSubmit={onSubmit} className="grid gap-6">
@@ -1722,19 +1414,16 @@ export default function FormPantallas() {
               label="Contacto *"
               type="tel"
               placeholder="+57 3xxxxxxxxx"
-              value={form.contacto}
+              value={user.contacto}
               onChange={(v: string) => {
-                if (/^\+?\d*(?:\s?\d*)*$/.test(v))
-                  setForm((s) => ({ ...s, contacto: v }));
+                if (/^\+?\d*(?:\s?\d*)*$/.test(v)) setUser((s) => ({ ...s, contacto: v }));
               }}
               required
               inputMode="numeric"
               pattern="^\+\d+(?:\s*\d+)*$"
               title="Formato válido: + seguido de números"
               onInvalid={(e: any) =>
-                e.currentTarget.setCustomValidity(
-                  "Ingresa un teléfono en formato + y solo números"
-                )
+                e.currentTarget.setCustomValidity("Ingresa un teléfono en formato + y solo números")
               }
               onInput={(e: any) => e.currentTarget.setCustomValidity("")}
               inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
@@ -1742,355 +1431,433 @@ export default function FormPantallas() {
             <FieldPantallas
               label="Nombre"
               placeholder="Se autocompleta si el contacto existe (desde cache)"
-              value={form.nombre}
+              value={user.nombre}
               onChange={(v: string) => {
-                setNombreDirty(true); // <— marcado manual
-                setForm((s) => ({ ...s, nombre: v }));
+                setNombreDirty(true);
+                setUser((s) => ({ ...s, nombre: v }));
               }}
               inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
             />
           </div>
         </section>
 
-        {/* Pantalla */}
+        {/* Compras / Pantallas (multi-bloque) */}
         <section className="border border-neutral-800 rounded-2xl p-4 bg-neutral-950/40 text-neutral-100">
-          <h3 className="font-semibold mb-3">Pantalla</h3>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h3 className="font-semibold">Compras / Plataformas</h3>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            {/* Plataforma */}
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <label className="block text-sm text-neutral-300">
-                  Plataforma <span className="text-red-600">*</span>
-                </label>
-                {lastPlatformId && (
-                  <span className="text-xs text-neutral-400">
-                    Última: #{lastPlatformId}
-                  </span>
-                )}
-              </div>
-              <select
-                className="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
-                value={form.plataforma_id ? String(form.plataforma_id) : ""}
-                onChange={(e) =>
-                  setForm((s) => ({
-                    ...s,
-                    plataforma_id: Number(e.target.value),
-                    correo: "",
-                    cuenta_id: null,
-                    contrasena: "",
-                    nro_pantalla: "",
-                  }))
-                }
-                required
-                disabled={platLoading || !!platError}
-              >
-                <option value="" disabled>
-                  {platLoading
-                    ? "Cargando…"
-                    : platError
-                    ? "Error al cargar"
-                    : "Selecciona una plataforma"}
-                </option>
-                {plataformasOrdered.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <button
+              type="button"
+              className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
+              onClick={() => {
+                const pid = orders[orders.length - 1]?.plataforma_id || plataformasOrdered[0]?.id || 0;
+                setOrders((prev) => [...prev, makeEmptyOrder(pid)]);
+              }}
+              title="Agregar otra compra/plataforma"
+            >
+              +
+            </button>
+          </div>
 
-            {/* Correo + sugerencias */}
-            <div className="relative" ref={boxRef}>
-              <FieldPantallas
-                label="Correo *"
-                labelRight={badge}
-                type="email"
-                placeholder="correo@dominio.com"
-                value={form.correo}
-                onChange={(v: string) => {
-                  setForm((s) => ({ ...s, correo: v, nro_pantalla: "" }));
-                  setSelectedEmailSource(null);
-                }}
-                onFocus={onFocusCorreo}
-                required
-                onInvalid={(e: any) =>
-                  e.currentTarget.setCustomValidity("Ingresa un correo válido")
-                }
-                onInput={(e: any) => e.currentTarget.setCustomValidity("")}
-                inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-              />
+          <div className="grid gap-6" ref={dropdownBoxRef}>
+            {orders.map((o, idx) => {
+  const pid = o.plataforma_id;
+  const pidCache = pid ? perPid[pid] : null;
+  const availableSlots = availableSlotsByIdx[idx] ?? [];
+  const loadingSlots = loadingSlotsByIdx[idx] ?? false;
+  const slotsError = slotsErrorByIdx[idx] ?? null;
 
-              {open && (
-                <div className="absolute left-0 right-0 z-20 mt-1 rounded-lg border border-neutral-700 bg-neutral-900 text-sm text-neutral-100 shadow-lg">
-                  {loadingEmails && (
-                    <div className="p-2 text-sm text-neutral-400">
-                      Cargando correos…
-                    </div>
+  // ✅ FIX: NO useMemo dentro de map (esto rompía el orden de hooks)
+  const visibleOptions =
+    !pid || !pidCache
+      ? []
+      : (pidCache.options ?? []).filter(({ email, source }) => {
+          const key = `${pid}::${source}::${email}`;
+          const free = pidCache.freeByEmail?.[key];
+          return typeof free === "number" && free > 0;
+        });
+
+  return (
+    <div
+      key={idx}
+      className="border border-neutral-800 rounded-2xl p-4 bg-neutral-950/40"
+    >
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <h4 className="font-semibold">Compra #{idx + 1}</h4>
+
+        {orders.length > 1 && (
+          <button
+            type="button"
+            className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800"
+            onClick={() => {
+              setOrders((prev) => prev.filter((_, i) => i !== idx));
+              setEmailOpenIdx((cur) => (cur === idx ? null : cur));
+            }}
+          >
+            Quitar
+          </button>
+        )}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {/* Plataforma */}
+        <div>
+          <div className="mb-1 flex items-center justify-between">
+            <label className="block text-sm text-neutral-300">
+              Plataforma <span className="text-red-600">*</span>
+            </label>
+            {lastPlatformId && (
+              <span className="text-xs text-neutral-400">
+                Última: #{lastPlatformId}
+              </span>
+            )}
+          </div>
+
+          <select
+            className="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
+            value={o.plataforma_id ? String(o.plataforma_id) : ""}
+            onChange={(e) => {
+              const newPid = Number(e.target.value);
+              setOrder(idx, {
+                plataforma_id: newPid,
+                correo: "",
+                cuenta_id: null,
+                contrasena: "",
+                nro_pantalla: "",
+                selectedEmailSource: null,
+                selectedInvId: null,
+              });
+              if (newPid) loadEmailsForPid(newPid).catch(() => {});
+            }}
+            required
+            disabled={platLoading || !!platError}
+          >
+            <option value="" disabled>
+              {platLoading
+                ? "Cargando…"
+                : platError
+                ? "Error al cargar"
+                : "Selecciona una plataforma"}
+            </option>
+            {plataformasOrdered.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Correo + dropdown */}
+        <div className="relative">
+          <FieldPantallas
+            label="Correo *"
+            labelRight={badgeFor(idx)}
+            type="email"
+            placeholder="correo@dominio.com"
+            value={o.correo}
+            onChange={(v: string) => {
+              setOrder(idx, {
+                correo: v,
+                nro_pantalla: "",
+                selectedEmailSource: null,
+                selectedInvId: null,
+              });
+            }}
+            onFocus={() => {
+              if (pid) loadEmailsForPid(pid).catch(() => {});
+              setEmailOpenIdx(idx);
+            }}
+            required
+            onInvalid={(e: any) =>
+              e.currentTarget.setCustomValidity("Ingresa un correo válido")
+            }
+            onInput={(e: any) => e.currentTarget.setCustomValidity("")}
+            inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+          />
+
+          {emailOpenIdx === idx && pid && (
+            <div className="absolute left-0 right-0 z-20 mt-1 rounded-lg border border-neutral-700 bg-neutral-900 text-sm text-neutral-100 shadow-lg"
+            onClick={(e) => e.stopPropagation()}  >
+              
+              {pidCache?.loading && (
+                <div className="p-2 text-sm text-neutral-400">
+                  Cargando correos…
+                </div>
+              )}
+              {!pidCache?.loading && pidCache?.error && (
+                <div className="p-2 text-sm text-neutral-300">
+                  {pidCache.error}
+                </div>
+              )}
+
+              {!pidCache?.loading && !pidCache?.error && (
+                <ul className="max-h-72 overflow-auto">
+                  {visibleOptions.length === 0 && (
+                    <li className="px-3 py-2 text-neutral-500">
+                      Sin correos con cupos disponibles
+                    </li>
                   )}
-                  {!loadingEmails && errEmails && (
-                    <div className="p-2 text-sm text-neutral-300">
-                      {errEmails}
-                    </div>
-                  )}
 
-                  {!loadingEmails && !errEmails && (
-                    <ul className="max-h-72 overflow-auto">
-                      {visibleOptions.length === 0 && (
-                        <li className="px-3 py-2 text-neutral-500">
-                          {loadingEmails
-                            ? "Calculando cupos…"
-                            : "Sin correos con cupos disponibles"}
-                        </li>
-                      )}
+                  {visibleOptions.map(({ email, source }) => {
+                    const key = `${pid}::${source}::${email}`;
+                    const free = pidCache?.freeByEmail?.[key];
 
-                      {visibleOptions.map(({ email, source }) => {
-                        const pid = form.plataforma_id;
-                        const key = `${pid}::${source}::${email}`;
-                        const free = freeByEmail[key]; // ✅ número o null
+                    if (!(typeof free === "number" && free > 0)) return null;
 
-                        // (defensa extra) si por algo llega una opción sin cupo, no la muestres
-                        if (!(typeof free === "number" && free > 0))
-                          return null;
+                    return (
+                      <li key={`${source}-${email}`}>
+                        <div className="flex w-full items-center justify-between px-3 py-2 hover:bg-neutral-800">
+                          <button
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              if (!pidCache) return;
 
-                        return (
-                          <li key={`${source}-${email}`}>
-                            <div className="flex w-full items-center justify-between px-3 py-2 hover:bg-neutral-800">
-                              {/* Botón de selección */}
+                              if (source === "inv") {
+                                const pass = pidCache.invPassMap[email] ?? null;
+                                const invId = pidCache.invIdMap[email] ?? null;
+
+                                setOrder(idx, {
+                                  correo: email,
+                                  contrasena: o.contrasena || pass || "",
+                                  cuenta_id: null,
+                                  selectedEmailSource: "inv",
+                                  selectedInvId: invId,
+                                  nro_pantalla: "",
+                                });
+                              } else {
+                                const cid = pidCache.acctIdMap[email];
+                                const pass = pidCache.acctPassMap[email];
+                                setOrder(idx, {
+                                  correo: email,
+                                  cuenta_id: cid ?? o.cuenta_id,
+                                  contrasena: o.contrasena || pass || "",
+                                  selectedEmailSource: "acct",
+                                  selectedInvId: null,
+                                  nro_pantalla: "",
+                                });
+                              }
+
+                              setEmailOpenIdx(null);
+                            }}
+                            className="flex-1 min-w-0 text-left"
+                          >
+                            <span className="truncate">{email}</span>
+                          </button>
+
+                          <div className="ml-2 flex items-center gap-2">
+                            {source === "inv" && (
+                              <span className="text-[10px] rounded-full px-2 py-[1px] border border-emerald-400/70 text-emerald-300">
+                                INV
+                              </span>
+                            )}
+                            <span className="text-xs opacity-70">{`cupos: ${free}`}</span>
+
+                            {source === "acct" && (
                               <button
                                 type="button"
                                 onMouseDown={(e) => e.preventDefault()}
-                                onClick={() =>
-                                  source === "inv"
-                                    ? pickFromInv(email)
-                                    : pickFromAcct(email)
-                                }
-                                className="flex-1 min-w-0 text-left"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteCuentaCompartidaByEmail(pid, email);
+                                }}
+                                className="ml-1 text-xs rounded px-2 py-[3px] border border-red-700/60 text-red-300 hover:bg-red-900/30"
                               >
-                                <span className="truncate">{email}</span>
+                                Eliminar
                               </button>
-
-                              <div className="ml-2 flex items-center gap-2">
-                                {source === "inv" && (
-                                  <span className="text-[10px] rounded-full px-2 py-[1px] border border-emerald-400/70 text-emerald-300">
-                                    INV
-                                  </span>
-                                )}
-                                <span className="text-xs opacity-70">{`cupos: ${free}`}</span>
-
-                                {/* 🗑️ BOTÓN ELIMINAR — solo si es una cuenta compartida */}
-                                {source === "acct" && (
-                                  <button
-                                    type="button"
-                                    onMouseDown={(e) => e.preventDefault()}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      deleteCuentaCompartidaByEmail(email);
-                                    }}
-                                    className="ml-1 text-xs rounded px-2 py-[3px] border border-red-700/60 text-red-300 hover:bg-red-900/30"
-                                  >
-                                    Eliminar
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </div>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
             </div>
+          )}
+        </div>
 
-            {/* Proveedor */}
-            <FieldPantallas
-              label="Proveedor"
-              placeholder="Opcional"
-              value={form.proveedor}
-              onChange={(v: string) => setForm((s) => ({ ...s, proveedor: v }))}
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-            />
+        {/* Proveedor */}
+        <FieldPantallas
+          label="Proveedor"
+          placeholder="Opcional"
+          value={o.proveedor}
+          onChange={(v: string) => setOrder(idx, { proveedor: v })}
+          inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+        />
 
-            {/* Contraseña SIEMPRE VISIBLE */}
-            <FieldPantallas
-              label="Contraseña *"
-              type="text" // 👈 siempre visible
-              placeholder="Requerida"
-              value={form.contrasena}
-              onChange={(v: string) =>
-                setForm((s) => ({ ...s, contrasena: v }))
-              }
-              required
-              onInvalid={(e: any) =>
-                e.currentTarget.setCustomValidity(
-                  "La contraseña es obligatoria"
-                )
-              }
-              onInput={(e: any) => e.currentTarget.setCustomValidity("")}
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-            />
+        {/* Contraseña */}
+        <FieldPantallas
+          label="Contraseña *"
+          type="text"
+          placeholder="Requerida"
+          value={o.contrasena}
+          onChange={(v: string) => setOrder(idx, { contrasena: v })}
+          required
+          onInvalid={(e: any) =>
+            e.currentTarget.setCustomValidity("La contraseña es obligatoria")
+          }
+          onInput={(e: any) => e.currentTarget.setCustomValidity("")}
+          inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+        />
 
-            {/* Nro. pantalla (select de disponibles) */}
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <label className="block text-sm text-neutral-300">
-                  Nro. pantalla <span className="text-red-600">*</span>
-                </label>
-                {form.plataforma_id > 0 && (
-                  <span className="text-xs text-neutral-400">
-                    {loadingSlots
-                      ? "Calculando…"
-                      : slotsError
-                      ? "Error al calcular"
-                      : `Disponibles: ${availableSlots.length}`}
-                  </span>
-                )}
-              </div>
+        {/* Nro pantalla */}
+        <div>
+          <div className="mb-1 flex items-center justify-between">
+            <label className="block text-sm text-neutral-300">
+              Nro. pantalla <span className="text-red-600">*</span>
+            </label>
+            {pid > 0 && (
+              <span className="text-xs text-neutral-400">
+                {loadingSlots
+                  ? "Calculando…"
+                  : slotsError
+                  ? "Error al calcular"
+                  : `Disponibles: ${availableSlots.length}`}
+              </span>
+            )}
+          </div>
 
-              <select
-                className="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
-                value={form.nro_pantalla ? String(form.nro_pantalla) : ""}
-                onChange={(e) =>
-                  setForm((s) => ({ ...s, nro_pantalla: e.target.value }))
-                }
-                required
-                disabled={
-                  !form.plataforma_id ||
-                  !form.correo.trim() ||
-                  !!slotsError ||
-                  loadingSlots ||
-                  availableSlots.length === 0
-                }
-              >
-                <option value="" disabled>
-                  {!form.plataforma_id
-                    ? "Selecciona una plataforma"
-                    : !form.correo.trim()
-                    ? "Ingresa o selecciona un correo"
-                    : loadingSlots
-                    ? "Calculando…"
-                    : slotsError
-                    ? "Error al calcular"
-                    : availableSlots.length === 0
-                    ? "Sin cupos disponibles"
-                    : "Selecciona una pantalla disponible"}
-                </option>
+          <select
+            className="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
+            value={o.nro_pantalla ? String(o.nro_pantalla) : ""}
+            onChange={(e) => setOrder(idx, { nro_pantalla: e.target.value })}
+            required
+            disabled={
+              !pid ||
+              !o.correo.trim() ||
+              !!slotsError ||
+              loadingSlots ||
+              availableSlots.length === 0
+            }
+          >
+            <option value="" disabled>
+              {!pid
+                ? "Selecciona una plataforma"
+                : !o.correo.trim()
+                ? "Ingresa o selecciona un correo"
+                : loadingSlots
+                ? "Calculando…"
+                : slotsError
+                ? "Error al calcular"
+                : availableSlots.length === 0
+                ? "Sin cupos disponibles"
+                : "Selecciona una pantalla disponible"}
+            </option>
 
-                {availableSlots.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {availableSlots.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </div>
 
-            {/* Fechas */}
-            <FieldPantallas
-              label="Fecha de compra *"
-              type="date"
-              value={form.fecha_compra}
-              onChange={(v) => setForm((s) => ({ ...s, fecha_compra: v }))}
-              required
-              onMouseDown={(e) => {
-                const el = e.currentTarget;
-                // Solo si el input NO está enfocado aún → abre el picker
-                if (el.showPicker && document.activeElement !== el) {
-                  // No hacemos preventDefault para no bloquear el foco/teclado
-                  // Abrimos justo después de que el input reciba foco
-                  requestAnimationFrame(() => el.showPicker());
-                }
-              }}
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-text"
-            />
+        {/* Fechas */}
+        <FieldPantallas
+          label="Fecha de compra *"
+          type="date"
+          value={o.fecha_compra}
+          onChange={(v) => setOrder(idx, { fecha_compra: v })}
+          required
+          onMouseDown={(e) => {
+            const el = e.currentTarget;
+            if (el.showPicker && document.activeElement !== el) {
+              requestAnimationFrame(() => el.showPicker());
+            }
+          }}
+          inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-text"
+        />
 
-            <FieldPantallas
-              label="Fecha de vencimiento (auto) *"
-              type="date"
-              value={form.fecha_vencimiento}
-              onChange={() => {}}
-              disabled
-              required
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-not-allowed opacity-80"
-            />
+        <FieldPantallas
+          label="Fecha de vencimiento (auto) *"
+          type="date"
+          value={o.fecha_vencimiento}
+          onChange={() => {}}
+          disabled
+          required
+          inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-not-allowed opacity-80"
+        />
 
-            {/* Meses y totales */}
-            <FieldPantallas
-              label="Meses pagados *"
-              type="number"
-              inputMode="numeric"
-              min={1}
-              step={1}
-              value={String(form.meses_pagados)}
-              onChange={(v: string) => {
-                const n = parseInt(v, 10);
-                setForm((s) => ({
-                  ...s,
-                  meses_pagados: Number.isFinite(n) ? Math.max(1, n) : 1,
-                }));
-              }}
-              placeholder="Ej. 1"
-              required
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-            />
+        {/* Meses / Totales */}
+        <FieldPantallas
+          label="Meses pagados *"
+          type="number"
+          inputMode="numeric"
+          min={1}
+          step={1}
+          value={String(o.meses_pagados)}
+          onChange={(v: string) => {
+            const n = parseInt(v, 10);
+            setOrder(idx, {
+              meses_pagados: Number.isFinite(n) ? Math.max(1, n) : 1,
+            });
+          }}
+          placeholder="Ej. 1"
+          required
+          inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+        />
 
-            <FieldPantallas
-              label="Total pagado"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
-              value={form.total_pagado}
-              onChange={(v: string) =>
-                setForm((s) => ({ ...s, total_pagado: v }))
-              }
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-            />
+        <FieldPantallas
+          label="Total pagado"
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          min="0"
+          placeholder="0.00"
+          value={o.total_pagado}
+          onChange={(v: string) => setOrder(idx, { total_pagado: v })}
+          inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+        />
 
-            <FieldPantallas
-              label="Total pagado proveedor (opcional)"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
-              value={form.total_pagado_proveedor ?? ""}
-              onChange={(v: string) =>
-                setForm((s) => ({ ...s, total_pagado_proveedor: v }))
-              }
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-            />
+        <FieldPantallas
+          label="Total pagado proveedor (opcional)"
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          min="0"
+          placeholder="0.00"
+          value={o.total_pagado_proveedor ?? ""}
+          onChange={(v: string) => setOrder(idx, { total_pagado_proveedor: v })}
+          inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+        />
 
-            <FieldPantallas
-              label="Total ganado (auto)"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
-              value={form.total_ganado ?? ""}
-              onChange={() => {}}
-              disabled
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-not-allowed opacity-80"
-            />
+        <FieldPantallas
+          label="Total ganado (auto)"
+          type="number"
+          inputMode="decimal"
+          step="0.01"
+          min="0"
+          placeholder="0.00"
+          value={o.total_ganado ?? ""}
+          onChange={() => {}}
+          disabled
+          inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-not-allowed opacity-80"
+        />
 
-            {/* Estado / Comentario */}
-            <FieldPantallas
-              label="Estado *"
-              placeholder='Ej. "ACTIVA", "PAUSADA"…'
-              value={form.estado}
-              onChange={(v: string) => setForm((s) => ({ ...s, estado: v }))}
-              required
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-            />
-            <TextArea
-              className="sm:col-span-2"
-              label="Comentario"
-              placeholder="Notas adicionales"
-              value={form.comentario}
-              onChange={(v) => setForm((s) => ({ ...s, comentario: v }))}
-            />
+        {/* Estado / Comentario */}
+        <FieldPantallas
+          label="Estado *"
+          placeholder='Ej. "ACTIVA", "PAUSADA"…'
+          value={o.estado}
+          onChange={(v: string) => setOrder(idx, { estado: v })}
+          required
+          inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+        />
+
+        <TextArea
+          className="sm:col-span-2"
+          label="Comentario"
+          placeholder="Notas adicionales"
+          value={o.comentario}
+          onChange={(v) => setOrder(idx, { comentario: v })}
+        />
+      </div>
+    </div>
+  );
+})}
+
+            
           </div>
         </section>
 
@@ -2106,8 +1873,9 @@ export default function FormPantallas() {
                 : "opacity-60 cursor-not-allowed",
             ].join(" ")}
           >
-            {loading ? "Procesando…" : "Guardar"}
+            {loading ? "Procesando…" : "Guardar todo"}
           </button>
+
           <button
             type="button"
             onClick={() => {
@@ -2118,32 +1886,21 @@ export default function FormPantallas() {
                   : null;
               const lastId = stored ? Number(stored) : NaN;
               const nextPlat =
-                Number.isFinite(lastId) && lastId > 0
-                  ? lastId
-                  : plataformasOrdered[0]?.id ?? 0;
+                Number.isFinite(lastId) && lastId > 0 ? lastId : plataformasOrdered[0]?.id ?? 0;
 
-              setForm({
-                contacto: "",
-                nombre: "",
-                plataforma_id: nextPlat,
-                cuenta_id: null,
-                nro_pantalla: "",
-                correo: "",
-                contrasena: "",
-                proveedor: "",
-                fecha_compra: base,
-                fecha_vencimiento: addMonthsLocal(base, 1),
-                meses_pagados: 1,
-                total_pagado: "",
-                total_pagado_proveedor: "",
-                total_ganado: "",
-                estado: "ACTIVA",
-                comentario: "",
-              });
-              setOptions([]);
-              setEmailCounts({});
+              setUser({ contacto: "", nombre: "" });
+              setOrders([
+                {
+                  ...makeEmptyOrder(nextPlat),
+                  fecha_compra: base,
+                  fecha_vencimiento: addMonthsLocal(base, 1),
+                },
+              ]);
               setNombreDirty(false);
               lastContactoRef.current = "";
+              setEmailOpenIdx(null);
+              setOkMsg(null);
+              setErrMsg(null);
             }}
             className="px-4 py-2 rounded-xl border"
           >
@@ -2154,6 +1911,7 @@ export default function FormPantallas() {
         {okMsg && <p className="text-green-700 text-sm">{okMsg}</p>}
         {errMsg && <p className="text-red-600 text-sm">Error: {errMsg}</p>}
       </form>
+
       {/* ===== Modal de confirmación ===== */}
       {confirmOpen && (
         <div
@@ -2163,11 +1921,13 @@ export default function FormPantallas() {
           aria-modal="true"
           aria-labelledby="confirm-title"
         >
-          <div
+            <div
+            ref={modalBoxRef}
             className="w-full max-w-4xl rounded-2xl border border-neutral-700 bg-neutral-900 text-neutral-100 shadow-2xl
-                      max-h-[90vh] grid grid-rows-[auto_auto_1fr_auto]"
+                        max-h-[90vh] grid grid-rows-[auto_auto_1fr_auto]"
             onClick={(e) => e.stopPropagation()}
           >
+
             {/* Header */}
             <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -2179,7 +1939,7 @@ export default function FormPantallas() {
                     Confirmar datos a guardar
                   </h3>
                   <p className="text-xs text-neutral-400">
-                    Revisa el contenido antes de continuar. Se enviará tal cual.
+                    Se guardan todas las compras en una sola acción (varios POST).
                   </p>
                 </div>
               </div>
@@ -2232,9 +1992,10 @@ export default function FormPantallas() {
                   onClick={() => {
                     let obj = confirmPayload;
                     try {
-                      obj = JSON.parse(confirmText);
+                      const maybe = JSON.parse(confirmText);
+                      if (Array.isArray(maybe)) obj = maybe;
                     } catch {}
-                    downloadJson("pantalla.json", obj);
+                    downloadJson("pantallas_lote.json", obj);
                   }}
                 >
                   Descargar
@@ -2242,204 +2003,39 @@ export default function FormPantallas() {
               </div>
             </div>
 
-            {/* Contenido (SCROLLABLE) */}
-            <div className="p-5 overflow-y-auto min-w-0">
+            {/* Contenido */}
+              <div ref={modalScrollRef} className="p-5 overflow-y-auto min-w-0">
               {confirmView === "resumen" ? (
-                <>
-                  {/* === Ticket para el cliente === */}
-                  <div className="rounded-xl border border-emerald-800/50 bg-emerald-950/30 p-4 mb-4">
-                    <div className="flex items-center justify-between gap-3 mb-2">
-                      <h4 className="font-semibold text-sm text-emerald-300">
-                        Datos para entregar al cliente
+              <div className="grid gap-4">
+                {Array.isArray(confirmPayload) && (
+                  <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <h4 className="font-semibold text-sm text-neutral-200">
+                        Pedido completo (todas las compras)
                       </h4>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          className="text-xs px-2 py-1 rounded-md border border-emerald-700/70 hover:bg-emerald-900/40"
-                          onClick={() => {
-                            const txt = buildHandoffFull(
-                              confirmPayload,
-                              plataformaMap,
-                              form
-                            );
-                            copyToClipboard(txt);
-                          }}
-                        >
-                          Copiar
-                        </button>
-                        <button
-                          type="button"
-                          className="text-xs px-2 py-1 rounded-md border border-neutral-700 hover:bg-neutral-800"
-                          onClick={() => {
-                            const txt = buildHandoffFull(
-                              confirmPayload,
-                              plataformaMap,
-                              form
-                            );
-                            const blob = new Blob([txt], {
-                              type: "text/plain;charset=utf-8",
-                            });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement("a");
-                            a.href = url;
-                            a.download = "ticket_cliente.txt";
-                            a.click();
-                            URL.revokeObjectURL(url);
-                          }}
-                        >
-                          Descargar
-                        </button>
-                      </div>
+
+                      <button
+                        type="button"
+                        className="text-xs px-2 py-1 rounded-md border border-neutral-700 hover:bg-neutral-800"
+                        onClick={() => {
+                          const txt = buildPedidoResumenFull(confirmPayload, plataformaMap, confirmOrders);
+                          copyToClipboard(txt);
+                        }}
+                      >
+                        Copiar ticket completo
+                      </button>
                     </div>
 
-                    <pre
-                      className="whitespace-pre-wrap break-words text-sm font-mono bg-neutral-950/70 border border-neutral-800 rounded-lg p-3
-                                text-left max-h-56 md:max-h-72 overflow-auto"
-                    >
-                      {buildHandoffFull(confirmPayload, plataformaMap, form)}
+                    <pre className="whitespace-pre-wrap break-words text-sm font-mono bg-neutral-950/70 border border-neutral-800 rounded-lg p-3 overflow-auto">
+                      {buildPedidoResumenFull(confirmPayload, plataformaMap, confirmOrders)}
                     </pre>
                   </div>
-
-                  {/* === Resto del resumen === */}
-                  <div className="grid gap-4 md:grid-cols-2 min-w-0">
-                    {/* Usuario */}
-                    <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 space-y-3 min-w-0">
-                      <h4 className="font-medium text-sm text-neutral-300 mb-1">
-                        Datos del usuario
-                      </h4>
-                      <dl className="grid grid-cols-[140px_1fr] text-sm gap-y-2">
-                        <dt className="text-neutral-400">Contacto</dt>
-                        <dd className="font-medium break-words">
-                          {confirmPayload?.contacto || "—"}
-                        </dd>
-                        <dt className="text-neutral-400">Nombre</dt>
-                        <dd className="font-medium break-words">
-                          {form.nombre || "—"}{" "}
-                          {(!form.nombre || form.nombre === "") && (
-                            <span className="text-[10px] px-2 py-[2px] rounded-full border border-neutral-500 text-neutral-300">
-                              opcional
-                            </span>
-                          )}
-                        </dd>
-                        <dt className="text-neutral-400">Estado</dt>
-                        <dd className="font-medium">
-                          {confirmPayload?.estado || "—"}
-                        </dd>
-                      </dl>
-                    </div>
-
-                    {/* Cuenta / Plataforma */}
-                    <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 space-y-3 min-w-0">
-                      <h4 className="font-medium text-sm text-neutral-300 mb-1">
-                        Cuenta y plataforma
-                      </h4>
-                      <dl className="grid grid-cols-[140px_1fr] text-sm gap-y-2">
-                        <dt className="text-neutral-400">Plataforma</dt>
-                        <dd className="font-semibold break-words">
-                          {plataformaMap.get(confirmPayload?.plataforma_id) ??
-                            `#${confirmPayload?.plataforma_id ?? "—"}`}
-                        </dd>
-                        <dt className="text-neutral-400">Correo</dt>
-                        <dd className="font-medium break-words">
-                          {confirmPayload?.correo || "—"}
-                        </dd>
-                        <dt className="text-neutral-400">Contraseña</dt>
-                        <dd className="font-mono break-words">
-                          {confirmPayload?.contrasena || "—"}
-                        </dd>
-                        <dt className="text-neutral-400">Proveedor</dt>
-                        <dd className="font-medium break-words">
-                          {confirmPayload?.proveedor || "—"}{" "}
-                          {(!confirmPayload?.proveedor ||
-                            confirmPayload?.proveedor === "") && (
-                            <span className="text-[10px] px-2 py-[2px] rounded-full border border-neutral-500 text-neutral-300">
-                              opcional
-                            </span>
-                          )}
-                        </dd>
-                        <dt className="text-neutral-400">Cuenta ID</dt>
-                        <dd className="font-medium">
-                          {confirmPayload?.cuenta_id ?? "—"}
-                        </dd>
-                        <dt className="text-neutral-400">Nro. pantalla</dt>
-                        <dd className="font-medium">
-                          {confirmPayload?.nro_pantalla ?? "—"}
-                        </dd>
-                      </dl>
-                    </div>
-
-                    {/* Fechas */}
-                    <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 min-w-0">
-                      <h4 className="font-medium text-sm text-neutral-300 mb-2">
-                        Fechas
-                      </h4>
-                      <dl className="grid grid-cols-[140px_1fr] text-sm gap-y-2">
-                        <dt className="text-neutral-400">Compra</dt>
-                        <dd className="font-medium">
-                          {form.fecha_compra || "—"}
-                        </dd>
-                        <dt className="text-neutral-400">Vencimiento</dt>
-                        <dd className="font-medium">
-                          {form.fecha_vencimiento || "—"}
-                        </dd>
-                        <dt className="text-neutral-400">Meses pagados</dt>
-                        <dd className="font-medium">
-                          {form.meses_pagados ?? "—"}
-                        </dd>
-                      </dl>
-                    </div>
-
-                    {/* Totales */}
-                    <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 min-w-0">
-                      <h4 className="font-medium text-sm text-neutral-300 mb-2">
-                        Totales
-                      </h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="rounded-lg border border-neutral-800 p-3">
-                          <div className="text-xs text-neutral-400">
-                            Total pagado
-                          </div>
-                          <div className="text-lg font-semibold">
-                            {toMoney(confirmPayload?.total_pagado)}
-                          </div>
-                        </div>
-                        <div className="rounded-lg border border-neutral-800 p-3">
-                          <div className="text-xs text-neutral-400">
-                            Pagado proveedor
-                          </div>
-                          <div className="text-lg font-semibold">
-                            {toMoney(confirmPayload?.total_pagado_proveedor)}
-                          </div>
-                        </div>
-                        <div className="rounded-lg border border-neutral-800 p-3">
-                          <div className="text-xs text-neutral-400">
-                            Total ganado
-                          </div>
-                          <div className="text-lg font-semibold">
-                            {toMoney(confirmPayload?.total_ganado)}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Comentario */}
-                    <div className="md:col-span-2 rounded-xl border border-neutral-800 bg-neutral-950 p-4 min-w-0">
-                      <h4 className="font-medium text-sm text-neutral-300 mb-2">
-                        Comentario
-                      </h4>
-                      <div className="text-sm whitespace-pre-wrap">
-                        {form.comentario || (
-                          <span className="opacity-70">—</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </>
-              ) : (
+                )}
+              </div>
+            ) : (
                 <div>
                   <p className="text-sm text-neutral-300 mb-2">
-                    Puedes editar el texto antes de confirmar. Se enviará
-                    exactamente este JSON.
+                    Puedes editar el texto antes de confirmar. Se enviará exactamente este JSON.
                   </p>
                   <textarea
                     className="w-full h-96 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-100 font-mono text-sm p-3"

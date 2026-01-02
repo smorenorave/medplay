@@ -17,7 +17,6 @@ import {
 
 /* ===================== Tipos ===================== */
 type Usuario = { contacto: string; nombre: string | null };
-type CorreoInfo = { correo: string; contrasena?: string | null };
 type InventarioRow = {
   id: number;
   plataforma_id?: number | null;
@@ -41,6 +40,12 @@ type FormState = {
   comentario: string | "";
 };
 
+// ✅ NUEVO: usuario separado
+type UserState = { contacto: string; nombre: string | "" };
+
+// ✅ NUEVO: “compra/bloque” (todo menos usuario)
+type OrderState = Omit<FormState, "contacto" | "nombre">;
+
 // Solo inventario
 type EmailSuggestion = {
   email: string;
@@ -62,6 +67,7 @@ const LS_USERS_ALL = "__usuarios_all_cache_v1"; // { map, ts }
 const LS_INV_PREFIX = "__cc_inv_cache_v1:"; // por plataforma { map, ts, stamp }
 const STAMP_KEY_CC = "__stamp_cuentas_all"; // guarda último stamp de /api/cuentascompletas/stamp
 const LIST_CACHE_TTL = 5 * 60_000; // 5 min listas de inventario (mantener)
+
 /* ===================== Utils ===================== */
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const toLocalDateStr = (d: Date) =>
@@ -82,7 +88,6 @@ function addMonthsLocal(dateStr: string, months: number): string {
   const out = new Date(tmp.getFullYear(), tmp.getMonth(), day);
   return toLocalDateStr(out);
 }
-const isEmpty = (v: any) => v == null || v === "";
 const toMoney = (n: number | null) =>
   n == null || Number.isNaN(n) ? "—" : new Intl.NumberFormat().format(n);
 const normalizeEmail = (s: string) => s.trim().toLowerCase();
@@ -146,7 +151,7 @@ const fmtMoneyClientCC = (n?: number | null) =>
 function buildHandoffTextCC(
   payload: any,
   plataformaMap: Map<number, string>,
-  form: any
+  order: any
 ) {
   const platName =
     plataformaMap.get(payload?.plataforma_id) ??
@@ -155,9 +160,9 @@ function buildHandoffTextCC(
     `Plataforma: ${platName}`,
     `Correo: ${payload?.correo ?? "—"}`,
     `Clave: ${payload?.contrasena ?? "—"}`,
-    `Fecha de compra: ${fmtDateHumanCC(form?.fecha_compra)}`,
-    `Fecha de vencimiento: ${fmtDateHumanCC(form?.fecha_vencimiento)}`,
-    `Meses pagados: ${form?.meses_pagados ?? "—"}`,
+    `Fecha de compra: ${fmtDateHumanCC(order?.fecha_compra)}`,
+    `Fecha de vencimiento: ${fmtDateHumanCC(order?.fecha_vencimiento)}`,
+    `Meses pagados: ${order?.meses_pagados ?? "—"}`,
     `Total pagado: ${fmtMoneyClientCC(payload?.total_pagado)}`,
   ].join("\n");
 }
@@ -166,16 +171,85 @@ function buildHandoffTextCC(
 function buildHandoffFullCC(
   payload: any,
   plataformaMap: Map<number, string>,
-  form: any
+  order: any
 ) {
   return (
-    buildHandoffTextCC(payload, plataformaMap, form) +
+    buildHandoffTextCC(payload, plataformaMap, order) +
     `\n\n` +
+    `✨ ¡Para que no se te escape nada! ✨\n` +
+    `Te recomendamos guardar nuestros números en tus contactos, por si las moscas, así siempre podrás comunicarte con nosotros y verificar el estado de promociones, soporte, beneficios y novedades cuando lo necesites.\n\n` +
+    `📲 +57 304 676 0115\n` +
+    `📲 +57 322 532 4142\n\n` +
+    `📌 Mejor tenerlos guardados… ¡por si acaso! 😄\n\n` +
     `Gracias por tu compra! 🥳\n` +
-    `Recuerda que puedes disfrutar de tu servicio hasta la fecha indicada.\n` +
     `Si tienes dudas o necesitas soporte, estamos para ayudarte.`
   );
 }
+
+function buildPedidoResumenTextCC(
+  payloads: any[],
+  plataformaMap: Map<number, string>,
+  orders: any[]
+) {
+  const lines: string[] = [];
+
+  lines.push("🧾 RESUMEN DE TU PEDIDO");
+  lines.push("");
+
+  let totalPagado = 0;
+  let totalProveedor = 0;
+  let totalGanado = 0;
+
+  payloads.forEach((p, i) => {
+    const order = orders?.[i];
+    const platName =
+      plataformaMap.get(p?.plataforma_id) ??
+      `#${p?.plataforma_id ?? "—"}`;
+
+    const tp = Number(p?.total_pagado) || 0;
+    const tpp = Number(p?.total_pagado_proveedor) || 0;
+    const tg = Number(p?.total_ganado) || 0;
+
+    totalPagado += tp;
+    totalProveedor += tpp;
+    totalGanado += tg;
+
+    lines.push(`• COMPRA #${i + 1}`);
+    lines.push(`Plataforma: ${platName}`);
+    lines.push(`Correo: ${p?.correo ?? "—"}`);
+    lines.push(`Clave: ${p?.contrasena ?? "—"}`);
+    lines.push(`Fecha de compra: ${fmtDateHumanCC(order?.fecha_compra)}`);
+    lines.push(`Fecha de vencimiento: ${fmtDateHumanCC(order?.fecha_vencimiento)}`);
+    lines.push(`Meses pagados: ${order?.meses_pagados ?? "—"}`);
+    lines.push(`Total: ${fmtMoneyClientCC(tp)}`);
+    lines.push("");
+  });
+
+  lines.push("💰 TOTALES DEL PEDIDO");
+  lines.push(`Total pagado: ${fmtMoneyClientCC(totalPagado)}`);
+  return lines.join("\n");
+}
+
+
+function buildPedidoResumenFullCC(
+  payloads: any[],
+  plataformaMap: Map<number, string>,
+  orders: any[]
+) {
+  return (
+    buildPedidoResumenTextCC(payloads, plataformaMap, orders) +
+    `\n\n` +
+    `✨ ¡Para que no se te escape nada! ✨\n` +
+    `Te recomendamos guardar nuestros números en tus contactos, por si las moscas, así siempre podrás comunicarte con nosotros y verificar el estado de promociones, soporte, beneficios y novedades cuando lo necesites.\n\n` +
+    `📲 +57 304 676 0115\n` +
+    `📲 +57 322 532 4142\n\n` +
+    `📌 Mejor tenerlos guardados… ¡por si acaso! 😄\n\n` +
+    `Gracias por tu compra! 🥳\n` +
+    `Si tienes dudas o necesitas soporte, estamos para ayudarte.`
+  );
+}
+
+
 
 /* ===================== Usuarios: catálogo completo (una sola vez) ===================== */
 type UsersAllCache = { map: Record<string, Usuario>; ts: number };
@@ -209,8 +283,8 @@ async function ensureUsersAllLoaded() {
       const data = await res.json();
       const list = Array.isArray(data)
         ? data
-        : Array.isArray(data?.items)
-        ? data.items
+        : Array.isArray((data as any)?.items)
+        ? (data as any).items
         : [];
       if (list?.length) {
         arr = list;
@@ -267,23 +341,6 @@ async function parseListResponse(res: Response): Promise<any[]> {
 /* ===================== Componente ===================== */
 export default function FormCuentaCompletas() {
   const compraHoy = todayStr();
-  const compraDateRef = useRef<HTMLInputElement | null>(null);
-
-  const [form, setForm] = useState<FormState>({
-    contacto: "",
-    nombre: "",
-    plataforma_id: 0,
-    correo: "",
-    contrasena: "",
-    proveedor: "",
-    fecha_compra: compraHoy,
-    fecha_vencimiento: addMonthsLocal(compraHoy, 1),
-    meses_pagados: 1,
-    total_pagado: "",
-    total_pagado_proveedor: "",
-    estado: "ACTIVA",
-    comentario: "",
-  });
 
   const {
     plataformas,
@@ -315,27 +372,81 @@ export default function FormCuentaCompletas() {
     return [fav, ...rest];
   }, [plataformas, lastPlatformId]);
 
-  useEffect(() => {
-    ensureUsersAllLoaded();
-  }, []);
-  /* Autoselección inicial */
-  useEffect(() => {
-    if (platLoading || platError || !plataformasOrdered.length) return;
-    if (form.plataforma_id === 0) {
-      setForm((s) => ({ ...s, plataforma_id: plataformasOrdered[0]!.id }));
-    }
-  }, [plataformasOrdered, platLoading, platError, form.plataforma_id]);
-
   /* Default contraseña 'youtube' si aplica */
   const isYouTube = (id?: number) => {
     const name = (id ? plataformaMap.get(id) : "") || "";
     return /youtube/i.test(name);
   };
+
+  // ✅ NUEVO: constructor de orden
+  const makeEmptyOrder = (plataforma_id: number): OrderState => {
+    const pid = plataforma_id || 0;
+    return {
+      plataforma_id: pid,
+      correo: "",
+      contrasena: isYouTube(pid) ? "youtube" : "",
+      proveedor: "",
+      fecha_compra: compraHoy,
+      fecha_vencimiento: addMonthsLocal(compraHoy, 1),
+      meses_pagados: 1,
+      total_pagado: "",
+      total_pagado_proveedor: "",
+      estado: "ACTIVA",
+      comentario: "",
+    };
+  };
+
+  // ✅ NUEVO: usuario separado
+  const [user, setUser] = useState<UserState>({
+    contacto: "",
+    nombre: "",
+  });
+
+  // ✅ NUEVO: múltiples compras
+  const [orders, setOrders] = useState<OrderState[]>(() => [
+    makeEmptyOrder(0),
+  ]);
+
+  // helper para editar un bloque
+  const setOrder = (idx: number, patch: Partial<OrderState>) => {
+    setOrders((prev) =>
+      prev.map((o, i) => (i === idx ? { ...o, ...patch } : o))
+    );
+  };
+
+  // ✅ NUEVO: autoselección inicial (solo si pid 0 en el primer bloque)
   useEffect(() => {
-    if (!form.contrasena && isYouTube(form.plataforma_id)) {
-      setForm((s) => ({ ...s, contrasena: "youtube" }));
-    }
-  }, [form.plataforma_id, form.contrasena]); // eslint-disable-line
+    if (platLoading || platError || !plataformasOrdered.length) return;
+
+    setOrders((prev) => {
+      if (!prev.length) return [makeEmptyOrder(plataformasOrdered[0]!.id)];
+      const first = prev[0]!;
+      if (first.plataforma_id !== 0) return prev;
+      const pid = plataformasOrdered[0]!.id;
+      const next0 = { ...first, plataforma_id: pid };
+      if (!next0.contrasena && isYouTube(pid)) next0.contrasena = "youtube";
+      return [next0, ...prev.slice(1)];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plataformasOrdered, platLoading, platError]);
+
+  // ✅ NUEVO: asegurar “youtube” por bloque cuando cambia plataforma
+  useEffect(() => {
+    setOrders((prev) =>
+      prev.map((o) => {
+        if (!o.plataforma_id) return o;
+        if (!o.contrasena && isYouTube(o.plataforma_id)) {
+          return { ...o, contrasena: "youtube" };
+        }
+        return o;
+      })
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plataformaMap]);
+
+  useEffect(() => {
+    ensureUsersAllLoaded();
+  }, []);
 
   /* ===== Stamp polling & suscripción a cambios ===== */
   useEffect(() => {
@@ -358,20 +469,19 @@ export default function FormCuentaCompletas() {
     };
   }, []);
 
-  /* ===== Nombre: control de edición manual y autocompletado por catálogo ===== */
   /* ===== Nombre: control de edición manual y autocompletado por catálogo + fallback ===== */
   const [nombreDirty, setNombreDirty] = useState(false);
   const lastContactoRef = useRef<string>("");
 
   useEffect(() => {
-    const raw = form.contacto.trim();
+    const raw = user.contacto.trim();
     const norm = normalizeContacto(raw);
 
     // contacto cambió → habilitar nuevo autocompletado
     if ((norm || "") !== lastContactoRef.current) {
       lastContactoRef.current = norm || "";
       setNombreDirty(false);
-      setForm((s) => ({ ...s, nombre: "" }));
+      setUser((s) => ({ ...s, nombre: "" }));
     }
 
     if (!norm || norm.length < CONTACTO_MIN_LEN) return;
@@ -386,12 +496,11 @@ export default function FormCuentaCompletas() {
       const u = getUserFromAllCache(norm);
 
       if (!canceled && !nombreDirty && u && (u.nombre ?? "") !== "") {
-        setForm((s) => ({ ...s, nombre: u.nombre ?? "" }));
+        setUser((s) => ({ ...s, nombre: u.nombre ?? "" }));
         return;
       }
 
       // 2) Fallback: buscar en cuentascompletas por contacto exacto
-      //    Tomamos el nombre más frecuente (o el último válido) y lo guardamos en cache local.
       try {
         const res = await fetch(
           `/api/cuentascompletas?q=${encodeURIComponent(norm)}&limit=200`,
@@ -400,25 +509,20 @@ export default function FormCuentaCompletas() {
         if (!res.ok) throw new Error("No se pudo consultar cuentascompletas");
         const rows = await parseListResponse(res);
 
-        // Filtra por contacto normalizado exacto
         const same = rows.filter(
           (r: any) => normalizeContacto(String(r?.contacto ?? "")) === norm
         );
 
-        // Extrae nombres no vacíos
         const names = same
           .map((r: any) => String(r?.nombre ?? "").trim())
           .filter((n: string) => n.length > 0);
 
         let bestName = "";
         if (names.length) {
-          // Frecuencia
           const freq = new Map<string, number>();
           for (const n of names) freq.set(n, (freq.get(n) || 0) + 1);
-          // top por frecuencia; si empata, usamos el que aparezca primero (ya suficientemente robusto)
           bestName = [...freq.entries()].sort((a, b) => b[1] - a[1])[0]![0];
         } else {
-          // Como respaldo, toma el último con nombre no vacío por orden de id/fecha si existiera
           const withName = same
             .filter((r: any) => String(r?.nombre ?? "").trim().length > 0)
             .sort((a: any, b: any) => Number(b?.id ?? 0) - Number(a?.id ?? 0));
@@ -426,16 +530,15 @@ export default function FormCuentaCompletas() {
         }
 
         if (!canceled && !nombreDirty && bestName) {
-          setForm((s) => ({ ...s, nombre: bestName }));
+          setUser((s) => ({ ...s, nombre: bestName }));
 
-          // Calienta el cache local de usuarios para futuras veces
           const cur = readUsersAll() || { map: {}, ts: 0 };
           cur.map[norm] = { contacto: norm, nombre: bestName };
           cur.ts = Date.now();
           writeLS(LS_USERS_ALL, cur);
         }
       } catch {
-        /* ignoramos: el autocompletado es "best-effort" */
+        /* best-effort */
       }
     };
 
@@ -444,7 +547,7 @@ export default function FormCuentaCompletas() {
       canceled = true;
       clearTimeout(id);
     };
-  }, [form.contacto, nombreDirty]);
+  }, [user.contacto, nombreDirty]);
 
   /* ===== Mensajería + modal ===== */
   const [loading, setLoading] = useState(false);
@@ -456,62 +559,116 @@ export default function FormCuentaCompletas() {
   const [confirmText, setConfirmText] = useState<string>("");
   const [confirmView, setConfirmView] = useState<"resumen" | "json">("resumen");
 
-  /* ===== Sugerencias y cache de correos/contraseñas ===== */
-  const [emailOpen, setEmailOpen] = useState(false);
-  const [emailOpts, setEmailOpts] = useState<EmailSuggestion[]>([]);
-  const [emailLoading, setEmailLoading] = useState(false);
-  const [emailError, setEmailError] = useState<string | null>(null);
-  const [selectedInvId, setSelectedInvId] = useState<number | null>(null);
-  const [invIndex, setInvIndex] = useState<Record<string, InvEntry>>({});
-  const [isInvLoading, setIsInvLoading] = useState(false);
+  // ✅ NUEVO: confirmOrders para mostrar resumen por bloque
+  const [confirmOrders, setConfirmOrders] = useState<OrderState[]>([]);
 
-  // cargar sugerencias (usa caches persistentes primero)
+  /* ===== Inventario (por bloque) ===== */
+  const [emailOpenIdx, setEmailOpenIdx] = useState<number | null>(null);
+  const [emailOptsByIdx, setEmailOptsByIdx] = useState<EmailSuggestion[][]>([]);
+  const [emailErrorByIdx, setEmailErrorByIdx] = useState<(string | null)[]>([]);
+  const [isInvLoadingByIdx, setIsInvLoadingByIdx] = useState<boolean[]>([]);
+  const [selectedInvIdByIdx, setSelectedInvIdByIdx] = useState<(number | null)[]>(
+    []
+  );
+
+
+  // ✅ refs para centrar modal + reset scroll interno
+const modalBoxRef = useRef<HTMLDivElement | null>(null);
+const modalScrollRef = useRef<HTMLDivElement | null>(null);
+
+useEffect(() => {
+  if (!confirmOpen) return;
+
+  // Espera a que el modal renderice
+  requestAnimationFrame(() => {
+    // centra el modal en pantalla
+    modalBoxRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+      inline: "nearest",
+    });
+
+    // sube el scroll interno del modal al inicio
+    if (modalScrollRef.current) {
+      modalScrollRef.current.scrollTop = 0;
+    }
+  });
+}, [confirmOpen]);
+
+  // inventario cache en memoria por plataforma
+  const [invIndexByPid, setInvIndexByPid] = useState<
+    Record<number, Record<string, InvEntry>>
+  >({});
+
+  const ensureIdxArrays = (len: number) => {
+    setEmailOptsByIdx((prev) =>
+      prev.length >= len ? prev : [...prev, ...Array(len - prev.length).fill([])]
+    );
+    setEmailErrorByIdx((prev) =>
+      prev.length >= len
+        ? prev
+        : [...prev, ...Array(len - prev.length).fill(null)]
+    );
+    setIsInvLoadingByIdx((prev) =>
+      prev.length >= len
+        ? prev
+        : [...prev, ...Array(len - prev.length).fill(false)]
+    );
+    setSelectedInvIdByIdx((prev) =>
+      prev.length >= len
+        ? prev
+        : [...prev, ...Array(len - prev.length).fill(null)]
+    );
+  };
+
+  useEffect(() => {
+    ensureIdxArrays(orders.length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders.length]);
+
   async function fetchEmailsByPlatform(plataformaId: number) {
-    if (!plataformaId) {
-      setInvIndex({});
-      setEmailOpts([]);
-      return;
+    if (!plataformaId) return {};
+
+    // 1) LS cache
+    const invMapLS = getInvMap(plataformaId);
+    if (invMapLS) {
+      setInvIndexByPid((s) => ({ ...s, [plataformaId]: invMapLS }));
+      return invMapLS;
     }
 
+    // 2) fetch inventario
+    const resInv = await fetch(
+      `/api/inventario?plataforma_id=${plataformaId}&limit=${SUGGEST_LIMIT * 100}`,
+      { cache: "no-store" }
+    );
+    const rowsInv: InventarioRow[] = resInv.ok
+      ? ((await parseListResponse(resInv)) as any[])
+      : [];
+    const m: Record<string, InvEntry> = {};
+    for (const it of rowsInv) {
+      const c = normalizeEmail(it?.correo ?? "");
+      if (!c) continue;
+      m[c] = { pass: (it as any)?.clave ?? null, id: Number(it?.id) };
+    }
+    writeInvCache(plataformaId, m);
+    setInvIndexByPid((s) => ({ ...s, [plataformaId]: m }));
+    return m;
+  }
+
+  const openEmailForIdx = async (idx: number) => {
+    setEmailOpenIdx(idx);
+    const pid = orders[idx]?.plataforma_id;
+    if (!pid) return;
     try {
-      // 1) Cache persistente
-      const invMap = getInvMap(plataformaId);
-      if (invMap) {
-        setInvIndex(invMap);
-        const list: EmailSuggestion[] = Object.entries(invMap)
-          .slice(0, SUGGEST_LIMIT)
-          .map(([email, ent]) => ({
-            email,
-            invId: ent.id ?? null,
-            invClave: ent.pass ?? null,
-          }));
-        setEmailOpts(list);
-        setEmailError(null);
-        return;
-      }
+      setIsInvLoadingByIdx((p) => {
+        const a = [...p];
+        a[idx] = true;
+        return a;
+      });
+      const invMap =
+        invIndexByPid[pid] ?? (await fetchEmailsByPlatform(pid));
 
-      // 2) Carga de /api/inventario una sola vez si no hay cache
-      setIsInvLoading(true);
-      const resInv = await fetch(
-        `/api/inventario?plataforma_id=${plataformaId}&limit=${
-          SUGGEST_LIMIT * 100
-        }`,
-        { cache: "no-store" }
-      );
-      const rowsInv: InventarioRow[] = resInv.ok
-        ? ((await parseListResponse(resInv)) as any[])
-        : [];
-      const m: Record<string, InvEntry> = {};
-      for (const it of rowsInv) {
-        const c = normalizeEmail(it?.correo ?? "");
-        if (!c) continue;
-        m[c] = { pass: (it as any)?.clave ?? null, id: Number(it?.id) };
-      }
-
-      writeInvCache(plataformaId, m);
-      setInvIndex(m);
-
-      const list: EmailSuggestion[] = Object.entries(m)
+      const list: EmailSuggestion[] = Object.entries(invMap)
         .slice(0, SUGGEST_LIMIT)
         .map(([email, ent]) => ({
           email,
@@ -519,153 +676,192 @@ export default function FormCuentaCompletas() {
           invClave: ent.pass ?? null,
         }));
 
-      setEmailOpts(list);
-      setEmailError(null);
+      setEmailOptsByIdx((p) => {
+        const a = [...p];
+        a[idx] = list;
+        return a;
+      });
+      setEmailErrorByIdx((p) => {
+        const a = [...p];
+        a[idx] = null;
+        return a;
+      });
     } catch (e: any) {
-      setEmailError(
-        e?.message ?? "No se pudieron cargar correos de inventario"
-      );
-      setInvIndex({});
-      setEmailOpts([]);
+      setEmailErrorByIdx((p) => {
+        const a = [...p];
+        a[idx] = e?.message ?? "No se pudieron cargar correos de inventario";
+        return a;
+      });
+      setEmailOptsByIdx((p) => {
+        const a = [...p];
+        a[idx] = [];
+        return a;
+      });
     } finally {
-      setIsInvLoading(false);
+      setIsInvLoadingByIdx((p) => {
+        const a = [...p];
+        a[idx] = false;
+        return a;
+      });
     }
-  }
-
-  const onEmailFocus = () => {
-    setEmailOpen(true);
-    // Ya precargamos en el useEffect de plataforma;
-    // si no hubiese cache, la función hará la carga una vez.
-    if (form.plataforma_id) fetchEmailsByPlatform(form.plataforma_id);
   };
-  const onEmailBlur = () => setTimeout(() => setEmailOpen(false), 120);
 
+  const closeEmailDropdown = () => setTimeout(() => setEmailOpenIdx(null), 120);
+
+  // ✅ por cada bloque: cuando cambia plataforma, precarga inventario y resetea flags del bloque
   useEffect(() => {
-    setEmailError(null);
-    setEmailOpts([]);
-    setSelectedInvId(null);
-    if (form.plataforma_id) {
-      // Precarga para que al enfocar ya esté todo listo
-      fetchEmailsByPlatform(form.plataforma_id);
-    }
+    orders.forEach((o, idx) => {
+      const pid = o.plataforma_id;
+      if (!pid) return;
+      // precarga sin bloquear
+      fetchEmailsByPlatform(pid).catch(() => {});
+      setSelectedInvIdByIdx((p) => {
+        const a = [...p];
+        a[idx] = null;
+        return a;
+      });
+      setEmailOptsByIdx((p) => {
+        const a = [...p];
+        a[idx] = [];
+        return a;
+      });
+      setEmailErrorByIdx((p) => {
+        const a = [...p];
+        a[idx] = null;
+        return a;
+      });
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.plataforma_id]);
+  }, [orders.map((o) => o.plataforma_id).join("|")]);
 
+  // ✅ por cada bloque: al escribir correo, filtra dropdown y autocompleta clave desde inventario
   useEffect(() => {
-    setSelectedInvId(null);
-  }, [form.correo]);
+    orders.forEach((o, idx) => {
+      const pid = o.plataforma_id;
+      if (!pid) return;
 
-  // al escribir correo: intenta completar desde cache; si no, busca puntual y cachea
-  useEffect(() => {
-    const correo = normalizeEmail(form.correo.trim());
+      const correo = normalizeEmail(o.correo.trim());
+      const invIndex = invIndexByPid[pid] ?? {};
 
-    // Reseteos de flags ligados a DB (ya no se usan):
-    setSelectedInvId(null);
-    // setCorreoCount(0);    // si lo quitaste del estado, elimina esta línea
-    // setEmailFound(false); // si lo quitaste del estado, elimina esta línea
+      // autocompletar desde inventario
+      if (correo && invIndex[correo]) {
+        const hit = invIndex[correo];
+        setSelectedInvIdByIdx((p) => {
+          const a = [...p];
+          a[idx] = hit.id ?? null;
+          return a;
+        });
 
-    if (!form.plataforma_id) {
-      setEmailLoading(false);
-      return;
-    }
-
-    // 1) Autocompletar desde inventario (en memoria)
-    if (correo && invIndex[correo]) {
-      const hit = invIndex[correo];
-      // setEmailFound(true); // si lo quitaste del estado, ignora
-      setSelectedInvId(hit.id ?? null);
-
-      if (hit.pass && !form.contrasena) {
-        setForm((s) => ({ ...s, contrasena: hit.pass || s.contrasena }));
+        if (hit.pass && !o.contrasena) {
+          setOrder(idx, { contrasena: hit.pass || o.contrasena });
+        }
+      } else {
+        setSelectedInvIdByIdx((p) => {
+          const a = [...p];
+          a[idx] = null;
+          return a;
+        });
       }
-    }
 
-    // 2) Filtrado local para dropdown
-    if (correo.length >= EMAIL_MIN_LEN) {
-      const subset: EmailSuggestion[] = [];
-      for (const [email, ent] of Object.entries(invIndex)) {
-        if (email.includes(correo)) {
-          subset.push({
+      // filtrar dropdown local
+      const nextOpts: EmailSuggestion[] = [];
+      if (correo.length >= EMAIL_MIN_LEN) {
+        for (const [email, ent] of Object.entries(invIndex)) {
+          if (email.includes(correo)) {
+            nextOpts.push({
+              email,
+              invId: ent.id ?? null,
+              invClave: ent.pass ?? null,
+            });
+            if (nextOpts.length >= SUGGEST_LIMIT) break;
+          }
+        }
+      } else {
+        for (const [email, ent] of Object.entries(invIndex)) {
+          nextOpts.push({
             email,
             invId: ent.id ?? null,
             invClave: ent.pass ?? null,
           });
-          if (subset.length >= SUGGEST_LIMIT) break;
+          if (nextOpts.length >= SUGGEST_LIMIT) break;
         }
       }
-      setEmailOpts(subset);
-    } else {
-      const top: EmailSuggestion[] = Object.entries(invIndex)
-        .slice(0, SUGGEST_LIMIT)
-        .map(([email, ent]) => ({
-          email,
-          invId: ent.id ?? null,
-          invClave: ent.pass ?? null,
-        }));
-      setEmailOpts(top);
-    }
 
-    setEmailLoading(false);
-    setEmailError(null);
+      setEmailOptsByIdx((p) => {
+        const a = [...p];
+        a[idx] = nextOpts;
+        return a;
+      });
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.correo, form.plataforma_id, invIndex, form.contrasena]);
+  }, [orders.map((o) => `${o.plataforma_id}:${o.correo}:${o.contrasena}`).join("|"), invIndexByPid]);
 
-  /* ===================== Recalcular fecha de vencimiento ===================== */
+  /* ===================== Recalcular fecha de vencimiento por bloque ===================== */
   useEffect(() => {
-    const compra = form.fecha_compra;
-    const meses = form.meses_pagados;
-    if (!compra || !Number.isFinite(meses) || meses < 1) return;
-
-    const nueva = addMonthsLocal(compra, meses);
-    setForm((s) =>
-      s.fecha_vencimiento === nueva ? s : { ...s, fecha_vencimiento: nueva }
+    setOrders((prev) =>
+      prev.map((o) => {
+        const compra = o.fecha_compra;
+        const meses = o.meses_pagados;
+        if (!compra || !Number.isFinite(meses) || meses < 1) return o;
+        const nueva = addMonthsLocal(compra, meses);
+        return o.fecha_vencimiento === nueva ? o : { ...o, fecha_vencimiento: nueva };
+      })
     );
-  }, [form.fecha_compra, form.meses_pagados]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders.map((o) => `${o.fecha_compra}:${o.meses_pagados}`).join("|")]);
 
-  /* ===================== Totales preview ===================== */
-  const totalGanadoPreview = useMemo(() => {
-    const tpStr = form.total_pagado.trim();
-    if (tpStr === "" || Number.isNaN(Number(tpStr))) return "";
-    const tp = Number(tpStr);
-    const tppStr = form.total_pagado_proveedor.trim();
-    if (tppStr === "") return String(tp);
-    if (Number.isNaN(Number(tppStr))) return "";
-    const tpp = Number(tppStr);
-    return String(tp - tpp);
-  }, [form.total_pagado, form.total_pagado_proveedor]);
+  /* ===================== Totales preview por bloque ===================== */
+  const totalGanadoPreviewByIdx = useMemo(() => {
+    return orders.map((o) => {
+      const tpStr = o.total_pagado.trim();
+      if (tpStr === "" || Number.isNaN(Number(tpStr))) return "";
+      const tp = Number(tpStr);
+      const tppStr = o.total_pagado_proveedor.trim();
+      if (tppStr === "") return String(tp);
+      if (Number.isNaN(Number(tppStr))) return "";
+      const tpp = Number(tppStr);
+      return String(tp - tpp);
+    });
+  }, [orders]);
 
   /* ===================== Validaciones ===================== */
   const canSubmit = useMemo(() => {
-    const requiredOk =
-      form.contacto.trim() !== "" &&
-      Number.isInteger(form.plataforma_id) &&
-      form.plataforma_id > 0 &&
-      form.correo.trim() !== "" &&
-      form.contrasena.trim() !== "" &&
-      Number.isInteger(form.meses_pagados) &&
-      form.meses_pagados >= 1 &&
-      !!form.fecha_compra &&
-      !!form.fecha_vencimiento;
+    const contactoOk = user.contacto.trim() !== "";
+    if (!contactoOk) return false;
+    if (!orders.length) return false;
 
-    const totalOk =
-      form.total_pagado === "" ||
-      (!Number.isNaN(Number(form.total_pagado)) &&
-        Number(form.total_pagado) >= 0);
-    const totalProvOk =
-      form.total_pagado_proveedor === "" ||
-      (!Number.isNaN(Number(form.total_pagado_proveedor)) &&
-        Number(form.total_pagado_proveedor) >= 0);
-    return requiredOk && totalOk && totalProvOk;
-  }, [form]);
+    for (const o of orders) {
+      const requiredOk =
+        Number.isInteger(o.plataforma_id) &&
+        o.plataforma_id > 0 &&
+        o.correo.trim() !== "" &&
+        o.contrasena.trim() !== "" &&
+        Number.isInteger(o.meses_pagados) &&
+        o.meses_pagados >= 1 &&
+        !!o.fecha_compra &&
+        !!o.fecha_vencimiento;
 
-  /* ===================== Payload ===================== */
-  const buildPayload = () => {
-    const totalPagadoNum =
-      form.total_pagado !== "" ? Number(form.total_pagado) : null;
+      if (!requiredOk) return false;
+
+      const totalOk =
+        o.total_pagado === "" ||
+        (!Number.isNaN(Number(o.total_pagado)) && Number(o.total_pagado) >= 0);
+
+      const totalProvOk =
+        o.total_pagado_proveedor === "" ||
+        (!Number.isNaN(Number(o.total_pagado_proveedor)) &&
+          Number(o.total_pagado_proveedor) >= 0);
+
+      if (!totalOk || !totalProvOk) return false;
+    }
+    return true;
+  }, [user, orders]);
+
+  /* ===================== Payload por bloque ===================== */
+  const buildPayloadFor = (o: OrderState) => {
+    const totalPagadoNum = o.total_pagado !== "" ? Number(o.total_pagado) : null;
     const totalProvNum =
-      form.total_pagado_proveedor !== ""
-        ? Number(form.total_pagado_proveedor)
-        : null;
+      o.total_pagado_proveedor !== "" ? Number(o.total_pagado_proveedor) : null;
     const total_ganado =
       totalPagadoNum !== null
         ? totalProvNum !== null
@@ -674,20 +870,20 @@ export default function FormCuentaCompletas() {
         : null;
 
     return {
-      contacto: normalizeContacto(form.contacto.trim()),
-      nombre: form.nombre.trim() || null,
-      plataforma_id: form.plataforma_id,
-      correo: form.correo.trim().toLowerCase(),
-      contrasena: form.contrasena || null,
-      proveedor: form.proveedor.trim() || null,
-      fecha_compra: form.fecha_compra || null,
-      fecha_vencimiento: form.fecha_vencimiento || null,
-      meses_pagados: form.meses_pagados,
+      contacto: normalizeContacto(user.contacto.trim()),
+      nombre: user.nombre.trim() || null,
+      plataforma_id: o.plataforma_id,
+      correo: o.correo.trim().toLowerCase(),
+      contrasena: o.contrasena || null,
+      proveedor: o.proveedor.trim() || null,
+      fecha_compra: o.fecha_compra || null,
+      fecha_vencimiento: o.fecha_vencimiento || null,
+      meses_pagados: o.meses_pagados,
       total_pagado: totalPagadoNum,
       total_pagado_proveedor: totalProvNum,
       total_ganado,
-      estado: form.estado.trim() || null,
-      comentario: form.comentario.trim() || null,
+      estado: o.estado.trim() || null,
+      comentario: o.comentario.trim() || null,
     };
   };
 
@@ -696,135 +892,153 @@ export default function FormCuentaCompletas() {
     e.preventDefault();
     setOkMsg(null);
     setErrMsg(null);
+
     if (!canSubmit) {
       setErrMsg("Revisa los campos obligatorios y formatos numéricos.");
       return;
     }
-    const payload = buildPayload();
-    setConfirmPayload(payload);
-    setConfirmText(JSON.stringify(payload, null, 2));
+
+    const payloads = orders.map(buildPayloadFor);
+
+    // ✅ (opcional pero útil) evitar duplicados plataforma+correo en el mismo guardado
+    const keyset = new Set<string>();
+    for (const p of payloads) {
+      const k = `${p.plataforma_id}:${p.correo}`;
+      if (keyset.has(k)) {
+        setErrMsg(`Duplicado en el mismo guardado: ${k}`);
+        return;
+      }
+      keyset.add(k);
+    }
+
+    setConfirmPayload(payloads);
+    setConfirmOrders(orders);
+    setConfirmText(JSON.stringify(payloads, null, 2));
     setConfirmView("resumen");
     setConfirmOpen(true);
   }
 
-  /* ===================== Confirmar y guardar ===================== */
+  /* ===================== Confirmar y guardar (todos) ===================== */
   async function confirmAndSave() {
     if (!confirmPayload) return;
     setLoading(true);
     setErrMsg(null);
+
     try {
-      let toSend = confirmPayload;
+      let toSend: any[] = confirmPayload;
       try {
-        toSend = JSON.parse(confirmText);
+        const maybe = JSON.parse(confirmText);
+        if (Array.isArray(maybe)) toSend = maybe;
       } catch {}
 
-      const res = await fetch("/api/cuentascompletas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(toSend),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j?.error ?? "No se pudo guardar");
+      const results = await Promise.allSettled(
+        toSend.map((p, idx) =>
+          fetch("/api/cuentascompletas", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(p),
+          }).then(async (res) => {
+            const j = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(j?.error ?? "No se pudo guardar");
+            return { saved: j?.cuenta ?? j, idx, sent: p };
+          })
+        )
+      );
+
+      const ok = results.filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<{
+        saved: any;
+        idx: number;
+        sent: any;
+      }>[];
+
+      const bad = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+
+      // preferencia de plataforma: última del lote
+      try {
+        const last = toSend[toSend.length - 1];
+        if (last?.plataforma_id) {
+          window.localStorage.setItem(LAST_PLATFORM_KEY, String(last.plataforma_id));
+        }
+      } catch {}
+
+      // si venían de inventario, intenta eliminar (por bloque)
+      for (const f of ok) {
+        const idx = f.value.idx;
+        const invId = selectedInvIdByIdx[idx];
+        if (invId != null) {
+          try {
+            await fetch(`/api/inventario/${invId}`, { method: "DELETE" });
+          } catch {}
+        }
       }
 
-      const raw = await res.json();
-      const saved = raw?.cuenta ?? raw;
+      // cache local + notify por cada insert ok
+      for (const f of ok) {
+        const { saved, sent } = f.value;
 
-      // preferencia de plataforma
-      try {
-        window.localStorage.setItem(
-          LAST_PLATFORM_KEY,
-          String(toSend.plataforma_id)
-        );
-      } catch {}
-
-      // si venía de inventario, intenta eliminarlo
-      if (selectedInvId != null) {
         try {
-          await fetch(`/api/inventario/${selectedInvId}`, { method: "DELETE" });
+          const rowForCache = {
+            id: Number(saved?.id),
+            contacto: String(saved?.contacto ?? sent.contacto ?? ""),
+            nombre: (saved?.nombre ?? sent.nombre ?? null) as string | null,
+            plataforma_id: Number(saved?.plataforma_id ?? sent.plataforma_id),
+            correo: String(saved?.correo ?? sent.correo ?? ""),
+            contrasena: (saved?.contrasena ?? sent.contrasena ?? null) as string | null,
+            proveedor: (saved?.proveedor ?? sent.proveedor ?? null) as string | null,
+            fecha_compra: (saved?.fecha_compra ?? sent.fecha_compra ?? null) as string | null,
+            fecha_vencimiento: (saved?.fecha_vencimiento ?? sent.fecha_vencimiento ?? null) as string | null,
+            meses_pagados: (saved?.meses_pagados ?? sent.meses_pagados ?? null) as number | null,
+            total_pagado: (saved?.total_pagado ?? sent.total_pagado ?? null) as number | null,
+            total_pagado_proveedor: (saved?.total_pagado_proveedor ?? sent.total_pagado_proveedor ?? null) as number | null,
+            total_ganado: (saved?.total_ganado ?? sent.total_ganado ?? null) as number | null,
+            estado: (saved?.estado ?? sent.estado ?? null) as string | null,
+            comentario: (saved?.comentario ?? sent.comentario ?? null) as string | null,
+          };
+          mergeCuentaCompletaIntoCache(rowForCache as any);
+        } catch {}
+
+        try {
+          notifyCuentasChanged({
+            action: "insert",
+            id: Number(saved?.id),
+            plataforma_id: Number(saved?.plataforma_id ?? sent.plataforma_id),
+          });
         } catch {}
       }
 
-      // cache local del nuevo registro
       try {
-        const rowForCache = {
-          id: Number(saved?.id),
-          contacto: String(saved?.contacto ?? toSend.contacto ?? ""),
-          nombre: (saved?.nombre ?? toSend.nombre ?? null) as string | null,
-          plataforma_id: Number(saved?.plataforma_id ?? toSend.plataforma_id),
-          correo: String(saved?.correo ?? toSend.correo ?? ""),
-          contrasena: (saved?.contrasena ?? toSend.contrasena ?? null) as
-            | string
-            | null,
-          proveedor: (saved?.proveedor ?? toSend.proveedor ?? null) as
-            | string
-            | null,
-          fecha_compra: (saved?.fecha_compra ?? toSend.fecha_compra ?? null) as
-            | string
-            | null,
-          fecha_vencimiento: (saved?.fecha_vencimiento ??
-            toSend.fecha_vencimiento ??
-            null) as string | null,
-          meses_pagados: (saved?.meses_pagados ??
-            toSend.meses_pagados ??
-            null) as number | null,
-          total_pagado: (saved?.total_pagado ?? toSend.total_pagado ?? null) as
-            | number
-            | null,
-          total_pagado_proveedor: (saved?.total_pagado_proveedor ??
-            toSend.total_pagado_proveedor ??
-            null) as number | null,
-          total_ganado: (saved?.total_ganado ?? toSend.total_ganado ?? null) as
-            | number
-            | null,
-          estado: (saved?.estado ?? toSend.estado ?? null) as string | null,
-          comentario: (saved?.comentario ?? toSend.comentario ?? null) as
-            | string
-            | null,
-        };
-        mergeCuentaCompletaIntoCache(rowForCache as any);
-      } catch {}
-
-      // invalidar caches dependientes (stamp) y notificar
-      try {
-        notifyCuentasChanged({
-          action: "insert",
-          id: Number(saved?.id),
-          plataforma_id: Number(saved?.plataforma_id ?? toSend.plataforma_id),
-        });
         await refreshCuentasStampOnce();
       } catch {}
 
-      // UI OK + reset
-      setOkMsg("Guardado correctamente. ID: " + (saved?.id ?? ""));
+      if (bad.length) {
+        setErrMsg(
+          `Se guardaron ${ok.length}/${toSend.length}. Fallaron: ` +
+            bad
+              .map((b: any, i) => `#${i + 1} (${b.reason?.message ?? "error"})`)
+              .join(" | ")
+        );
+      } else {
+        const ids = ok.map((x) => x.value.saved?.id).filter(Boolean).join(", ");
+        setOkMsg(`Guardado correctamente (${ok.length}). IDs: ${ids}`);
+      }
+
       setConfirmOpen(false);
 
+      // reset UI (mantiene último pid)
       const base = todayStr();
       const stored = window.localStorage.getItem(LAST_PLATFORM_KEY);
       const lastId = stored ? Number(stored) : NaN;
       const nextPlat =
-        Number.isFinite(lastId) && lastId > 0
-          ? lastId
-          : plataformasOrdered[0]?.id ?? 0;
+        Number.isFinite(lastId) && lastId > 0 ? lastId : plataformasOrdered[0]?.id ?? 0;
 
-      setForm({
-        contacto: "",
-        nombre: "",
-        plataforma_id: nextPlat,
-        correo: "",
-        contrasena: isYouTube(nextPlat) ? "youtube" : "",
-        proveedor: "",
-        fecha_compra: base,
-        fecha_vencimiento: addMonthsLocal(base, 1),
-        meses_pagados: 1,
-        total_pagado: "",
-        total_pagado_proveedor: "",
-        estado: "ACTIVA",
-        comentario: "",
-      });
-      setSelectedInvId(null);
-      setEmailOpts([]);
+      setUser({ contacto: "", nombre: "" });
+      setOrders([makeEmptyOrder(nextPlat)]);
+
+      setEmailOpenIdx(null);
+      setEmailOptsByIdx([]);
+      setEmailErrorByIdx([]);
+      setIsInvLoadingByIdx([]);
+      setSelectedInvIdByIdx([]);
       setNombreDirty(false);
       lastContactoRef.current = "";
     } catch (err: any) {
@@ -840,27 +1054,23 @@ export default function FormCuentaCompletas() {
       <form onSubmit={onSubmit} className="grid gap-6">
         {/* Usuario */}
         <section className="border border-neutral-800 rounded-2xl p-4 bg-neutral-950/40 text-neutral-100">
-          <h2 className="font-semibold mb-3 text-neutral-100">
-            Datos del usuario
-          </h2>
+          <h2 className="font-semibold mb-3 text-neutral-100">Datos del usuario</h2>
           <div className="grid gap-2 sm:grid-cols-2 sm:gap-4">
             <Field
               label="Contacto *"
               type="tel"
               placeholder="+57 3xxxxxxxxx"
-              value={form.contacto}
+              value={user.contacto}
               onChange={(v) => {
                 if (/^\+?\d*(?:\s?\d*)*$/.test(v))
-                  setForm((s) => ({ ...s, contacto: v }));
+                  setUser((s) => ({ ...s, contacto: v }));
               }}
               required
               inputMode="numeric"
               pattern="^\+\d+(?:\s*\d+)*$"
               title="Formato válido: + seguido de números"
               onInvalid={(e: any) =>
-                e.currentTarget.setCustomValidity(
-                  "Ingresa un teléfono en formato + y solo números"
-                )
+                e.currentTarget.setCustomValidity("Ingresa un teléfono en formato + y solo números")
               }
               onInput={(e: any) => e.currentTarget.setCustomValidity("")}
               inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
@@ -868,250 +1078,280 @@ export default function FormCuentaCompletas() {
             <Field
               label="Nombre"
               placeholder="Se autocompleta si el contacto existe (desde cache)"
-              value={form.nombre}
+              value={user.nombre}
               onChange={(v) => {
                 setNombreDirty(true);
-                setForm((s) => ({ ...s, nombre: v }));
+                setUser((s) => ({ ...s, nombre: v }));
               }}
               inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
             />
           </div>
         </section>
 
-        {/* Cuenta completa */}
+        {/* ✅ NUEVO: header con botón + */}
         <section className="border border-neutral-800 rounded-2xl p-4 bg-neutral-950/40 text-neutral-100">
-          <h2 className="font-semibold mb-3 text-neutral-100">
-            Datos de la cuenta completa
-          </h2>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h2 className="font-semibold text-neutral-100">Compras / Plataformas</h2>
+            <button
+              type="button"
+              className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
+              onClick={() => {
+                const pid = orders[orders.length - 1]?.plataforma_id || plataformasOrdered[0]?.id || 0;
+                setOrders((prev) => [...prev, makeEmptyOrder(pid)]);
+              }}
+              title="Agregar otra compra/plataforma"
+            >
+              +
+            </button>
+          </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            {/* Plataforma */}
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <label
-                  htmlFor="plataforma"
-                  className="block text-sm text-neutral-300"
-                >
-                  Plataforma <span className="text-red-600">*</span>
-                </label>
-                {lastPlatformId && (
-                  <span className="text-xs text-neutral-400">
-                    Última usada: #{lastPlatformId}
-                  </span>
-                )}
-              </div>
-              <select
-                id="plataforma"
-                className={[
-                  "w-full rounded-lg px-3 py-2",
-                  "border border-neutral-700 bg-neutral-900 text-neutral-100",
-                  "outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500",
-                  "[&>option]:bg-neutral-900 [&>option]:text-neutral-100",
-                ].join(" ")}
-                value={form.plataforma_id ? String(form.plataforma_id) : ""}
-                onChange={(e) => {
-                  const newId = Number(e.target.value);
-                  setForm((s) => ({
-                    ...s,
-                    plataforma_id: newId,
-                    correo: "",
-                    contrasena:
-                      !s.contrasena && isYouTube(newId)
-                        ? "youtube"
-                        : s.contrasena,
-                  }));
-                }}
-                required
-                disabled={platLoading || !!platError}
+          <div className="grid gap-6">
+            {orders.map((o, idx) => (
+              <div
+                key={idx}
+                className="border border-neutral-800 rounded-2xl p-4 bg-neutral-950/40"
               >
-                <option value="" disabled>
-                  {platLoading
-                    ? "Cargando…"
-                    : platError
-                    ? "Error al cargar"
-                    : "Selecciona una plataforma"}
-                </option>
-                {plataformasOrdered.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Correo + sugerencias */}
-            <div className="relative">
-              <Field
-                label="Correo *"
-                type="email"
-                placeholder="correo@dominio.com"
-                value={form.correo}
-                onChange={(v) => setForm((s) => ({ ...s, correo: v }))}
-                onFocus={onEmailFocus}
-                onBlur={onEmailBlur}
-                required
-                inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-              />
-
-              {emailOpen && emailOpts.length > 0 && (
-                <div className="absolute left-0 right-0 z-10 mt-1 rounded-lg border border-neutral-700 bg-neutral-900 text-sm text-neutral-100 shadow-lg">
-                  <ul className="max-h-56 overflow-auto">
-                    {emailOpts.map((opt) => (
-                      <li
-                        key={`${opt.invId ?? "x"}:${opt.email}`}
-                        className="cursor-pointer px-3 py-2 flex items-center justify-between hover:bg-neutral-800"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          setForm((s) => ({
-                            ...s,
-                            correo: opt.email,
-                            contrasena: s.contrasena || (opt.invClave ?? ""),
-                          }));
-                          setSelectedInvId(opt.invId ?? null);
-                          setEmailOpen(false);
-                        }}
-                        title="Disponible en inventario"
-                      >
-                        <span className="truncate">{opt.email}</span>
-                        <span className="text-[10px] px-1.5 py-[1px] rounded-full border border-emerald-300 text-emerald-300">
-                          INV
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <h3 className="font-semibold text-neutral-100">Compra #{idx + 1}</h3>
+                  {orders.length > 1 && (
+                    <button
+                      type="button"
+                      className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800"
+                      onClick={() => {
+                        setOrders((prev) => prev.filter((_, i) => i !== idx));
+                        setSelectedInvIdByIdx((p) => p.filter((_, i) => i !== idx));
+                        setEmailOptsByIdx((p) => p.filter((_, i) => i !== idx));
+                        setEmailErrorByIdx((p) => p.filter((_, i) => i !== idx));
+                        setIsInvLoadingByIdx((p) => p.filter((_, i) => i !== idx));
+                        if (emailOpenIdx === idx) setEmailOpenIdx(null);
+                      }}
+                    >
+                      Quitar
+                    </button>
+                  )}
                 </div>
-              )}
 
-              <div className="mt-1 text-xs">
-                {isInvLoading && (
-                  <span className="text-neutral-400">Cargando inventario…</span>
-                )}
-                {!isInvLoading && emailError && (
-                  <span className="text-red-300">Error: {emailError}</span>
-                )}
-                {!isInvLoading && !emailError && selectedInvId != null && (
-                  <span className="text-emerald-300">
-                    Correo tomado del inventario.
-                  </span>
-                )}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {/* Plataforma */}
+                  <div>
+                    <div className="mb-1 flex items-center justify-between">
+                      <label htmlFor={`plataforma-${idx}`} className="block text-sm text-neutral-300">
+                        Plataforma <span className="text-red-600">*</span>
+                      </label>
+                      {lastPlatformId && (
+                        <span className="text-xs text-neutral-400">Última usada: #{lastPlatformId}</span>
+                      )}
+                    </div>
+                    <select
+                      id={`plataforma-${idx}`}
+                      className={[
+                        "w-full rounded-lg px-3 py-2",
+                        "border border-neutral-700 bg-neutral-900 text-neutral-100",
+                        "outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500",
+                        "[&>option]:bg-neutral-900 [&>option]:text-neutral-100",
+                      ].join(" ")}
+                      value={o.plataforma_id ? String(o.plataforma_id) : ""}
+                      onChange={(e) => {
+                        const newId = Number(e.target.value);
+                        setOrder(idx, {
+                          plataforma_id: newId,
+                          correo: "",
+                          contrasena: !o.contrasena && isYouTube(newId) ? "youtube" : o.contrasena,
+                        });
+                      }}
+                      required
+                      disabled={platLoading || !!platError}
+                    >
+                      <option value="" disabled>
+                        {platLoading
+                          ? "Cargando…"
+                          : platError
+                          ? "Error al cargar"
+                          : "Selecciona una plataforma"}
+                      </option>
+                      {plataformasOrdered.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Correo + sugerencias */}
+                  <div className="relative">
+                    <Field
+                      label="Correo *"
+                      type="email"
+                      placeholder="correo@dominio.com"
+                      value={o.correo}
+                      onChange={(v) => setOrder(idx, { correo: v })}
+                      onFocus={() => openEmailForIdx(idx)}
+                      onBlur={closeEmailDropdown}
+                      required
+                      inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+                    />
+
+                    {emailOpenIdx === idx && (emailOptsByIdx[idx]?.length ?? 0) > 0 && (
+                      <div className="absolute left-0 right-0 z-10 mt-1 rounded-lg border border-neutral-700 bg-neutral-900 text-sm text-neutral-100 shadow-lg">
+                        <ul className="max-h-56 overflow-auto">
+                          {emailOptsByIdx[idx].map((opt) => (
+                            <li
+                              key={`${opt.invId ?? "x"}:${opt.email}`}
+                              className="cursor-pointer px-3 py-2 flex items-center justify-between hover:bg-neutral-800"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setOrder(idx, {
+                                  correo: opt.email,
+                                  contrasena: o.contrasena || (opt.invClave ?? ""),
+                                });
+                                setSelectedInvIdByIdx((p) => {
+                                  const a = [...p];
+                                  a[idx] = opt.invId ?? null;
+                                  return a;
+                                });
+                                setEmailOpenIdx(null);
+                              }}
+                              title="Disponible en inventario"
+                            >
+                              <span className="truncate">{opt.email}</span>
+                              <span className="text-[10px] px-1.5 py-[1px] rounded-full border border-emerald-300 text-emerald-300">
+                                INV
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    <div className="mt-1 text-xs">
+                      {isInvLoadingByIdx[idx] && (
+                        <span className="text-neutral-400">Cargando inventario…</span>
+                      )}
+                      {!isInvLoadingByIdx[idx] && emailErrorByIdx[idx] && (
+                        <span className="text-red-300">Error: {emailErrorByIdx[idx]}</span>
+                      )}
+                      {!isInvLoadingByIdx[idx] &&
+                        !emailErrorByIdx[idx] &&
+                        selectedInvIdByIdx[idx] != null && (
+                          <span className="text-emerald-300">Correo tomado del inventario.</span>
+                        )}
+                    </div>
+                  </div>
+
+                  {/* Contraseña */}
+                  <Field
+                    label="Contraseña *"
+                    type="text"
+                    placeholder="Contraseña"
+                    value={o.contrasena}
+                    onChange={(v) => setOrder(idx, { contrasena: v })}
+                    required
+                    inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+                  />
+
+                  <Field
+                    label="Proveedor"
+                    placeholder="Opcional"
+                    value={o.proveedor}
+                    onChange={(v) => setOrder(idx, { proveedor: v })}
+                    inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+                  />
+
+                  <Field
+                    label="Fecha de compra *"
+                    type="date"
+                    value={o.fecha_compra}
+                    onChange={(v) => setOrder(idx, { fecha_compra: v })}
+                    required
+                    onMouseDown={(e) => {
+                      const el = e.currentTarget;
+                      if (el.showPicker && document.activeElement !== el) {
+                        requestAnimationFrame(() => el.showPicker());
+                      }
+                    }}
+                    inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-text"
+                  />
+
+                  <Field
+                    label="Fecha de vencimiento (auto) *"
+                    type="date"
+                    value={o.fecha_vencimiento}
+                    onChange={() => {}}
+                    disabled
+                    required
+                    inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-not-allowed opacity-80"
+                  />
+
+                  <Field
+                    label="Meses pagados *"
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    step={1}
+                    placeholder="Ej. 3"
+                    value={String(o.meses_pagados)}
+                    onChange={(v) => {
+                      const n = v === "" ? NaN : Number(v);
+                      setOrder(idx, {
+                        meses_pagados: Number.isNaN(n) ? (1 as any) : Math.max(1, Math.trunc(n)),
+                      });
+                    }}
+                    required
+                    inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+                  />
+
+                  {/* Totales */}
+                  <Field
+                    label="Total pagado"
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={o.total_pagado}
+                    onChange={(v) => setOrder(idx, { total_pagado: v })}
+                    inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+                  />
+
+                  <Field
+                    label="Total pagado proveedor (opcional)"
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={o.total_pagado_proveedor}
+                    onChange={(v) => setOrder(idx, { total_pagado_proveedor: v })}
+                    inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+                  />
+
+                  <Field
+                    label="Total ganado (auto)"
+                    type="text"
+                    value={totalGanadoPreviewByIdx[idx] ?? ""}
+                    onChange={() => {}}
+                    disabled
+                    inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-not-allowed opacity-80"
+                  />
+
+                  <Field
+                    label="Estado"
+                    placeholder='Ej. "ACTIVA", "PAUSADA"…'
+                    value={o.estado}
+                    onChange={(v) => setOrder(idx, { estado: v })}
+                    inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+                  />
+
+                  <TextArea
+                    className="sm:col-span-2"
+                    label="Comentario"
+                    placeholder="Notas adicionales"
+                    value={o.comentario}
+                    onChange={(v) => setOrder(idx, { comentario: v })}
+                  />
+                </div>
               </div>
-            </div>
-
-            {/* Contraseña SIEMPRE VISIBLE */}
-            <Field
-              label="Contraseña *"
-              type="text"
-              placeholder="Contraseña"
-              value={form.contrasena}
-              onChange={(v) => setForm((s) => ({ ...s, contrasena: v }))}
-              required
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-            />
-
-            <Field
-              label="Proveedor"
-              placeholder="Opcional"
-              value={form.proveedor}
-              onChange={(v) => setForm((s) => ({ ...s, proveedor: v }))}
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-            />
-            <Field
-              label="Fecha de compra *"
-              type="date"
-              value={form.fecha_compra}
-              onChange={(v) => setForm((s) => ({ ...s, fecha_compra: v }))}
-              required
-              onMouseDown={(e) => {
-                const el = e.currentTarget;
-                // Solo si el input NO está enfocado aún → abre el picker
-                if (el.showPicker && document.activeElement !== el) {
-                  // No hacemos preventDefault para no bloquear el foco/teclado
-                  // Abrimos justo después de que el input reciba foco
-                  requestAnimationFrame(() => el.showPicker());
-                }
-              }}
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-text"
-            />
-            <Field
-              label="Fecha de vencimiento (auto) *"
-              type="date"
-              value={form.fecha_vencimiento}
-              onChange={() => {}}
-              disabled
-              required
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-not-allowed opacity-80"
-            />
-
-            <Field
-              label="Meses pagados *"
-              type="number"
-              inputMode="numeric"
-              min={1}
-              step={1}
-              placeholder="Ej. 3"
-              value={String(form.meses_pagados)}
-              onChange={(v) => {
-                const n = v === "" ? NaN : Number(v);
-                setForm((s) => ({
-                  ...s,
-                  meses_pagados: Number.isNaN(n)
-                    ? (1 as any)
-                    : Math.max(1, Math.trunc(n)),
-                }));
-              }}
-              required
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-            />
-
-            {/* Totales */}
-            <Field
-              label="Total pagado"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
-              value={form.total_pagado}
-              onChange={(v) => setForm((s) => ({ ...s, total_pagado: v }))}
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-            />
-            <Field
-              label="Total pagado proveedor (opcional)"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
-              value={form.total_pagado_proveedor}
-              onChange={(v) =>
-                setForm((s) => ({ ...s, total_pagado_proveedor: v }))
-              }
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-            />
-            <Field
-              label="Total ganado (auto)"
-              type="text"
-              value={totalGanadoPreview}
-              onChange={() => {}}
-              disabled
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-not-allowed opacity-80"
-            />
-
-            <Field
-              label="Estado"
-              placeholder='Ej. "ACTIVA", "PAUSADA"…'
-              value={form.estado}
-              onChange={(v) => setForm((s) => ({ ...s, estado: v }))}
-              inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-            />
-
-            <TextArea
-              className="sm:col-span-2"
-              label="Comentario"
-              placeholder="Notas adicionales"
-              value={form.comentario}
-              onChange={(v) => setForm((s) => ({ ...s, comentario: v }))}
-            />
+            ))}
           </div>
         </section>
 
@@ -1129,6 +1369,7 @@ export default function FormCuentaCompletas() {
           >
             {loading ? "Procesando…" : "Guardar"}
           </button>
+
           <button
             type="button"
             onClick={() => {
@@ -1139,26 +1380,17 @@ export default function FormCuentaCompletas() {
                   : null;
               const lastId = stored ? Number(stored) : NaN;
               const nextPlat =
-                Number.isFinite(lastId) && lastId > 0
-                  ? lastId
-                  : plataformasOrdered[0]?.id ?? 0;
-              setForm({
-                contacto: "",
-                nombre: "",
-                plataforma_id: nextPlat,
-                correo: "",
-                contrasena: isYouTube(nextPlat) ? "youtube" : "",
-                proveedor: "",
-                fecha_compra: base,
-                fecha_vencimiento: addMonthsLocal(base, 1),
-                meses_pagados: 1,
-                total_pagado: "",
-                total_pagado_proveedor: "",
-                estado: "ACTIVA",
-                comentario: "",
-              });
-              setSelectedInvId(null);
-              setEmailOpts([]);
+                Number.isFinite(lastId) && lastId > 0 ? lastId : plataformasOrdered[0]?.id ?? 0;
+
+              setUser({ contacto: "", nombre: "" });
+              setOrders([makeEmptyOrder(nextPlat)]);
+
+              setEmailOpenIdx(null);
+              setEmailOptsByIdx([]);
+              setEmailErrorByIdx([]);
+              setIsInvLoadingByIdx([]);
+              setSelectedInvIdByIdx([]);
+
               setNombreDirty(false);
               lastContactoRef.current = "";
             }}
@@ -1171,6 +1403,7 @@ export default function FormCuentaCompletas() {
         {okMsg && <p className="text-green-700 text-sm">{okMsg}</p>}
         {errMsg && <p className="text-red-600 text-sm">Error: {errMsg}</p>}
       </form>
+
       {/* ===== Modal ===== */}
       {confirmOpen && (
         <div
@@ -1181,10 +1414,12 @@ export default function FormCuentaCompletas() {
           aria-labelledby="confirm-title"
         >
           <div
+            ref={modalBoxRef}
             className="w-full max-w-4xl rounded-2xl border border-neutral-700 bg-neutral-900 text-neutral-100 shadow-2xl
-                        max-h-[90vh] grid grid-rows-[auto_auto_1fr_auto]"
+                      max-h-[90vh] grid grid-rows-[auto_auto_1fr_auto]"
             onClick={(e) => e.stopPropagation()}
           >
+
             {/* Header */}
             <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -1196,7 +1431,7 @@ export default function FormCuentaCompletas() {
                     Confirmar datos a guardar
                   </h3>
                   <p className="text-xs text-neutral-400">
-                    Revisa el contenido antes de continuar. Se enviará tal cual.
+                    Se enviará tal cual. (Se guardan todas las compras en una sola acción)
                   </p>
                 </div>
               </div>
@@ -1257,7 +1492,7 @@ export default function FormCuentaCompletas() {
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement("a");
                     a.href = url;
-                    a.download = "cuenta.json";
+                    a.download = "cuentas.json";
                     a.click();
                     URL.revokeObjectURL(url);
                   }}
@@ -1268,181 +1503,38 @@ export default function FormCuentaCompletas() {
             </div>
 
             {/* Contenido (scrollable) */}
-            <div className="p-5 overflow-y-auto min-w-0">
+            <div ref={modalScrollRef} className="p-5 overflow-y-auto min-w-0">
               {confirmView === "resumen" ? (
-                <>
-                  {/* === Ticket para el cliente === */}
-                  <div className="rounded-xl border border-emerald-800/50 bg-emerald-950/30 p-4 mb-4">
-                    <div className="flex items-center justify-between gap-3 mb-2">
-                      <h4 className="font-semibold text-sm text-emerald-300">
-                        Datos para entregar al cliente
-                      </h4>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          className="text-xs px-2 py-1 rounded-md border border-emerald-700/70 hover:bg-emerald-900/40"
-                          onClick={() => {
-                            const txt = buildHandoffFullCC(
-                              confirmPayload,
-                              plataformaMap,
-                              form
-                            );
-                            navigator.clipboard?.writeText?.(txt);
-                          }}
-                        >
-                          Copiar
-                        </button>
-                        <button
-                          type="button"
-                          className="text-xs px-2 py-1 rounded-md border border-neutral-700 hover:bg-neutral-800"
-                          onClick={() => {
-                            const txt = buildHandoffFullCC(
-                              confirmPayload,
-                              plataformaMap,
-                              form
-                            );
-                            const blob = new Blob([txt], {
-                              type: "text/plain;charset=utf-8",
-                            });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement("a");
-                            a.href = url;
-                            a.download = "ticket_cliente.txt";
-                            a.click();
-                            URL.revokeObjectURL(url);
-                          }}
-                        >
-                          Descargar
-                        </button>
-                      </div>
-                    </div>
+              <div className="grid gap-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="font-semibold text-sm text-neutral-200">
+                    Ticket del pedido completo
+                  </h4>
 
-                    <pre
-                      className="whitespace-pre-wrap break-words text-sm font-mono bg-neutral-950/70 border border-neutral-800 rounded-lg p-3
-                                  text-left max-h-56 md:max-h-72 overflow-auto"
-                    >
-                      {buildHandoffFullCC(confirmPayload, plataformaMap, form)}
-                    </pre>
-                  </div>
+                  <button
+                    type="button"
+                    className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800"
+                    onClick={() => {
+                      const txt = buildPedidoResumenFullCC(confirmPayload, plataformaMap, confirmOrders);
+                      navigator.clipboard?.writeText?.(txt);
+                    }}
+                  >
+                    Copiar ticket
+                  </button>
+                </div>
 
-                  {/* === Resumen técnico === */}
-                  <div className="grid gap-4 md:grid-cols-2 min-w-0">
-                    {/* Usuario */}
-                    <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 space-y-3 min-w-0">
-                      <h4 className="font-medium text-sm text-neutral-300 mb-1">
-                        Datos del usuario
-                      </h4>
-                      <dl className="grid grid-cols-[140px_1fr] text-sm gap-y-2">
-                        <dt className="text-neutral-400">Contacto</dt>
-                        <dd className="font-medium break-words">
-                          {confirmPayload?.contacto || "—"}
-                        </dd>
-                        <dt className="text-neutral-400">Nombre</dt>
-                        <dd className="font-medium break-words">
-                          {confirmPayload?.nombre || "—"}{" "}
-                          {(!confirmPayload?.nombre ||
-                            confirmPayload?.nombre === "") && (
-                            <span className="text-[10px] px-2 py-[2px] rounded-full border border-neutral-500 text-neutral-300">
-                              opcional
-                            </span>
-                          )}
-                        </dd>
-                        <dt className="text-neutral-400">Estado</dt>
-                        <dd className="font-medium">
-                          {confirmPayload?.estado || "—"}
-                        </dd>
-                      </dl>
-                    </div>
+                <pre className="whitespace-pre-wrap break-words text-sm font-mono bg-neutral-950/70 border border-neutral-800 rounded-lg p-3 overflow-auto">
+                  {buildPedidoResumenFullCC(confirmPayload, plataformaMap, confirmOrders)}
+                </pre>
 
-                    {/* Cuenta / Plataforma */}
-                    <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4 space-y-3 min-w-0">
-                      <h4 className="font-medium text-sm text-neutral-300 mb-1">
-                        Cuenta y plataforma
-                      </h4>
-                      <dl className="grid grid-cols-[140px_1fr] text-sm gap-y-2">
-                        <dt className="text-neutral-400">Plataforma</dt>
-                        <dd className="font-semibold break-words">
-                          {plataformaMap.get(confirmPayload?.plataforma_id) ??
-                            `#${confirmPayload?.plataforma_id ?? "—"}`}
-                        </dd>
-                        <dt className="text-neutral-400">Correo</dt>
-                        <dd className="font-medium break-words">
-                          {confirmPayload?.correo || "—"}
-                        </dd>
-                        <dt className="text-neutral-400">Contraseña</dt>
-                        <dd className="font-mono break-words">
-                          {confirmPayload?.contrasena || "—"}
-                        </dd>
-                        <dt className="text-neutral-400">Proveedor</dt>
-                        <dd className="font-medium break-words">
-                          {confirmPayload?.proveedor || "—"}
-                        </dd>
-                        <dt className="text-neutral-400">Compra</dt>
-                        <dd className="font-medium">
-                          {confirmPayload?.fecha_compra || "—"}
-                        </dd>
-                        <dt className="text-neutral-400">Vencimiento</dt>
-                        <dd className="font-medium">
-                          {confirmPayload?.fecha_vencimiento || "—"}
-                        </dd>
-                        <dt className="text-neutral-400">Meses pagados</dt>
-                        <dd className="font-medium">
-                          {confirmPayload?.meses_pagados ?? "—"}
-                        </dd>
-                      </dl>
-                    </div>
-
-                    {/* Totales */}
-                    <div className="md:col-span-2 rounded-xl border border-neutral-800 bg-neutral-950 p-4 min-w-0">
-                      <h4 className="font-medium text-sm text-neutral-300 mb-2">
-                        Totales
-                      </h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="rounded-lg border border-neutral-800 p-3">
-                          <div className="text-xs text-neutral-400">
-                            Total pagado
-                          </div>
-                          <div className="text-lg font-semibold">
-                            {toMoney(confirmPayload?.total_pagado)}
-                          </div>
-                        </div>
-                        <div className="rounded-lg border border-neutral-800 p-3">
-                          <div className="text-xs text-neutral-400">
-                            Pagado proveedor
-                          </div>
-                          <div className="text-lg font-semibold">
-                            {toMoney(confirmPayload?.total_pagado_proveedor)}
-                          </div>
-                        </div>
-                        <div className="rounded-lg border border-neutral-800 p-3">
-                          <div className="text-xs text-neutral-400">
-                            Total ganado
-                          </div>
-                          <div className="text-lg font-semibold">
-                            {toMoney(confirmPayload?.total_ganado)}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Comentario */}
-                    <div className="md:col-span-2 rounded-xl border border-neutral-800 bg-neutral-950 p-4 min-w-0">
-                      <h4 className="font-medium text-sm text-neutral-300 mb-2">
-                        Comentario
-                      </h4>
-                      <div className="text-sm whitespace-pre-wrap">
-                        {confirmPayload?.comentario || (
-                          <span className="opacity-70">—</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </>
-              ) : (
+                <div className="text-xs text-neutral-400">
+                  {Array.isArray(confirmPayload) ? `${confirmPayload.length} item(s)` : "—"}
+                </div>
+              </div>
+            ) : (
                 <div>
                   <p className="text-sm text-neutral-300 mb-2">
-                    Puedes editar el texto antes de confirmar. Se enviará
-                    exactamente este JSON.
+                    Puedes editar el texto antes de confirmar. Se enviará exactamente este JSON.
                   </p>
                   <textarea
                     className="w-full h-96 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-100 font-mono text-sm p-3"

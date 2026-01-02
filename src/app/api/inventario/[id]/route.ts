@@ -55,15 +55,26 @@ export async function PATCH(
 
 /* ---------- DELETE ---------- */
 export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } }
+  req: Request,
+  ctx: { params: Promise<{ id: string }> } // 👈 params ahora es async
 ) {
   try {
-    const id = Number(params.id);
-    await prisma.inventario.delete({ where: { id } });
+    const { id } = await ctx.params; // 👈 OBLIGATORIO en tu versión de Next
+    const idNum = Number(id);
+
+    if (!Number.isFinite(idNum)) {
+      return NextResponse.json({ error: "validation", detail: "id inválido" }, { status: 400 });
+    }
+
+    // 👇 IMPORTANTÍSIMO: no revienta si ya se borró antes
+    await prisma.inventario.deleteMany({ where: { id: idNum } });
+
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (e: any) {
-    console.error('DELETE /api/inventario/[id]', e);
-    return NextResponse.json({ error: 'server_error' }, { status: 500 });
+    console.error("DELETE /api/inventario/[id]", e);
+    return NextResponse.json(
+      { error: "server_error", detail: e?.message ?? "Error" },
+      { status: 500 }
+    );
   }
 }

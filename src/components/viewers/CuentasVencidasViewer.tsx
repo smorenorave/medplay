@@ -254,77 +254,28 @@ async function fetchPantallasAll(): Promise<Pantalla[]> {
 }
 
 async function fetchCuentas(): Promise<Cuenta[]> {
-  const T = today();
-  const T1 = tomorrow();
+  const out = await pagedFetch(
+    `${CUENTAS_BASE}?vencidas=1&limit=500&hoy=${today()}&manana=${tomorrow()}`
+  );
 
-  const trySpec = async () => {
-    try {
-      const out = await pagedFetch(`${CUENTAS_BASE}?vencidas=1&limit=500`);
-      return out as Cuenta[];
-    } catch {
-      return null;
-    }
-  };
-
-  const vencidas = await trySpec();
-  const todas = await pagedFetch(`${CUENTAS_BASE}?limit=500`);
-
-  const arr = (
-    vencidas
-      ? [
-          ...vencidas,
-          ...todas.filter(
-            (r: any) => r.fecha_vencimiento === T || r.fecha_vencimiento === T1
-          ),
-        ]
-      : todas.filter(
-          (r: any) =>
-            isYYYYMMDD(r.fecha_vencimiento) &&
-            (r.fecha_vencimiento! < T ||
-              r.fecha_vencimiento === T ||
-              r.fecha_vencimiento === T1)
-        )
-  ) as any[];
-
-  return arr.map((r) => ({ ...r, tipo: "cuenta" as const }));
+  return (out as any[]).map((r) => ({
+    ...r,
+    tipo: "cuenta" as const,
+  }));
 }
 
+
 async function fetchPantallas(): Promise<Pantalla[]> {
-  const T = today();
-  const T1 = tomorrow();
+  const out = await pagedFetch(
+    `${PANTALLAS_BASE}?vencidas=1&limit=500&hoy=${today()}&manana=${tomorrow()}`
+  );
 
-  const trySpec = async () => {
-    try {
-      const out = await pagedFetch(`${PANTALLAS_BASE}?vencidas=1&limit=500`);
-      return out as Pantalla[];
-    } catch {
-      return null;
-    }
-  };
-
-  const vencidas = await trySpec();
-  const todas = await pagedFetch(`${PANTALLAS_BASE}?limit=500`);
-
-  const base = vencidas
-    ? [
-        ...vencidas,
-        ...todas.filter(
-          (r: any) => r.fecha_vencimiento === T || r.fecha_vencimiento === T1
-        ),
-      ]
-    : todas.filter(
-        (r: any) =>
-          isYYYYMMDD(r.fecha_vencimiento) &&
-          (r.fecha_vencimiento! < T ||
-            r.fecha_vencimiento === T ||
-            r.fecha_vencimiento === T1)
-      );
-
-  return base.map((r: any) => ({
+  return (out as any[]).map((r) => ({
     ...r,
     tipo: "pantalla" as const,
   }));
 }
+
 
 async function fetchVencidasHoyManana(): Promise<Registro[]> {
   const [cuentas, pantallas] = await Promise.all([
@@ -361,6 +312,49 @@ export default function CuentasPantallasVencidasPage() {
       return cached && typeof cached === "object" ? cached : {};
     }
   );
+
+    // Añadir manualmente a la cola
+  const [manualEmails, setManualEmails] = useState("");
+  const [manualPw, setManualPw] = useState("");
+
+  const splitEmails = (raw: string) =>
+    raw
+      .split(/[\s,;]+/g) // separa por espacios, comas o ;
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+
+  const isValidEmail = (email: string) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  const addManualToQueue = () => {
+    const emails = splitEmails(manualEmails);
+    const pw = (manualPw || "").trim();
+
+    if (emails.length === 0) {
+      alert("Escribe al menos un correo.");
+      return;
+    }
+    if (!pw) {
+      alert("Escribe la nueva clave.");
+      return;
+    }
+
+    const invalid = emails.filter((e) => !isValidEmail(e));
+    if (invalid.length > 0) {
+      alert(`Correos inválidos:\n${invalid.slice(0, 10).join("\n")}${invalid.length > 10 ? "\n…" : ""}`);
+      return;
+    }
+
+    setPwNewByEmail((prev) => {
+      const next = { ...prev };
+      for (const e of emails) next[e] = pw; // si existe, actualiza clave
+      return next;
+    });
+
+    setManualEmails("");
+    setManualPw("");
+  };
+
   const [notifying, setNotifying] = useState(false);
 
   // Persistir cambios de la cola en la caché diaria
@@ -1182,6 +1176,43 @@ export default function CuentasPantallasVencidasPage() {
             </button>
           </div>
         </div>
+                {/* Añadir manualmente */}
+        <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-3">
+          <div className="text-sm font-semibold text-neutral-200 mb-2">
+            Añadir correos manualmente a la cola
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              value={manualEmails}
+              onChange={(e) => setManualEmails(e.target.value)}
+              placeholder="Correo(s): uno o varios (separados por coma/espacio/salto de línea)…"
+              className="flex-1 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600"
+            />
+            <input
+              value={manualPw}
+              onChange={(e) => setManualPw(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") addManualToQueue();
+              }}
+              placeholder="Nueva clave…"
+              className="sm:w-64 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600"
+            />
+            <button
+              type="button"
+              onClick={addManualToQueue}
+              className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
+              title="Añadir a la cola de notificación"
+            >
+              Añadir
+            </button>
+          </div>
+
+          <div className="mt-2 text-xs text-neutral-400">
+            Tip: puedes pegar varios correos separados por comas, espacios o saltos de línea.
+          </div>
+        </div>
+
 
         <div className="flex flex-col gap-2">
           {pwChangedEmails.length === 0 ? (
