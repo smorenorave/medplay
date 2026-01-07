@@ -2,6 +2,8 @@
 
 import { useState, Suspense, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
+import FloatingTimer from "@/components/FloatingTimer";
+import WorkTimers from "@/components/WorkTimers";
 
 /* ===== Lazy components ===== */
 const CuentasCompletasViewer = dynamic(
@@ -30,13 +32,10 @@ const FormPantalla = dynamic<{
   ssr: false,
   loading: () => <SkeletonForm />,
 });
-const CuentasVencidasViewer = dynamic<{
-  prefillContacto?: string;
-  prefillNombre?: string;
-}>(() => import("@/components/viewers/CuentasVencidasViewer"), {
-  ssr: false,
-  loading: () => <SkeletonForm />,
-});
+const CuentasVencidasViewer = dynamic(
+  () => import("@/components/viewers/CuentasVencidasViewer"),
+  { ssr: false, loading: () => <SkeletonForm /> }
+);
 
 /* ===== Tipos ===== */
 type Vista =
@@ -48,18 +47,15 @@ type Vista =
   | "ver-pantalla"
   | "ver-usuarios-plataformas";
 
-/* =========================================================
- * Página: SOLO maneja autenticación + pings de actividad
- * ======================================================= */
+/* ========================================================= */
 export default function Page() {
   const [autenticado, setAutenticado] = useState(false);
   const [usuario, setUsuario] = useState("");
   const [clave, setClave] = useState("");
   const [error, setError] = useState("");
   const [loadingLogin, setLoadingLogin] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true); // 👈 DENTRO del componente
+  const [checkingSession, setCheckingSession] = useState(true);
 
-  // ✅ Comprobar si ya hay sesión al cargar (valida JWT en servidor)
   useEffect(() => {
     const check = async () => {
       try {
@@ -74,7 +70,6 @@ export default function Page() {
     check();
   }, []);
 
-  // Llamada al router /api/admin/login (cookies HTTP-only las setea el server)
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -100,7 +95,6 @@ export default function Page() {
     }
   };
 
-  // Logout: borra cookies en backend y limpia estado local
   const handleLogout = async () => {
     try {
       await fetch("/api/admin/logout", { method: "POST" });
@@ -108,7 +102,6 @@ export default function Page() {
     setAutenticado(false);
   };
 
-  // Pings de actividad (debounced) para renovar lastActivity
   useEffect(() => {
     if (!autenticado) return;
 
@@ -132,10 +125,8 @@ export default function Page() {
     ] as const;
 
     events.forEach((ev) => window.addEventListener(ev, ping));
-    // primer ping al montar (usuario activo)
     ping();
 
-    // Heartbeat opcional cada 10 min si la pestaña está visible
     const heartbeat = setInterval(() => {
       if (document.visibilityState === "visible") {
         fetch("/api/session/ping", { method: "POST" }).catch(() => {});
@@ -149,18 +140,14 @@ export default function Page() {
     };
   }, [autenticado]);
 
-  // Loader mientras valida sesión (evita flash del login)
   if (checkingSession) {
     return (
       <main className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
-        <p className="text-gray-600 dark:text-gray-400">
-          Verificando sesión...
-        </p>
+        <p className="text-gray-600 dark:text-gray-400">Verificando sesión...</p>
       </main>
     );
   }
 
-  // Render: o login o dashboard (hooks separados)
   if (!autenticado) {
     return (
       <main className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
@@ -202,14 +189,35 @@ export default function Page() {
   return <DashboardApp onLogout={handleLogout} />;
 }
 
-/* =========================================================
- * Subcomponente: Dashboard (sus propios hooks, orden estable)
- * ======================================================= */
+function readMsFromStorage(key: string) {
+  if (typeof window === "undefined") return 0;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return 0;
+    const s = JSON.parse(raw);
+    return Number(s.elapsedMs || 0);
+  } catch {
+    return 0;
+  }
+}
+
+
+/* ========================================================= */
 function DashboardApp({ onLogout }: { onLogout: () => void }) {
   const [vista, setVista] = useState<Vista>("none");
   const [contacto] = useState("");
   const [nombre] = useState("");
   const panelRef = useRef<HTMLElement | null>(null);
+
+  // abierto por defecto + recuerda
+  const [timerOpen, setTimerOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("timer_open") !== "0";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("timer_open", timerOpen ? "1" : "0");
+  }, [timerOpen]);
 
   const handleSetVista = (next: Vista) => {
     setVista(next);
@@ -225,23 +233,27 @@ function DashboardApp({ onLogout }: { onLogout: () => void }) {
 
       <header className="mb-2 flex items-center justify-between">
         <div>
-          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight">
-            MEDPLAY
-          </h1>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            Elige una acción:
-          </p>
+          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight">MEDPLAY</h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Elige una acción:</p>
         </div>
 
-        <button
-          onClick={onLogout}
-          className="rounded-xl px-4 py-2 text-sm font-medium bg-white/60 dark:bg-white/10 text-gray-900 dark:text-gray-100 ring-1 ring-inset ring-black/10 dark:ring-white/10 hover:bg-white/80 dark:hover:bg-white/15"
-        >
-          Cerrar sesión
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setTimerOpen(true)}
+            className="rounded-xl px-4 py-2 text-sm font-medium bg-white/60 dark:bg-white/10 text-gray-900 dark:text-gray-100 ring-1 ring-inset ring-black/10 dark:ring-white/10 hover:bg-white/80 dark:hover:bg-white/15"
+          >
+            Abrir cronómetro
+          </button>
+
+          <button
+            onClick={onLogout}
+            className="rounded-xl px-4 py-2 text-sm font-medium bg-white/60 dark:bg-white/10 text-gray-900 dark:text-gray-100 ring-1 ring-inset ring-black/10 dark:ring-white/10 hover:bg-white/80 dark:hover:bg-white/15"
+          >
+            Cerrar sesión
+          </button>
+        </div>
       </header>
 
-      {/* Botonera */}
       <section className="rounded-2xl border border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-md shadow-sm p-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <Btn onClick={() => handleSetVista("registrar-cc")} full>
@@ -265,7 +277,6 @@ function DashboardApp({ onLogout }: { onLogout: () => void }) {
         </div>
       </section>
 
-      {/* Panel dinámico */}
       <section
         ref={panelRef}
         id="action-panel"
@@ -282,13 +293,8 @@ function DashboardApp({ onLogout }: { onLogout: () => void }) {
 
           {vista === "registrar-cc" && (
             <div className="space-y-4">
-              <h2 className="text-xl font-semibold">
-                Registrar Cuenta Completa
-              </h2>
-              <FormCuentaCompleta
-                prefillContacto={contacto}
-                prefillNombre={nombre}
-              />
+              <h2 className="text-xl font-semibold">Registrar Cuenta Completa</h2>
+              <FormCuentaCompleta prefillContacto={contacto} prefillNombre={nombre} />
             </div>
           )}
 
@@ -310,9 +316,7 @@ function DashboardApp({ onLogout }: { onLogout: () => void }) {
 
           {vista === "ver-cc" && (
             <div className="space-y-4">
-              <h2 className="text-xl font-semibold">
-                Ver/Editar Cuentas Completas
-              </h2>
+              <h2 className="text-xl font-semibold">Ver/Editar Cuentas Completas</h2>
               <div className="-mx-3 md:-mx-5">
                 <CuentasCompletasViewer />
               </div>
@@ -330,9 +334,7 @@ function DashboardApp({ onLogout }: { onLogout: () => void }) {
 
           {vista === "ver-usuarios-plataformas" && (
             <div className="space-y-4">
-              <h2 className="text-xl font-semibold">
-                Usuarios/Plataformas/Inventario
-              </h2>
+              <h2 className="text-xl font-semibold">Usuarios/Plataformas/Inventario</h2>
               <div className="-mx-3 md:-mx-5">
                 <PlataformaViewer />
               </div>
@@ -340,6 +342,22 @@ function DashboardApp({ onLogout }: { onLogout: () => void }) {
           )}
         </Suspense>
       </section>
+
+      {/* POPUP DEL CRONÓMETRO */}
+      <FloatingTimer
+  open={timerOpen}
+  onOpen={() => setTimerOpen(true)}
+  onClose={() => setTimerOpen(false)}
+  title="Cronómetros (Bogotá)"
+>
+  <WorkTimers
+    tickMs={500}
+    persistKey="medplay_worktimers_v1"
+    timezone="America/Bogota"
+    extraLabel="Actividad en la tienda"
+  />
+</FloatingTimer>
+
     </main>
   );
 }
