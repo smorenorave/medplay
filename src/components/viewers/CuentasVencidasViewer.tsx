@@ -205,19 +205,18 @@ async function pagedFetch(baseUrl: string) {
   const out: any[] = [];
   let cursor: string | null = null;
   for (let i = 0; i < 50; i++) {
-    const url = `${baseUrl}${
-      cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""
-    }`;
+    const url = `${baseUrl}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""
+      }`;
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw new Error(`GET ${baseUrl} -> ${res.status}`);
     const j: any = await res.json();
     const items: any[] = Array.isArray(j?.items)
       ? j.items
       : Array.isArray(j?.data)
-      ? j.data
-      : Array.isArray(j)
-      ? j
-      : [];
+        ? j.data
+        : Array.isArray(j)
+          ? j
+          : [];
     out.push(...items);
     const next =
       j?.nextCursor ??
@@ -306,16 +305,22 @@ export default function CuentasPantallasVencidasPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set()); // key = tipo:id
 
   // Cola notificación
-  const [pwNewByEmail, setPwNewByEmail] = useState<Record<string, string>>(
+  type PwQueueItem = {
+    pw: string;
+    plataforma_id?: number;
+  };
+
+  const [pwNewByEmail, setPwNewByEmail] = useState<Record<string, PwQueueItem>>(
     () => {
-      const cached = getDaily<Record<string, string>>(QUEUE_KEY);
+      const cached = getDaily<Record<string, PwQueueItem>>(QUEUE_KEY);
       return cached && typeof cached === "object" ? cached : {};
     }
   );
 
-    // Añadir manualmente a la cola
+  // Añadir manualmente a la cola
   const [manualEmails, setManualEmails] = useState("");
   const [manualPw, setManualPw] = useState("");
+  const [manualPlatform, setManualPlatform] = useState<number | "">("");
 
   const splitEmails = (raw: string) =>
     raw
@@ -338,6 +343,10 @@ export default function CuentasPantallasVencidasPage() {
       alert("Escribe la nueva clave.");
       return;
     }
+    if (!manualPlatform) {
+      alert("Selecciona la plataforma.");
+      return;
+    }
 
     const invalid = emails.filter((e) => !isValidEmail(e));
     if (invalid.length > 0) {
@@ -347,12 +356,18 @@ export default function CuentasPantallasVencidasPage() {
 
     setPwNewByEmail((prev) => {
       const next = { ...prev };
-      for (const e of emails) next[e] = pw; // si existe, actualiza clave
+      for (const e of emails) {
+        next[e] = {
+          pw,
+          plataforma_id: Number(manualPlatform),
+        };
+      }
       return next;
     });
 
     setManualEmails("");
     setManualPw("");
+    setManualPlatform("");
   };
 
   const [notifying, setNotifying] = useState(false);
@@ -362,7 +377,7 @@ export default function CuentasPantallasVencidasPage() {
     setDaily(QUEUE_KEY, pwNewByEmail);
     try {
       bcNotify?.postMessage({ t: "queue_update", at: Date.now() });
-    } catch {}
+    } catch { }
   }, [pwNewByEmail]);
 
   // Editar
@@ -494,7 +509,7 @@ export default function CuentasPantallasVencidasPage() {
         const msg = JSON.parse(e.newValue);
         if (msg.by === INSTANCE_ID) return;
         if (msg.t === "deleted") refreshSoon();
-      } catch {}
+      } catch { }
     };
     window.addEventListener("storage", onStorage);
 
@@ -511,9 +526,9 @@ export default function CuentasPantallasVencidasPage() {
       // si otra pestaña modificó la cola diaria -> reflejar aquí
       if (e.key === QUEUE_KEY) {
         try {
-          const v = getDaily<Record<string, string>>(QUEUE_KEY) || {};
+          const v = getDaily<Record<string, PwQueueItem>>(QUEUE_KEY) || {};
           setPwNewByEmail(v);
-        } catch {}
+        } catch { }
       }
       // si otra pestaña liberó el lock -> despejar estado local
       if (e.key === NOTIFY_LOCK_KEY && e.newValue === null) {
@@ -527,7 +542,7 @@ export default function CuentasPantallasVencidasPage() {
       if (msg.t === "notify_start") setNotifying(true);
       if (msg.t === "notify_done") setNotifying(false);
       if (msg.t === "queue_update") {
-        const v = getDaily<Record<string, string>>(QUEUE_KEY) || {};
+        const v = getDaily<Record<string, PwQueueItem>>(QUEUE_KEY) || {};
         setPwNewByEmail(v);
       }
     };
@@ -621,7 +636,7 @@ export default function CuentasPantallasVencidasPage() {
       (x) =>
         x.plataforma_id === r.plataforma_id &&
         (x.correo || "").trim().toLowerCase() ===
-          (r.correo || "").trim().toLowerCase()
+        (r.correo || "").trim().toLowerCase()
     ).length;
     return { isLast: remaining <= 1, remaining };
   }
@@ -678,7 +693,7 @@ export default function CuentasPantallasVencidasPage() {
         by: INSTANCE_ID,
         at: Date.now(),
       });
-    } catch {}
+    } catch { }
     try {
       localStorage.setItem(
         LS_BROADCAST_KEY,
@@ -689,7 +704,7 @@ export default function CuentasPantallasVencidasPage() {
           at: Date.now(),
         })
       );
-    } catch {}
+    } catch { }
   };
 
   const onAskDelete = async (r: Registro) => {
@@ -833,12 +848,34 @@ export default function CuentasPantallasVencidasPage() {
 
     // ----- Construcción de items (igual que antes) -----
     const items = Object.entries(pwNewByEmail).flatMap(
-      ([correoRaw, nuevaClave]) => {
+      ([correoRaw, data]) => {
         const correo = (correoRaw || "").trim().toLowerCase();
-        const clave = (nuevaClave || "").trim();
+        const clave =
+          typeof data === "string"
+            ? data
+            : (data?.pw || "").trim();
+        const manualPlat = data?.plataforma_id;
+
         if (!correo || !clave) return [];
+
+        // Si vino manual, usar esa plataforma directamente
+        if (manualPlat) {
+          return [
+            {
+              correo,
+              nuevaClave: clave,
+              plataforma_id: manualPlat,
+              plataforma_nombre: platformName(manualPlat),
+            },
+          ];
+        }
+
+        // Fallback: comportamiento actual por coincidencia de filas
         const plats = platByEmail.get(correo);
-        if (!plats || plats.size === 0) return [{ correo, nuevaClave: clave }];
+        if (!plats || plats.size === 0) {
+          return [{ correo, nuevaClave: clave }];
+        }
+
         return Array.from(plats).map((plataforma_id) => ({
           correo,
           nuevaClave: clave,
@@ -854,7 +891,7 @@ export default function CuentasPantallasVencidasPage() {
       try {
         localStorage.removeItem(NOTIFY_LOCK_KEY);
         bcNotify?.postMessage({ t: "notify_done", at: Date.now() });
-      } catch {}
+      } catch { }
       return;
     }
 
@@ -871,15 +908,14 @@ export default function CuentasPantallasVencidasPage() {
         throw new Error(j?.error || "No se pudo iniciar la notificación");
 
       alert(
-        `Notificación lanzada. PID: ${j?.pid ?? "—"}\nLog: ${
-          j?.logFile ?? "(servidor)"
+        `Notificación lanzada. PID: ${j?.pid ?? "—"}\nLog: ${j?.logFile ?? "(servidor)"
         }`
       );
       setPwNewByEmail({});
       setDaily(QUEUE_KEY, {}); // limpia local
       try {
         bcNotify?.postMessage({ t: "queue_update", at: Date.now() });
-      } catch {}
+      } catch { }
     } catch (e: any) {
       alert(e?.message ?? "Error al enviar notificaciones");
     } finally {
@@ -887,7 +923,7 @@ export default function CuentasPantallasVencidasPage() {
       try {
         localStorage.removeItem(NOTIFY_LOCK_KEY);
         bcNotify?.postMessage({ t: "notify_done", at: Date.now() });
-      } catch {}
+      } catch { }
     }
   };
 
@@ -940,8 +976,8 @@ export default function CuentasPantallasVencidasPage() {
           : null,
         fecha_vencimiento:
           edit.fecha_compra &&
-          edit.meses_pagados != null &&
-          isYYYYMMDD(edit.fecha_compra)
+            edit.meses_pagados != null &&
+            isYYYYMMDD(edit.fecha_compra)
             ? computedVencimiento
             : edit.fecha_vencimiento ?? null,
       };
@@ -961,31 +997,31 @@ export default function CuentasPantallasVencidasPage() {
       const merged: Registro[] = rows.map((r) =>
         `${r.tipo}:${r.id}` === `${edit.tipo}:${edit.id}`
           ? ({
-              ...r,
-              contacto: flat?.row?.contacto ?? edit.contacto ?? r.contacto,
-              nombre: flat?.row?.nombre ?? edit.nombre ?? r.nombre,
-              correo: flat?.row?.correo ?? edit.correo ?? r.correo,
-              estado: flat?.row?.estado ?? edit.estado ?? r.estado,
-              comentario:
-                flat?.row?.comentario ?? edit.comentario ?? r.comentario,
-              contrasena:
-                flat?.row?.contrasena ?? edit.contrasena ?? r.contrasena,
-              fecha_compra:
-                flat?.row?.fecha_compra ??
-                (isYYYYMMDD(edit.fecha_compra ?? "")
-                  ? edit.fecha_compra
-                  : r.fecha_compra),
-              meses_pagados:
-                flat?.row?.meses_pagados ??
-                (Number.isFinite(Number(edit.meses_pagados))
-                  ? Number(edit.meses_pagados)
-                  : r.meses_pagados),
-              fecha_vencimiento:
-                flat?.row?.fecha_vencimiento ??
-                computedVencimiento ??
-                r.fecha_vencimiento,
-              tipo: r.tipo,
-            } as Registro)
+            ...r,
+            contacto: flat?.row?.contacto ?? edit.contacto ?? r.contacto,
+            nombre: flat?.row?.nombre ?? edit.nombre ?? r.nombre,
+            correo: flat?.row?.correo ?? edit.correo ?? r.correo,
+            estado: flat?.row?.estado ?? edit.estado ?? r.estado,
+            comentario:
+              flat?.row?.comentario ?? edit.comentario ?? r.comentario,
+            contrasena:
+              flat?.row?.contrasena ?? edit.contrasena ?? r.contrasena,
+            fecha_compra:
+              flat?.row?.fecha_compra ??
+              (isYYYYMMDD(edit.fecha_compra ?? "")
+                ? edit.fecha_compra
+                : r.fecha_compra),
+            meses_pagados:
+              flat?.row?.meses_pagados ??
+              (Number.isFinite(Number(edit.meses_pagados))
+                ? Number(edit.meses_pagados)
+                : r.meses_pagados),
+            fecha_vencimiento:
+              flat?.row?.fecha_vencimiento ??
+              computedVencimiento ??
+              r.fecha_vencimiento,
+            tipo: r.tipo,
+          } as Registro)
           : r
       );
 
@@ -1004,9 +1040,14 @@ export default function CuentasPantallasVencidasPage() {
         .toString()
         .trim();
       if (newPw && newPw !== oldPw && emailForQueue) {
-        setPwNewByEmail((prev) => ({ ...prev, [emailForQueue]: newPw }));
+        setPwNewByEmail((prev) => ({
+          ...prev,
+          [emailForQueue]: {
+            pw: newPw,
+            plataforma_id: updated.plataforma_id ?? undefined,
+          },
+        }));
       }
-
       const T = today();
       const T1 = tomorrow();
       const next = merged.filter(
@@ -1028,7 +1069,7 @@ export default function CuentasPantallasVencidasPage() {
           by: INSTANCE_ID,
           at: Date.now(),
         });
-      } catch {}
+      } catch { }
       localStorage.setItem(
         LS_BROADCAST_KEY,
         JSON.stringify({ t: "updated", by: INSTANCE_ID, at: Date.now() })
@@ -1176,7 +1217,7 @@ export default function CuentasPantallasVencidasPage() {
             </button>
           </div>
         </div>
-                {/* Añadir manualmente */}
+        {/* Añadir manualmente */}
         <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-3">
           <div className="text-sm font-semibold text-neutral-200 mb-2">
             Añadir correos manualmente a la cola
@@ -1189,6 +1230,7 @@ export default function CuentasPantallasVencidasPage() {
               placeholder="Correo(s): uno o varios (separados por coma/espacio/salto de línea)…"
               className="flex-1 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600"
             />
+
             <input
               value={manualPw}
               onChange={(e) => setManualPw(e.target.value)}
@@ -1198,6 +1240,22 @@ export default function CuentasPantallasVencidasPage() {
               placeholder="Nueva clave…"
               className="sm:w-64 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600"
             />
+
+            <select
+              value={manualPlatform}
+              onChange={(e) =>
+                setManualPlatform(e.target.value ? Number(e.target.value) : "")
+              }
+              className="sm:w-56 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
+            >
+              <option value="">Seleccionar plataforma</option>
+              {plataformas.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {(p as any).nombre ?? p.id}
+                </option>
+              ))}
+            </select>
+
             <button
               type="button"
               onClick={addManualToQueue}
@@ -1207,7 +1265,6 @@ export default function CuentasPantallasVencidasPage() {
               Añadir
             </button>
           </div>
-
           <div className="mt-2 text-xs text-neutral-400">
             Tip: puedes pegar varios correos separados por comas, espacios o saltos de línea.
           </div>
@@ -1238,14 +1295,25 @@ export default function CuentasPantallasVencidasPage() {
                     ×
                   </button>
                 </span>
+
+                {/* 👇 AQUÍ VA EXACTAMENTE */}
+                {pwNewByEmail[email]?.plataforma_id && (
+                  <span className="text-xs text-neutral-400">
+                    {platformName(pwNewByEmail[email].plataforma_id)}
+                  </span>
+                )}
+
                 <input
                   type="text"
                   placeholder="Nueva clave…"
-                  value={pwNewByEmail[email] ?? ""}
+                  value={pwNewByEmail[email]?.pw ?? ""}
                   onChange={(e) =>
                     setPwNewByEmail((prev) => ({
                       ...prev,
-                      [email]: e.target.value,
+                      [email]: {
+                        ...prev[email],
+                        pw: e.target.value,
+                      },
                     }))
                   }
                   className="min-w-[240px] flex-1 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600"
@@ -1287,10 +1355,10 @@ export default function CuentasPantallasVencidasPage() {
             {view === "todos"
               ? "Todos"
               : view === "hoy"
-              ? "Vencen hoy"
-              : view === "manana"
-              ? "Vencen mañana"
-              : "Anteriores a hoy (vencidas)"}
+                ? "Vencen hoy"
+                : view === "manana"
+                  ? "Vencen mañana"
+                  : "Anteriores a hoy (vencidas)"}
           </div>
           <div className="flex items-center gap-2">
             <button

@@ -329,7 +329,7 @@ async function ensureChatReady(page, phone, textEncoded) {
     }
     if (!resolved) {
       flog('⚠️ Deep link no resolvió; reintento con otra variante (sin hard reset)…');
-      continue; // NO hard reset aquí para no castigar equipos lentos
+      continue;
     }
 
     await waitForNetworkQuiet(page, { quietMs: QUIET_PRE_MS, timeout: PRE_SEND_TIMEOUT_MS }).catch(() => {});
@@ -498,7 +498,6 @@ ${tips}`.trim();
       throw e;
     }
 
-    // Log detallado (opcional) de cada fila que regresó el SQL — activar con VERBOSE_SQL_LOG=1
     if (String(process.env.VERBOSE_SQL_LOG) === '1') {
       for (const r of rows) {
         flog(
@@ -517,8 +516,7 @@ ${tips}`.trim();
     /* STEP 4: Construir tareas (1 tarea = 1 mensaje) ordenadas por correo y plataforma */
     const t4 = Date.now();
 
-    // Log auxiliar por correo/plataforma para ver qué trae la DB
-    const perCorreoPlat = new Map(); // `${correo}::${plataforma_id}` -> { plataforma_nombre, count, phones:Set }
+    const perCorreoPlat = new Map();
     const bump = (k, platName, phone) => {
       if (!perCorreoPlat.has(k)) perCorreoPlat.set(k, { plataforma_nombre: platName || 'N/D', count: 0, phones: new Set() });
       const o = perCorreoPlat.get(k);
@@ -526,7 +524,6 @@ ${tips}`.trim();
       if (phone) o.phones.add(phone);
     };
 
-    /** task = { correo, plataforma_id, plataforma_nombre, phone, nombre, item, nuevaClave } */
     const tasks = [];
     let skippedPhone = 0;
     let skippedNoClave = 0;
@@ -562,7 +559,6 @@ ${tips}`.trim();
       bump(keyCP, r.plataforma_nombre, phone);
     }
 
-    // Ordenar: correo ASC, plataforma (nombre ASC, fallback id), phone
     tasks.sort((a, b) => {
       const c = a.correo.localeCompare(b.correo);
       if (c !== 0) return c;
@@ -573,7 +569,6 @@ ${tips}`.trim();
       return (a.plataforma_id - b.plataforma_id) || a.phone.localeCompare(b.phone);
     });
 
-    // Logs de resumen por correo+plataforma
     for (const [k, v] of perCorreoPlat.entries()) {
       const [corr, pid] = k.split('::');
       flog(`[STEP 4][RESUMEN] correo=${corr} plataforma_id=${pid} (${v.plataforma_nombre}) filas=${v.count} phones=${Array.from(v.phones).join(',')}`);
@@ -582,7 +577,6 @@ ${tips}`.trim();
     flog(`[STEP 4] tasks=${tasks.length} skippedPhone=${skippedPhone} skippedNoClave=${skippedNoClave}`);
     flog(`[STEP 4] Time=${Date.now() - t4}ms`);
 
-    /* STEP 5: Validaciones finales antes de abrir navegador/.sh */
     if (!tasks.length) {
       flog('⛔ No hay tareas tras filtros (fechas futuras / correos / teléfonos / plataforma) → salida temprana.');
       console.log('No hay destinatarios (verifica fechas futuras, correos, teléfonos y plataforma).');
@@ -595,7 +589,6 @@ ${tips}`.trim();
     flog(`[STEP 6.1] START_SH=${START_SH_RESOLVED}`);
     ensureExecutable(START_SH_RESOLVED);
 
-    // Si ya hay CDP vivo, no lanzamos otro Chrome
     const preLive = await waitForDebugger(Number(DEBUG_PORT), 1500);
     if (!preLive) {
       flog('[STEP 6.1] Lanzando start-chrome-wa.sh…');
@@ -623,23 +616,18 @@ ${tips}`.trim();
     page = context.pages()[0] || (await context.newPage());
     flog('[STEP 6.2] CDP conectado.');
 
-    // Abrir WA y WARMUP (pasivo, sin recargas)
     await page.goto('https://web.whatsapp.com/', { waitUntil: 'domcontentloaded' });
     flog(`⏳ [STEP 6.3] Warmup inicial: esperando ${Math.round(FIRST_BOOT_PASSIVE_WAIT_MS / 1000)}s fijos (sin recargar)…`);
     await sleep(FIRST_BOOT_PASSIVE_WAIT_MS);
 
-    // Verificación pasiva (no recarga, no hard reset)
     flog('[STEP 6.3] Verificación pasiva post-warmup (sin recargas)…');
     await passivePostWarmupChecks(page);
     flog(`[STEP 6] Time=${Date.now() - t6}ms`);
 
-    /* STEP 7/8: Envío con pausas */
-    // Más tiempo base entre mensajes (90s mínimo) + jitter 15–30s
     const baseGap = Math.max(Number(OPEN_SPACING_MS) || 90000, 90000);
     flog(`[STEP 7] base gapEnv=${baseGap}ms (se añadirá jitter 15–30s)`);
     console.log(`Notificando ${tasks.length} mensaje(s) en orden por correo y plataforma…`);
 
-    // Log de “bloques” (correo::plataforma)
     let prevKey = null;
 
     for (let i = 0; i < tasks.length; i++) {
@@ -658,24 +646,22 @@ ${tips}`.trim();
       if (!chatOk) {
         flog(`❌ No se pudo preparar el chat de ${t.phone}; se omite.`);
       } else {
-        await sendMessage(page); // Enter
-        const postSendPause = rand(POST_SEND_MIN_MS, POST_SEND_MAX_MS); // 6–10s
+        await sendMessage(page);
+        const postSendPause = rand(POST_SEND_MIN_MS, POST_SEND_MAX_MS);
         flog(`   ↪ post-send pause ~${Math.round(postSendPause/1000)}s…`);
         await sleep(postSendPause);
       }
 
-      // Pausa entre mensajes (si NO es el último)
       if (i < tasks.length - 1) {
-        const jitter = rand(15000, 30000); // 15–30s
+        const jitter = rand(15000, 30000);
         const pause = baseGap + jitter;
         flog(`⏳ Pausa entre mensajes: ~${Math.round(pause/1000)}s (incluye jitter)…`);
         await sleep(pause);
       }
     }
 
-    // 🔚 Espera final tras el ÚLTIMO mensaje (misma pausa que entre mensajes)
     if (tasks.length > 0) {
-      const jitter = rand(15000, 30000); // 15–30s, igual que entre mensajes
+      const jitter = rand(15000, 30000);
       const finalPause = baseGap + jitter;
       flog(`🧵 Espera final post-último mensaje: ~${Math.round(finalPause/1000)}s (misma que entre mensajes)…`);
       await sleep(finalPause);

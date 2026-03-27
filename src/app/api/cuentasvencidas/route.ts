@@ -34,16 +34,48 @@ async function acquireLock(): Promise<boolean> {
 }
 
 async function releaseLock() {
-  try { await fs.unlink(LOCK_FILE); } catch {}
+  try { await fs.unlink(LOCK_FILE); } catch { }
 }
 
 export async function POST(req: Request) {
   try {
-    // 1) Validar payload
+    // 1) Validar y normalizar payload
     const body = await req.json().catch(() => ({}));
-    const { items } = body || {};
-    if (!Array.isArray(items) || items.length === 0) {
+    const rawItems = body?.items;
+
+    if (!Array.isArray(rawItems) || rawItems.length === 0) {
       return NextResponse.json({ error: 'items vacío' }, { status: 400 });
+    }
+
+    const items = rawItems
+      .map((item: any) => {
+        const correo = String(item?.correo ?? '').trim().toLowerCase();
+        const nuevaClave = String(item?.nuevaClave ?? '').trim();
+
+        const plataforma_id =
+          item?.plataforma_id == null || item?.plataforma_id === ''
+            ? null
+            : Number(item.plataforma_id);
+
+        const plataforma_nombre =
+          item?.plataforma_nombre == null || item?.plataforma_nombre === ''
+            ? null
+            : String(item.plataforma_nombre).trim();
+
+        return {
+          correo,
+          nuevaClave,
+          plataforma_id: Number.isFinite(plataforma_id) ? plataforma_id : null,
+          plataforma_nombre,
+        };
+      })
+      .filter((item) => item.correo && item.nuevaClave);
+
+    if (items.length === 0) {
+      return NextResponse.json(
+        { error: 'No hay items válidos para procesar' },
+        { status: 400 }
+      );
     }
 
     // 2) Intentar adquirir lock (AQUÍ va el candado)
