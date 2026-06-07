@@ -39,5 +39,24 @@
     "recharts": "^3.1.2",
     "xlsx": "^0.18.5",
     "zod": "^4.0.17"
-  }
+  },
+  "name": "medplay",
+  "version": "1.0.0",
+  "description": "This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).",
+  "main": "ecosystem.config.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/smorenorave/medplay.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/smorenorave/medplay/issues"
+  },
+  "homepage": "https://github.com/smorenorave/medplay#readme"
 }

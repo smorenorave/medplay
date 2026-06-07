@@ -1,115 +1,53 @@
 #!/usr/bin/env node
-/* scripts/notify-password-changes.js
- * Notifica por WhatsApp Web cambios de contraseña a clientes,
- * abriendo Chrome con CDP mediante un .sh y consultando MySQL.
- *
- * EJECUCIÓN RECOMENDADA:
- *   spawn(process.execPath, [scriptPath, `--payload=${base64(JSON)}`], { detached:true, stdio:'ignore' })
- *
- * Payload esperado:
- *   {
- *     "items": [
- *       { "correo": "email@dominio.com", "nuevaClave": "Clave123", "plataforma_id": 7 },
- *       ...
- *     ]
- *   }
- *
- * Reglas:
- *  - Enviar a TODOS los contactos asociados a los correo(s) y plataforma_id(s) del payload.
- *  - NO depende de wa_notificaciones.
- *  - NO enviar si la fecha de vencimiento es HOY o en el pasado.
- */
-
 'use strict';
 
-/* ========= Requires ========= */
-require('dotenv').config({ path: '/home/medplay/medplayapp/medplay/.env' }); // ruta absoluta como el script funcional
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+
 const mysql = require('mysql2/promise');
 const http = require('http');
 const { spawn } = require('child_process');
 const { chromium } = require('playwright');
 const fs = require('fs');
-const path = require('path');
-const os = require('os');
 
-/* ========= LOG setup ========= */
-const LOG_DIR = process.env.NOTIFY_LOG_DIR || `${os.homedir()}/.medplay/logs`;
+/* ========= CONFIG ========= */
+const ROOT_DIR = path.resolve(__dirname, '..');
+const LOG_DIR = path.join(ROOT_DIR, '.logs');
 try { fs.mkdirSync(LOG_DIR, { recursive: true }); } catch {}
+
 const LOG_FILE = path.join(LOG_DIR, 'notify-password-changes.log');
 function flog(...args) {
   const line = `[${new Date().toISOString()}] ${args.join(' ')}\n`;
   try { fs.appendFileSync(LOG_FILE, line); } catch {}
+  console.log(...args);
 }
-flog(`LOG_FILE=${LOG_FILE}`);
 
-/* ========= ENV ========= */
 const {
   DATABASE_URL,
   DEBUG_PORT = '9222',
-  OPEN_SPACING_MS = '60000', // ↑ 60s por defecto (equipo lento). Ajustable por env.
-  START_SH = './start-chrome-wa.sh',
+  OPEN_SPACING_MS = '12000',
+  START_SCRIPT = './scripts/start-edge-wa.bat',
 } = process.env;
 
 if (!DATABASE_URL) {
   flog('❌ Falta DATABASE_URL en .env');
-  console.error('❌ Falta DATABASE_URL en .env');
   process.exit(1);
 }
 
-const START_SH_RESOLVED = process.env.START_SH
-  ? path.resolve(process.env.START_SH)
-  : path.join(__dirname, 'start-chrome-wa.sh');
-
-function ensureExecutable(file) {
-  try { fs.accessSync(file, fs.constants.X_OK); }
-  catch { try { fs.chmodSync(file, 0o755); } catch {} }
-}
-
+const START_SCRIPT_RESOLVED = path.resolve(ROOT_DIR, START_SCRIPT);
+const IS_WIN = process.platform === 'win32';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-/* =========================
- * TUNABLES
- * ========================= */
-const EDITOR_RETRIES        = 40;
-const EDITOR_POLL_MS        = 250;
+/* ========= TUNABLES ========= */
+const EDITOR_RETRIES = 40;
+const EDITOR_POLL_MS = 250;
+const PRE_SEND_TIMEOUT_MS = 45000;
+const QUIET_PRE_MS = 1200;
+const CHAT_RETRIES = 3;
+const FALLBACK_MS = 20000;
 
-const FALLBACK_MS           = 240_000;   // 4 min (uso residual, nunca durante warmup inicial)
-const PRE_SEND_TIMEOUT_MS   = 75_000;
-const QUIET_PRE_MS          = 1_400;
-const CHAT_RETRIES          = 3;
-
-// Primer arranque “pasivo” (sin recargas)
-const FIRST_BOOT_PASSIVE_WAIT_MS     = 390_000; // ~6.5 min fijos
-const POST_WARMUP_PASSIVE_QUIET_MS   = 2000;    // verificación pasiva de red en calma
-const POST_WARMUP_PASSIVE_TO_MS      = 30000;   // timeout de verificación pasiva
-const CHAT_SETTLE_MIN_MS             = 8000;    // 8–14s: dejar estabilizar la vista del chat antes de Enter
-const CHAT_SETTLE_MAX_MS             = 14000;
-const POST_SEND_MIN_MS               = 6000;    // ↑ 6–10s: pausa breve tras enviar (aumentada)
-const POST_SEND_MAX_MS               = 10000;
-
-/* ========= Helpers: lectura del payload ========= */
-async function readPayload() {
-  const arg = process.argv.find((a) => a.startsWith('--payload='));
-  if (arg) {
-    const b64 = arg.split('=')[1] || '';
-    const txt = Buffer.from(b64, 'base64').toString('utf8');
-    return JSON.parse(txt);
-  }
-  if (process.env.NOTIFY_ITEMS_JSON) return JSON.parse(process.env.NOTIFY_ITEMS_JSON);
-  if (process.stdin.isTTY) return {};
-  return await new Promise((resolve) => {
-    let data = '';
-    let done = false;
-    const finish = () => { if (!done) { done = true; resolve(data ? JSON.parse(data) : {}); } };
-    process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (c) => (data += c));
-    process.stdin.on('end', finish);
-    setTimeout(finish, 1500);
-  });
-}
-
-/* ========= CDP helpers ========= */
+/* ========= HELPERS CDP ========= */
 function isDebuggerLive(port) {
   return new Promise((resolve) => {
     const req = http.get(
@@ -117,10 +55,14 @@ function isDebuggerLive(port) {
       (res) => resolve(res.statusCode === 200)
     );
     req.on('error', () => resolve(false));
-    req.on('timeout', () => { req.destroy(); resolve(false); });
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(false);
+    });
   });
 }
-async function waitForDebugger(port, maxMs = 25000) {
+
+async function waitForDebugger(port, maxMs = 30000) {
   const start = Date.now();
   while (Date.now() - start < maxMs) {
     if (await isDebuggerLive(port)) return true;
@@ -129,38 +71,108 @@ async function waitForDebugger(port, maxMs = 25000) {
   return false;
 }
 
-/* ========= Lanzar el .sh ========= */
-async function launchChromeViaSh() {
-  return new Promise((resolve, reject) => {
-    try {
-      const env = {
-        ...process.env,
-        DEBUG_PORT: String(process.env.DEBUG_PORT || '9222'),
-      };
+async function launchBrowserScript() {
+  flog(`[STEP 6.1] START_SCRIPT=${START_SCRIPT_RESOLVED}`);
 
-      const child = spawn('bash', ['-lc', START_SH_RESOLVED], {
-        cwd: path.dirname(START_SH_RESOLVED),
-        env,
-        detached: true,
-        stdio: ['ignore', 'pipe', 'pipe'],
+  if (!fs.existsSync(START_SCRIPT_RESOLVED)) {
+    throw new Error(`No existe el script de arranque: ${START_SCRIPT_RESOLVED}`);
+  }
+
+  flog('[STEP 6.1] Lanzando start-edge-wa.bat…');
+
+  const child = IS_WIN
+    ? spawn('cmd.exe', ['/c', START_SCRIPT_RESOLVED], {
+        stdio: 'ignore',
+        env: process.env,
+        cwd: path.dirname(START_SCRIPT_RESOLVED),
+        detached: true
+      })
+    : spawn('bash', ['-lc', START_SCRIPT_RESOLVED], {
+        stdio: 'ignore',
+        env: process.env,
+        cwd: path.dirname(START_SCRIPT_RESOLVED),
+        detached: true
       });
 
-      child.stdout.on('data', (b) => flog(`[start-sh][out] ${String(b).trim()}`));
-      child.stderr.on('data', (b) => flog(`[start-sh][err] ${String(b).trim()}`));
-      child.on('error', (e) => reject(e));
-
-      child.unref();
-      resolve();
-    } catch (e) { reject(e); }
+  child.on('error', (err) => {
+    flog(`❌ Error lanzando navegador: ${err?.message || err}`);
   });
+
+  child.unref();
+  await sleep(1500);
 }
 
-/* ========= Esperas de red / WA ========= */
-async function waitForNetworkQuiet(page, { quietMs = 2000, timeout = 60000 } = {}) {
+function getExistingPage(browser) {
+  const contexts = browser.contexts();
+  if (!contexts.length) {
+    throw new Error('CDP respondió, pero Edge no expuso ningún contexto.');
+  }
+
+  const ctx = contexts[0];
+  const pages = ctx.pages().filter((p) => !p.isClosed());
+
+  if (!pages.length) {
+    throw new Error('CDP respondió, pero no hay pestañas disponibles en Edge.');
+  }
+
+  return { ctx, page: pages[0] };
+}
+
+async function connectToExistingEdge() {
+  flog(`[STEP 6.2] Esperando CDP en 127.0.0.1:${DEBUG_PORT}…`);
+  const ok = await waitForDebugger(Number(DEBUG_PORT), 30000);
+  flog(`[STEP 6.2] CDP ok: ${ok}`);
+
+  if (!ok) {
+    throw new Error(`No se detectó CDP en 127.0.0.1:${DEBUG_PORT}`);
+  }
+
+  const browser = await chromium.connectOverCDP(`http://127.0.0.1:${Number(DEBUG_PORT)}`);
+  await sleep(3000);
+
+  const { page } = getExistingPage(browser);
+  if (page.isClosed()) {
+    throw new Error('La pestaña de Edge se cerró antes de iniciar.');
+  }
+
+  return { browser, page };
+}
+
+/* ========= MODAL "USAR AQUI" ========= */
+async function resolveUseHereModal(page) {
+  const selectors = [
+    'button:has-text("Usar aquí")',
+    '[role="button"]:has-text("Usar aquí")',
+    'div[role="button"]:has-text("Usar aquí")',
+    'button:has-text("Use here")',
+    '[role="button"]:has-text("Use here")',
+    'div[role="button"]:has-text("Use here")',
+  ];
+
+  for (const sel of selectors) {
+    try {
+      const btn = page.locator(sel).first();
+      const count = await btn.count().catch(() => 0);
+      if (count > 0) {
+        await btn.click({ timeout: 3000 }).catch(() => {});
+        flog('✅ Modal resuelto: clic en "Usar aquí".');
+        await sleep(3000);
+        return true;
+      }
+    } catch {}
+  }
+
+  return false;
+}
+
+/* ========= WA HELPERS ========= */
+async function waitForNetworkQuiet(page, { quietMs = 1500, timeout = 20000 } = {}) {
   const client = await page.context().newCDPSession(page);
   await client.send('Network.enable');
+
   let lastActivity = Date.now();
   const bump = () => { lastActivity = Date.now(); };
+
   const handlers = {
     requestWillBeSent: bump,
     responseReceived: bump,
@@ -171,7 +183,10 @@ async function waitForNetworkQuiet(page, { quietMs = 2000, timeout = 60000 } = {
     webSocketFrameSent: bump,
     webSocketClosed: bump,
   };
-  for (const [ev, fn] of Object.entries(handlers)) client.on('Network.' + ev, fn);
+
+  for (const [ev, fn] of Object.entries(handlers)) {
+    client.on('Network.' + ev, fn);
+  }
 
   const start = Date.now();
   try {
@@ -181,42 +196,17 @@ async function waitForNetworkQuiet(page, { quietMs = 2000, timeout = 60000 } = {
     }
     return false;
   } finally {
-    for (const [ev, fn] of Object.entries(handlers)) client.off('Network.' + ev, fn);
+    for (const [ev, fn] of Object.entries(handlers)) {
+      client.off('Network.' + ev, fn);
+    }
     try { await client.detach(); } catch {}
   }
 }
 
-function wsTracker(page) {
-  const state = { frames: 0, attached: false, detach: async () => {} };
-  return {
-    async attach() {
-      if (state.attached) return;
-      const client = await page.context().newCDPSession(page);
-      await client.send('Network.enable');
-      state.attached = true;
-      state.client = client;
-      const onRecv = () => { state.frames++; };
-      const onSent = () => { state.frames++; };
-      client.on('Network.webSocketFrameReceived', onRecv);
-      client.on('Network.webSocketFrameSent', onSent);
-      state.detach = async () => {
-        try {
-          client.off('Network.webSocketFrameReceived', onRecv);
-          client.off('Network.webSocketFrameSent', onSent);
-          await client.detach();
-        } catch {}
-        state.attached = false;
-      };
-    },
-    count() { return state.frames; },
-    async dispose() { await state.detach(); }
-  };
-}
-
 async function waitForWhatsAppReady(page, {
-  timeout = 120_000,
-  quietMs = 2000,
-  requireWsTraffic = true,
+  timeout = 60000,
+  quietMs = 1500,
+  requireWsTraffic = false,
 } = {}) {
   const ctx = page.context();
   const client = await ctx.newCDPSession(page);
@@ -237,39 +227,88 @@ async function waitForWhatsAppReady(page, {
   });
 
   const t0 = Date.now();
+
   try {
-    await page.waitForLoadState('domcontentloaded', { timeout: 45_000 }).catch(() => {});
-    await page.waitForLoadState('load', { timeout: 60_000 }).catch(() => {});
+    await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+    await page.waitForLoadState('load', { timeout: 30000 }).catch(() => {});
 
     while (Date.now() - t0 < timeout) {
+      await resolveUseHereModal(page).catch(() => {});
+
       if (hasWASW || wsOpen) {
-        const quietOk = await waitForNetworkQuiet(page, { quietMs, timeout: 5000 });
+        const quietOk = await waitForNetworkQuiet(page, { quietMs, timeout: 4000 });
         if (quietOk && (!requireWsTraffic || wsFrames > 0)) return true;
       }
-      await sleep(150);
+
+      await sleep(200);
     }
+
     return false;
   } finally {
     try { await client.detach(); } catch {}
   }
 }
 
-// Verificación pasiva post-warmup (SIN recargas ni hard reset)
-async function passivePostWarmupChecks(page) {
-  try { await page.waitForLoadState('load', { timeout: 45_000 }); } catch {}
-  await waitForNetworkQuiet(page, {
-    quietMs: POST_WARMUP_PASSIVE_QUIET_MS,
-    timeout: POST_WARMUP_PASSIVE_TO_MS
-  }).catch(() => {});
+async function waitForSWControlled(page, timeout = 20000) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeout) {
+    try {
+      const controlled = await page.evaluate(() =>
+        !!(navigator.serviceWorker && navigator.serviceWorker.controller)
+      );
+      if (controlled) return true;
+    } catch {}
+    await sleep(200);
+  }
+  return false;
 }
 
-/* ========= Editor & envío ========= */
+async function prepareWhatsApp(page) {
+  flog('[STEP 6.3] Preparando WhatsApp Web…');
+
+  await page.goto('https://web.whatsapp.com/', {
+    waitUntil: 'domcontentloaded',
+    timeout: 60000
+  }).catch(() => {});
+
+  await resolveUseHereModal(page).catch(() => {});
+
+  let ready = await waitForWhatsAppReady(page, {
+    timeout: 60000,
+    quietMs: 1500,
+    requireWsTraffic: false,
+  });
+
+  if (!ready) {
+    flog('[STEP 6.3] ⚠️ Readiness inicial no confirmado. Reintentando…');
+    await resolveUseHereModal(page).catch(() => {});
+    ready = await waitForWhatsAppReady(page, {
+      timeout: 45000,
+      quietMs: 1200,
+      requireWsTraffic: false,
+    });
+  }
+
+  if (!ready) {
+    throw new Error('WhatsApp Web no quedó listo después del arranque.');
+  }
+
+  const swOk = await waitForSWControlled(page, 15000).catch(() => false);
+  if (!swOk) {
+    flog('[STEP 6.3] ⚠️ SW no confirmado, pero continúo porque WhatsApp respondió.');
+  }
+
+  flog('[STEP 6.3] ✅ WhatsApp Web listo.');
+}
+
+/* ========= EDITOR / ENVIO ========= */
 async function findEditorWithRetry(page) {
   const sels = [
     '[data-testid="conversation-compose-box-input"] div[contenteditable="true"]',
     'div[role="textbox"][contenteditable="true"]',
     'div[contenteditable="true"][data-tab]',
   ];
+
   for (let i = 0; i < EDITOR_RETRIES; i++) {
     for (const sel of sels) {
       const loc = page.locator(sel).last();
@@ -277,13 +316,16 @@ async function findEditorWithRetry(page) {
     }
     await sleep(EDITOR_POLL_MS);
   }
+
   return null;
 }
+
 async function focusEditorAtEnd(page, editor) {
   try { await editor.scrollIntoViewIfNeeded?.(); } catch {}
   try { await editor.click({ delay: 20 }); } catch {}
+
   try {
-    await editor.evaluate(el => {
+    await editor.evaluate((el) => {
       const sel = window.getSelection();
       const range = document.createRange();
       range.selectNodeContents(el);
@@ -293,12 +335,14 @@ async function focusEditorAtEnd(page, editor) {
       if (el.focus) el.focus();
     });
   } catch {}
+
   try {
     await page.keyboard.press('ControlOrMeta+End').catch(() => {});
     await page.keyboard.press('End').catch(() => {});
     await page.keyboard.press('ArrowRight').catch(() => {});
   } catch {}
 }
+
 async function ensureChatReady(page, phone, textEncoded) {
   const variants = [
     `https://web.whatsapp.com/send?phone=${encodeURIComponent(phone)}&text=${textEncoded}`,
@@ -306,55 +350,105 @@ async function ensureChatReady(page, phone, textEncoded) {
     `https://web.whatsapp.com/send?phone=${encodeURIComponent(phone)}&text=${textEncoded}&app_absent=0`,
   ];
 
-  const tracker = wsTracker(page);
-  await tracker.attach();
-
   for (let attempt = 1; attempt <= CHAT_RETRIES; attempt++) {
     const urlToOpen = variants[(attempt - 1) % variants.length];
-    flog(`🔁 [STEP 7] Abriendo chat (intento ${attempt}/${CHAT_RETRIES}) con: ${urlToOpen}`);
-    await page.goto(urlToOpen, { waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {});
+    flog(`[STEP 7] 🔁 Abriendo chat (intento ${attempt}/${CHAT_RETRIES}) con: ${urlToOpen}`);
 
-    // Pequeño asentamiento del chat (equipo lento)
-    const settleMs = rand(CHAT_SETTLE_MIN_MS, CHAT_SETTLE_MAX_MS);
-    flog(`   ↪ asentando vista de chat ~${Math.round(settleMs/1000)}s…`);
+    await page.goto(urlToOpen, {
+      waitUntil: 'domcontentloaded',
+      timeout: 60000
+    }).catch(() => {});
+
+    await resolveUseHereModal(page).catch(() => {});
+
+    const settleMs = rand(6000, 10000);
+    flog(`[STEP 7] ↪ asentando vista ~${Math.round(settleMs / 1000)}s…`);
     await sleep(settleMs);
 
     const tResolve = Date.now();
     let resolved = false;
+
     while (Date.now() - tResolve < PRE_SEND_TIMEOUT_MS) {
+      if (page.isClosed()) return false;
+
+      await resolveUseHereModal(page).catch(() => {});
+
       const cur = page.url();
       const isSend = /\/send\/?\?phone=/i.test(cur);
-      if (!isSend && /web\.whatsapp\.com/i.test(cur)) { resolved = true; break; }
+      if (!isSend && /web\.whatsapp\.com/i.test(cur)) {
+        resolved = true;
+        break;
+      }
+
       await sleep(200);
     }
+
     if (!resolved) {
-      flog('⚠️ Deep link no resolvió; reintento con otra variante (sin hard reset)…');
+      flog('[STEP 7] ⚠️ Deep link no resolvió; reintento corto');
+      await sleep(FALLBACK_MS);
       continue;
     }
 
-    await waitForNetworkQuiet(page, { quietMs: QUIET_PRE_MS, timeout: PRE_SEND_TIMEOUT_MS }).catch(() => {});
-    await tracker.dispose();
+    await waitForNetworkQuiet(page, {
+      quietMs: QUIET_PRE_MS,
+      timeout: PRE_SEND_TIMEOUT_MS
+    }).catch(() => {});
+
+    await resolveUseHereModal(page).catch(() => {});
     return true;
   }
 
-  await tracker.dispose();
   return false;
 }
+
 async function sendMessage(page) {
   const editor = await findEditorWithRetry(page);
   if (editor) await focusEditorAtEnd(page, editor);
-  try { await page.keyboard.press('Enter'); flog('↩️ [STEP 8] Enviado (Enter)'); }
-  catch (e) { flog('⚠️ No se pudo pulsar Enter: ' + (e?.message || e)); }
+
+  try {
+    await page.keyboard.press('Enter');
+    flog('[STEP 8] ↩️ Enviado (Enter)');
+    return true;
+  } catch (e) {
+    flog(`[STEP 8] ⚠️ No se pudo pulsar Enter: ${e?.message || e}`);
+    return false;
+  }
 }
 
 /* ========= DB ========= */
-/** Filtra por LOWER(correo) y por plataforma_id; excluye vencidos y que vencen HOY */
+async function readPayload() {
+  const arg = process.argv.find((a) => a.startsWith('--payload='));
+  if (arg) {
+    const b64 = arg.split('=')[1] || '';
+    const txt = Buffer.from(b64, 'base64').toString('utf8');
+    return JSON.parse(txt);
+  }
+
+  if (process.env.NOTIFY_ITEMS_JSON) return JSON.parse(process.env.NOTIFY_ITEMS_JSON);
+  if (process.stdin.isTTY) return {};
+
+  return await new Promise((resolve) => {
+    let data = '';
+    let done = false;
+    const finish = () => {
+      if (!done) {
+        done = true;
+        resolve(data ? JSON.parse(data) : {});
+      }
+    };
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (c) => (data += c));
+    process.stdin.on('end', finish);
+    setTimeout(finish, 1500);
+  });
+}
+
 async function fetchByCorreosAndPlataformas(conn, correos = [], plataformaIds = []) {
   if (!correos.length || !plataformaIds.length) return [];
-  const inCorreos = correos.map(() => '?').join(',');
-  const inPlats   = plataformaIds.map(() => '?').join(',');
 
-  // Pantallas (plataforma por cuentascompartidas)
+  const inCorreos = correos.map(() => '?').join(',');
+  const inPlats = plataformaIds.map(() => '?').join(',');
+
   const [pRows] = await conn.query(
     `
     SELECT
@@ -378,7 +472,6 @@ async function fetchByCorreosAndPlataformas(conn, correos = [], plataformaIds = 
     [...correos, ...plataformaIds]
   );
 
-  // Cuentas completas
   const [cRows] = await conn.query(
     `
     SELECT
@@ -404,19 +497,24 @@ async function fetchByCorreosAndPlataformas(conn, correos = [], plataformaIds = 
   return [...pRows, ...cRows];
 }
 
-/* ========= Mensajes ========= */
-function toE164(contacto) { return String(contacto || '').replace(/\D/g, ''); }
+/* ========= MENSAJES ========= */
+function toE164(contacto) {
+  return String(contacto || '').replace(/\D/g, '');
+}
+
 function fmtDateDDMMYYYY(value) {
   if (!value) return '';
   const s = String(value);
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
   if (m) return `${m[3]}/${m[2]}/${m[1]}`;
-  const d = new Date(value); if (isNaN(d)) return '';
+  const d = new Date(value);
+  if (isNaN(d)) return '';
   const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).toString().padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
   const yyyy = d.getFullYear();
   return `${dd}/${mm}/${yyyy}`;
 }
+
 function buildMessage(nombre, item, correo, nuevaClave) {
   const first = (nombre ? nombre.trim().split(/\s+/)[0] : null) || '!';
   const base = `• ${item.plataforma_nombre || 'tu plataforma'} — ${item.servicio}`;
@@ -446,22 +544,27 @@ ${tips}`.trim();
 
 /* ========= MAIN ========= */
 (async function main() {
+  flog(`LOG_FILE=${LOG_FILE}`);
   flog('== inicio notify-password-changes ==');
+
   let browser = null;
   let page = null;
   let conn = null;
 
   try {
-    /* STEP 1: Leer payload */
     const t1 = Date.now();
     const parsed = await readPayload();
     const items = Array.isArray(parsed?.items) ? parsed.items : [];
-    flog(`[STEP 1] items recibidos: ${items.length}`);
-    if (!items.length) { flog('⛔ No hay items para notificar → salida temprana.'); console.log('No hay items para notificar'); return; }
 
-    /* STEP 2: Normalizar y consolidar por (correo, plataforma_id) */
+    flog(`[STEP 1] items recibidos: ${items.length}`);
+    if (!items.length) {
+      flog('⛔ No hay items para notificar → salida temprana.');
+      console.log('No hay items para notificar');
+      return;
+    }
+
     const normCorreo = (v) => String(v || '').trim().toLowerCase();
-    const lastByCorreoPlataforma = new Map(); // key = `${correo}::${plataforma_id}`
+    const lastByCorreoPlataforma = new Map();
     const correosSet = new Set();
     const plataformasSet = new Set();
 
@@ -470,6 +573,7 @@ ${tips}`.trim();
       const plataforma_id = Number(it.plataforma_id);
       const nuevaClave = String(it.nuevaClave || '').trim();
       if (!correo || !nuevaClave || !Number.isFinite(plataforma_id)) continue;
+
       const key = `${correo}::${plataforma_id}`;
       lastByCorreoPlataforma.set(key, nuevaClave);
       correosSet.add(correo);
@@ -478,17 +582,19 @@ ${tips}`.trim();
 
     const correos = Array.from(correosSet);
     const plataformaIds = Array.from(plataformasSet);
+
     flog(`[STEP 2] Correos únicos=${correos.length} | plataforma_id únicos=${plataformaIds.length}`);
     if (!correos.length || !plataformaIds.length) {
       flog('⛔ Sin correos o plataforma_id válidos en payload → salida temprana.');
-      console.log('Sin correos/plataformas válidos.'); return;
+      console.log('Sin correos/plataformas válidos.');
+      return;
     }
     flog(`[STEP 2] Time=${Date.now() - t1}ms`);
 
-    /* STEP 3: Conectar DB y consultar por (correo, plataforma_id) */
     const t3 = Date.now();
     conn = await mysql.createConnection(DATABASE_URL);
     flog('[STEP 3] DB: conectado');
+
     let rows = [];
     try {
       rows = await fetchByCorreosAndPlataformas(conn, correos, plataformaIds);
@@ -498,45 +604,39 @@ ${tips}`.trim();
       throw e;
     }
 
-    if (String(process.env.VERBOSE_SQL_LOG) === '1') {
-      for (const r of rows) {
-        flog(
-          `[STEP 3][ROW] correo=${(r.correo||'').toLowerCase()} ` +
-          `plataforma_id=${r.plataforma_id} (${r.plataforma_nombre||'N/D'}) ` +
-          `phone=${String(r.contacto||'').replace(/\D/g,'')} ` +
-          `servicio=${r.servicio} ` +
-          `pantalla=${r.nro_pantalla ?? '—'} ` +
-          `vence=${fmtDateDDMMYYYY(r.fecha_vencimiento) || '—'}`
-        );
-      }
-    }
-
     flog(`[STEP 3] Time=${Date.now() - t3}ms`);
 
-    /* STEP 4: Construir tareas (1 tarea = 1 mensaje) ordenadas por correo y plataforma */
     const t4 = Date.now();
-
     const perCorreoPlat = new Map();
+    const tasks = [];
+    let skippedPhone = 0;
+    let skippedNoClave = 0;
+
     const bump = (k, platName, phone) => {
-      if (!perCorreoPlat.has(k)) perCorreoPlat.set(k, { plataforma_nombre: platName || 'N/D', count: 0, phones: new Set() });
+      if (!perCorreoPlat.has(k)) {
+        perCorreoPlat.set(k, { plataforma_nombre: platName || 'N/D', count: 0, phones: new Set() });
+      }
       const o = perCorreoPlat.get(k);
       o.count++;
       if (phone) o.phones.add(phone);
     };
 
-    const tasks = [];
-    let skippedPhone = 0;
-    let skippedNoClave = 0;
-
     for (const r of rows) {
       const phone = toE164(r.contacto);
-      if (!/^\d{8,15}$/.test(phone)) { skippedPhone++; continue; }
+      if (!/^\d{8,15}$/.test(phone)) {
+        skippedPhone++;
+        continue;
+      }
 
       const correoL = normCorreo(r.correo);
       const plataforma_id = Number(r.plataforma_id);
       const keyCP = `${correoL}::${plataforma_id}`;
       const nuevaClave = lastByCorreoPlataforma.get(keyCP);
-      if (!nuevaClave) { skippedNoClave++; continue; }
+
+      if (!nuevaClave) {
+        skippedNoClave++;
+        continue;
+      }
 
       const item = {
         servicio: r.servicio,
@@ -562,8 +662,8 @@ ${tips}`.trim();
     tasks.sort((a, b) => {
       const c = a.correo.localeCompare(b.correo);
       if (c !== 0) return c;
-      const na = (a.plataforma_nombre || '').toString();
-      const nb = (b.plataforma_nombre || '').toString();
+      const na = String(a.plataforma_nombre || '');
+      const nb = String(b.plataforma_nombre || '');
       const pn = na.localeCompare(nb);
       if (pn !== 0) return pn;
       return (a.plataforma_id - b.plataforma_id) || a.phone.localeCompare(b.phone);
@@ -578,55 +678,22 @@ ${tips}`.trim();
     flog(`[STEP 4] Time=${Date.now() - t4}ms`);
 
     if (!tasks.length) {
-      flog('⛔ No hay tareas tras filtros (fechas futuras / correos / teléfonos / plataforma) → salida temprana.');
+      flog('⛔ No hay tareas tras filtros → salida temprana.');
       console.log('No hay destinatarios (verifica fechas futuras, correos, teléfonos y plataforma).');
       return;
     }
+
     flog('[STEP 5] OK → hay tareas, continuamos a WA/CDP.');
 
-    /* STEP 6: Levantar Chrome (.sh) y conectar CDP (sin hard reset durante warmup) */
-    const t6 = Date.now();
-    flog(`[STEP 6.1] START_SH=${START_SH_RESOLVED}`);
-    ensureExecutable(START_SH_RESOLVED);
+    await launchBrowserScript();
+    const edge = await connectToExistingEdge();
+    browser = edge.browser;
+    page = edge.page;
 
-    const preLive = await waitForDebugger(Number(DEBUG_PORT), 1500);
-    if (!preLive) {
-      flog('[STEP 6.1] Lanzando start-chrome-wa.sh…');
-      await launchChromeViaSh();
-    } else {
-      flog('[STEP 6.1] CDP ya estaba vivo, no relanzamos Chrome.');
-    }
+    await prepareWhatsApp(page);
 
-    flog(`[STEP 6.2] Esperando CDP en 127.0.0.1:${DEBUG_PORT}…`);
-    const ok = await waitForDebugger(Number(DEBUG_PORT), 25_000);
-    flog(`[STEP 6.2] CDP ok: ${ok}`);
-    if (!ok) {
-      flog('[STEP 6.2] Falló espera de CDP. Reintento único: relanzo .sh y espero 25s más…');
-      await launchChromeViaSh();
-      const ok2 = await waitForDebugger(Number(DEBUG_PORT), 25_000);
-      flog(`[STEP 6.2] CDP ok tras relanzar: ${ok2}`);
-      if (!ok2) throw new Error(`No se detectó CDP en 127.0.0.1:${DEBUG_PORT}`);
-    }
-
-    flog('[STEP 6.2] Conectando a Chrome vía CDP…');
-    const cdpUrl = `http://127.0.0.1:${DEBUG_PORT}`;
-    const cdpBrowser = await chromium.connectOverCDP(cdpUrl);
-    const context = cdpBrowser.contexts()[0] || (await cdpBrowser.newContext());
-    browser = cdpBrowser;
-    page = context.pages()[0] || (await context.newPage());
-    flog('[STEP 6.2] CDP conectado.');
-
-    await page.goto('https://web.whatsapp.com/', { waitUntil: 'domcontentloaded' });
-    flog(`⏳ [STEP 6.3] Warmup inicial: esperando ${Math.round(FIRST_BOOT_PASSIVE_WAIT_MS / 1000)}s fijos (sin recargar)…`);
-    await sleep(FIRST_BOOT_PASSIVE_WAIT_MS);
-
-    flog('[STEP 6.3] Verificación pasiva post-warmup (sin recargas)…');
-    await passivePostWarmupChecks(page);
-    flog(`[STEP 6] Time=${Date.now() - t6}ms`);
-
-    const baseGap = Math.max(Number(OPEN_SPACING_MS) || 90000, 90000);
-    flog(`[STEP 7] base gapEnv=${baseGap}ms (se añadirá jitter 15–30s)`);
-    console.log(`Notificando ${tasks.length} mensaje(s) en orden por correo y plataforma…`);
+    const baseGap = Math.max(Number(OPEN_SPACING_MS) || 12000, 12000);
+    flog(`[STEP 7] base gapEnv=${baseGap}ms`);
 
     let prevKey = null;
 
@@ -638,8 +705,12 @@ ${tips}`.trim();
         prevKey = blkKey;
       }
 
+      if (page.isClosed()) {
+        throw new Error('La pestaña de WhatsApp se cerró durante el proceso.');
+      }
+
       const text = buildMessage(t.nombre, t.item, t.correo, t.nuevaClave);
-      flog(`→ [${i + 1}/${tasks.length}] phone=${t.phone} correo=${t.correo} plataforma_id=${t.plataforma_id} (${t.plataforma_nombre||'N/D'}) servicio=${t.item.servicio} pantalla=${t.item.nro_pantalla||'—'} vence=${fmtDateDDMMYYYY(t.item.fecha_vencimiento)||'—'}`);
+      flog(`→ [${i + 1}/${tasks.length}] phone=${t.phone} correo=${t.correo} plataforma_id=${t.plataforma_id} (${t.plataforma_nombre || 'N/D'}) servicio=${t.item.servicio} pantalla=${t.item.nro_pantalla || '—'} vence=${fmtDateDDMMYYYY(t.item.fecha_vencimiento) || '—'}`);
 
       const textEncoded = encodeURIComponent(text);
       const chatOk = await ensureChatReady(page, t.phone, textEncoded);
@@ -647,41 +718,25 @@ ${tips}`.trim();
         flog(`❌ No se pudo preparar el chat de ${t.phone}; se omite.`);
       } else {
         await sendMessage(page);
-        const postSendPause = rand(POST_SEND_MIN_MS, POST_SEND_MAX_MS);
-        flog(`   ↪ post-send pause ~${Math.round(postSendPause/1000)}s…`);
+        const postSendPause = rand(6000, 10000);
+        flog(`   ↪ post-send pause ~${Math.round(postSendPause / 1000)}s…`);
         await sleep(postSendPause);
       }
 
       if (i < tasks.length - 1) {
-        const jitter = rand(15000, 30000);
+        const jitter = rand(4000, 9000);
         const pause = baseGap + jitter;
-        flog(`⏳ Pausa entre mensajes: ~${Math.round(pause/1000)}s (incluye jitter)…`);
+        flog(`⏳ Pausa entre mensajes: ~${Math.round(pause / 1000)}s…`);
         await sleep(pause);
       }
     }
 
-    if (tasks.length > 0) {
-      const jitter = rand(15000, 30000);
-      const finalPause = baseGap + jitter;
-      flog(`🧵 Espera final post-último mensaje: ~${Math.round(finalPause/1000)}s (misma que entre mensajes)…`);
-      await sleep(finalPause);
-    }
-
     flog('✅ Notificaciones terminadas.');
+    flog('ℹ️ Navegador dejado abierto para revisión manual.');
   } catch (err) {
     flog(`❌ Error notify-password-changes: ${err?.stack || err?.message || err}`);
     process.exitCode = 1;
   } finally {
-    try { if (page) await page.close(); } catch {}
-    try {
-      if (browser) {
-        try {
-          const cdp = await browser.newBrowserCDPSession?.();
-          if (cdp) await cdp.send('Browser.close').catch(() => {});
-        } catch {}
-        await browser.close().catch(() => {});
-      }
-    } catch {}
     try { if (conn) await conn.end(); } catch {}
     flog('== fin notify-password-changes ==');
   }

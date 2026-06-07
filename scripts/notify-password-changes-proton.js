@@ -1,119 +1,99 @@
-/* scripts/notify-password-changes-proton.js
- * Notifica cambio de contraseña (Disney / Disney Premium) a todos los usuarios
- * con plataforma_id 3 o 4 y fecha de vencimiento futura, enviando 1 mensaje por usuario (teléfono).
- *
- * Payload esperado (desde /api/proton/notify):
- *   { "correo": "email@dominio.com", "clave": "NuevaClave123" }
- *
- * ❗️NO se toca la lógica de WhatsApp (Playwright, CDP, .sh, tiempos, etc.)
- */
+/*
+ARCHIVO 1: scripts/start-edge-wa.bat
+Guarda este contenido como: scripts\start-edge-wa.bat
+
+@echo off
+setlocal
+
+set "BROWSER_EXE="
+
+if exist "C:\Program Files\Microsoft\Edge\Application\msedge.exe" (
+    set "BROWSER_EXE=C:\Program Files\Microsoft\Edge\Application\msedge.exe"
+) else if exist "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" (
+    set "BROWSER_EXE=C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+) else (
+    echo No se encontro Microsoft Edge.
+    exit /b 1
+)
+
+if "%DEBUG_PORT%"=="" set "DEBUG_PORT=9222"
+if "%USER_DATA_DIR%"=="" set "USER_DATA_DIR=%LOCALAPPDATA%\EdgeWAProfile"
+if "%USER_PROFILE%"=="" set "USER_PROFILE=Default"
+
+if not exist "%USER_DATA_DIR%" mkdir "%USER_DATA_DIR%"
+
+start "" "%BROWSER_EXE%" ^
+  --remote-debugging-port=%DEBUG_PORT% ^
+  --remote-debugging-address=127.0.0.1 ^
+  --user-data-dir="%USER_DATA_DIR%" ^
+  --profile-directory="%USER_PROFILE%" ^
+  --no-first-run ^
+  --no-default-browser-check ^
+  --disable-features=msEdgeStartupBoost
+
+endlocal
+exit /b 0
+*/
+
 
 'use strict';
 
-/* ========= Requires ========= */
-require('dotenv').config();
-const mysql = require('mysql2/promise');
+const path = require('path');
+const fs = require('fs');
 const http = require('http');
 const { spawn } = require('child_process');
+const mysql = require('mysql2/promise');
 const { chromium } = require('playwright');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
 
-/* ========= LOG setup ========= */
-const LOG_DIR =
-  process.env.NOTIFY_LOG_DIR ||
-  `${os.homedir()}/.medplay/logs`;
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
+/* ========= CONFIG ========= */
+const ROOT_DIR = path.resolve(__dirname, '..');
+const LOG_DIR = path.join(ROOT_DIR, '.logs');
 try { fs.mkdirSync(LOG_DIR, { recursive: true }); } catch {}
 
-const LOG_FILE = path.join(LOG_DIR, 'notify-password-changes-proton.log');
+const LOG_FILE = path.join(LOG_DIR, 'notify-password-changes.log');
 function flog(...args) {
   const line = `[${new Date().toISOString()}] ${args.join(' ')}\n`;
   try { fs.appendFileSync(LOG_FILE, line); } catch {}
+  console.log(...args);
 }
-flog(`LOG_FILE=${LOG_FILE}`);
 
-/* ========= ENV ========= */
 const {
   DATABASE_URL,
   DEBUG_PORT = '9222',
-  OPEN_SPACING_MS = '60000',
-  START_SH = './start-chrome-wa.sh',
+  OPEN_SPACING_MS = '12000',
+  START_SCRIPT = './scripts/start-edge-wa.bat',
 } = process.env;
 
 if (!DATABASE_URL) {
-  flog('❌ Falta DATABASE_URL en .env');
-  console.error('❌ Falta DATABASE_URL en .env');
+  flog('Falta DATABASE_URL en .env');
   process.exit(1);
 }
 
-const START_SH_RESOLVED = START_SH
-  ? path.resolve(START_SH)
-  : path.join(__dirname, 'start-chrome-wa.sh');
-
+const IS_WIN = process.platform === 'win32';
+const START_SCRIPT_RESOLVED = path.resolve(ROOT_DIR, START_SCRIPT);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/* =========================
- * TUNABLES (idénticos)
- * ========================= */
-const EDITOR_RETRIES        = 40;
-const EDITOR_POLL_MS        = 250;
-
-const FALLBACK_MS           = 240_000;
-const PRE_SEND_TIMEOUT_MS   = 75_000;
-const QUIET_PRE_MS          = 1_400;
-const CHAT_RETRIES          = 3;
-
-const FIRST_BOOT_SW_MS      = 60_000;
-const FIRST_BOOT_READY_MS   = 120_000;
-const FIRST_BOOT_QUIET_MS   = 2_500;
-const FIRST_BOOT_QUIET_TO   = 40_000;
-const FIRST_BOOT_PAD_MS     = 20_000;
-
-/* ========= Helpers: lectura del payload ========= */
-async function getPlatformIds(conn, names = ['Disney', 'Disney Premium']) {
-  const [rows] = await conn.query(
-    `SELECT id, nombre FROM plataformas WHERE nombre IN (${names.map(()=>'?').join(',')})`,
-    names
-  );
-  const idMap = new Map(rows.map(r => [r.nombre, r.id]));
-  return names.map(n => idMap.get(n)).filter(Boolean);
-}
-
-async function readPayload() {
-  const arg = process.argv.find((a) => a.startsWith('--payload='));
-  if (arg) {
-    const b64 = arg.split('=')[1] || '';
-    const txt = Buffer.from(b64, 'base64').toString('utf8');
-    return JSON.parse(txt);
-  }
-  if (process.env.NOTIFY_ITEMS_JSON) return JSON.parse(process.env.NOTIFY_ITEMS_JSON);
-  if (process.stdin.isTTY) return {};
-  return await new Promise((resolve) => {
-    let data = '';
-    let done = false;
-    const finish = () => { if (!done) { done = true; resolve(data ? JSON.parse(data) : {}); } };
-    process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (c) => (data += c));
-    process.stdin.on('end', finish);
-    setTimeout(finish, 1500);
-  });
-}
-
-/* ========= CDP helpers (idénticos) ========= */
+/* ========= HELPERS CDP ========= */
 function isDebuggerLive(port) {
   return new Promise((resolve) => {
     const req = http.get(
-      { host: '127.0.0.1', port, path: '/json/version', timeout: 900 },
-      (res) => resolve(res.statusCode === 200)
+      { host: '127.0.0.1', port, path: '/json/version', timeout: 1000 },
+      (res) => {
+        res.resume();
+        resolve(res.statusCode === 200);
+      }
     );
     req.on('error', () => resolve(false));
-    req.on('timeout', () => { req.destroy(); resolve(false); });
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(false);
+    });
   });
 }
 
-async function waitForDebugger(port, maxMs = 25000) {
+async function waitForDebugger(port, maxMs = 30000) {
   const start = Date.now();
   while (Date.now() - start < maxMs) {
     if (await isDebuggerLive(port)) return true;
@@ -122,27 +102,111 @@ async function waitForDebugger(port, maxMs = 25000) {
   return false;
 }
 
-async function startShOnce() {
-  return new Promise((resolve, reject) => {
-    try {
-      const child = spawn('bash', ['-lc', START_SH_RESOLVED], {
+async function launchBrowserScript() {
+  flog(`[STEP 6.1] START_SCRIPT=${START_SCRIPT_RESOLVED}`);
+
+  if (!fs.existsSync(START_SCRIPT_RESOLVED)) {
+    throw new Error(`No existe el script de arranque: ${START_SCRIPT_RESOLVED}`);
+  }
+
+  flog('[STEP 6.1] Lanzando Edge con CDP...');
+
+  const child = IS_WIN
+    ? spawn('cmd.exe', ['/d', '/s', '/c', `"${START_SCRIPT_RESOLVED}"`], {
         stdio: 'ignore',
         env: process.env,
-        cwd: path.dirname(START_SH_RESOLVED),
-        detached: true
+        cwd: path.dirname(START_SCRIPT_RESOLVED),
+        detached: true,
+        windowsHide: true,
+      })
+    : spawn('bash', [START_SCRIPT_RESOLVED], {
+        stdio: 'ignore',
+        env: process.env,
+        cwd: path.dirname(START_SCRIPT_RESOLVED),
+        detached: true,
       });
-      child.on('error', reject);
-      child.unref();
-      setTimeout(resolve, 1200);
-    } catch (e) {
-      reject(e);
-    }
+
+  child.on('error', (err) => {
+    flog(`Error lanzando navegador: ${err?.message || err}`);
   });
+
+  child.unref();
+  await sleep(1500);
 }
 
-async function waitForNetworkQuiet(page, { quietMs = 2000, timeout = 60000 } = {}) {
+function getExistingPage(browser) {
+  const contexts = browser.contexts();
+  if (!contexts.length) {
+    throw new Error('CDP respondio, pero Edge no expuso ningun contexto.');
+  }
+
+  const ctx = contexts[0];
+  let pages = ctx.pages().filter((p) => !p.isClosed());
+
+  if (!pages.length) {
+    throw new Error('CDP respondio, pero no hay pestanas disponibles en Edge.');
+  }
+
+  return { ctx, page: pages[0] };
+}
+
+async function connectToExistingEdge() {
+  const port = Number(DEBUG_PORT);
+  flog(`[STEP 6.2] Esperando CDP en 127.0.0.1:${port}...`);
+
+  const ok = await waitForDebugger(port, 30000);
+  flog(`[STEP 6.2] CDP ok: ${ok}`);
+
+  if (!ok) {
+    throw new Error(`No se detecto CDP en 127.0.0.1:${port}`);
+  }
+
+  const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
+  await sleep(3000);
+
+  const { page } = getExistingPage(browser);
+  if (page.isClosed()) {
+    throw new Error('La pestana de Edge se cerro antes de iniciar.');
+  }
+
+  return { browser, page };
+}
+
+/* ========= MODAL "USAR AQUI" ========= */
+async function resolveUseHereModal(page) {
+  const selectors = [
+    'button:has-text("Usar aqui")',
+    'button:has-text("Usar aquí")',
+    '[role="button"]:has-text("Usar aqui")',
+    '[role="button"]:has-text("Usar aquí")',
+    'div[role="button"]:has-text("Usar aqui")',
+    'div[role="button"]:has-text("Usar aquí")',
+    'button:has-text("Use here")',
+    '[role="button"]:has-text("Use here")',
+    'div[role="button"]:has-text("Use here")',
+  ];
+
+  for (const sel of selectors) {
+    try {
+      const btn = page.locator(sel).first();
+      const count = await btn.count().catch(() => 0);
+      if (count > 0) {
+        await btn.click({ timeout: 3000 }).catch(() => {});
+        flog('Modal resuelto: clic en Usar aqui.');
+        await sleep(3000);
+        return true;
+      }
+    } catch {}
+  }
+
+  return false;
+}
+
+/* ========= WA HELPERS ========= */
+async function waitForNetworkQuiet(page, { quietMs = 1500, timeout = 20000 } = {}) {
   const client = await page.context().newCDPSession(page);
   await client.send('Network.enable');
+
   let lastActivity = Date.now();
   const bump = () => { lastActivity = Date.now(); };
 
@@ -156,7 +220,10 @@ async function waitForNetworkQuiet(page, { quietMs = 2000, timeout = 60000 } = {
     webSocketFrameSent: bump,
     webSocketClosed: bump,
   };
-  for (const [ev, fn] of Object.entries(handlers)) client.on('Network.' + ev, fn);
+
+  for (const [ev, fn] of Object.entries(handlers)) {
+    client.on('Network.' + ev, fn);
+  }
 
   const start = Date.now();
   try {
@@ -166,42 +233,17 @@ async function waitForNetworkQuiet(page, { quietMs = 2000, timeout = 60000 } = {
     }
     return false;
   } finally {
-    for (const [ev, fn] of Object.entries(handlers)) client.off('Network.' + ev, fn);
+    for (const [ev, fn] of Object.entries(handlers)) {
+      client.off('Network.' + ev, fn);
+    }
     try { await client.detach(); } catch {}
   }
 }
 
-function wsTracker(page) {
-  const state = { frames: 0, attached: false, detach: async () => {} };
-  return {
-    async attach() {
-      if (state.attached) return;
-      const client = await page.context().newCDPSession(page);
-      await client.send('Network.enable');
-      state.attached = true;
-      state.client = client;
-      const onRecv = () => { state.frames++; };
-      const onSent = () => { state.frames++; };
-      client.on('Network.webSocketFrameReceived', onRecv);
-      client.on('Network.webSocketFrameSent', onSent);
-      state.detach = async () => {
-        try {
-          client.off('Network.webSocketFrameReceived', onRecv);
-          client.off('Network.webSocketFrameSent', onSent);
-          await client.detach();
-        } catch {}
-        state.attached = false;
-      };
-    },
-    count() { return state.frames; },
-    async dispose() { await state.detach(); }
-  };
-}
-
 async function waitForWhatsAppReady(page, {
-  timeout = 120_000,
-  quietMs = 2000,
-  requireWsTraffic = true,
+  timeout = 60000,
+  quietMs = 1500,
+  requireWsTraffic = false,
 } = {}) {
   const ctx = page.context();
   const client = await ctx.newCDPSession(page);
@@ -222,28 +264,35 @@ async function waitForWhatsAppReady(page, {
   });
 
   const t0 = Date.now();
+
   try {
-    await page.waitForLoadState('domcontentloaded', { timeout: 45_000 }).catch(() => {});
-    await page.waitForLoadState('load', { timeout: 60_000 }).catch(() => {});
+    await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+    await page.waitForLoadState('load', { timeout: 30000 }).catch(() => {});
 
     while (Date.now() - t0 < timeout) {
+      await resolveUseHereModal(page).catch(() => {});
+
       if (hasWASW || wsOpen) {
-        const quietOk = await waitForNetworkQuiet(page, { quietMs, timeout: 5000 });
+        const quietOk = await waitForNetworkQuiet(page, { quietMs, timeout: 4000 });
         if (quietOk && (!requireWsTraffic || wsFrames > 0)) return true;
       }
-      await sleep(150);
+
+      await sleep(200);
     }
+
     return false;
   } finally {
     try { await client.detach(); } catch {}
   }
 }
 
-async function waitForSWControlled(page, timeout = 30000) {
+async function waitForSWControlled(page, timeout = 20000) {
   const t0 = Date.now();
   while (Date.now() - t0 < timeout) {
     try {
-      const controlled = await page.evaluate(() => !!(navigator.serviceWorker && navigator.serviceWorker.controller));
+      const controlled = await page.evaluate(() =>
+        !!(navigator.serviceWorker && navigator.serviceWorker.controller)
+      );
       if (controlled) return true;
     } catch {}
     await sleep(200);
@@ -251,63 +300,61 @@ async function waitForSWControlled(page, timeout = 30000) {
   return false;
 }
 
-async function hardResetWA(page) {
-  flog('🔄 Hard reset: recargando WhatsApp Web…');
-  await page.goto('https://web.whatsapp.com/', { waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {});
-  const swOk = await waitForSWControlled(page, 45_000);
-  const ready = await waitForWhatsAppReady(page, { timeout: 90_000, quietMs: 1500 }).catch(() => false);
-  const quiet = await waitForNetworkQuiet(page, { quietMs: 1200, timeout: 10_000 }).catch(() => false);
-  return swOk && ready && quiet;
-}
+async function prepareWhatsApp(page) {
+  flog('[STEP 6.3] Preparando WhatsApp Web...');
 
-async function warmUpFirstLoad(page) {
-  flog('🧊 Primer arranque: preparación extendida…');
-  const tStart = Date.now();
+  await page.goto('https://web.whatsapp.com/', {
+    waitUntil: 'domcontentloaded',
+    timeout: 60000,
+  }).catch(() => {});
 
-  const swOk = await waitForSWControlled(page, FIRST_BOOT_SW_MS);
-  if (!swOk) {
-    flog('⚠️ SW no controlado → hard reset…');
-    const resetOk = await hardResetWA(page).catch(() => false);
-    if (!resetOk) {
-      flog('⚠️ Hard reset no aseguró SW; fallback 4 min');
-      await sleep(FALLBACK_MS);
-    }
-  }
+  await resolveUseHereModal(page).catch(() => {});
 
-  const ready = await waitForWhatsAppReady(page, {
-    timeout: FIRST_BOOT_READY_MS,
-    quietMs: 1800,
+  let ready = await waitForWhatsAppReady(page, {
+    timeout: 60000,
+    quietMs: 1500,
     requireWsTraffic: false,
-  }).catch(() => false);
+  });
 
   if (!ready) {
-    flog('⚠️ Readiness no confirmado → hard reset y retry corto…');
-    const resetOk = await hardResetWA(page).catch(() => false);
-    if (!resetOk) {
-      flog('⚠️ Hard reset no ayudó; fallback 4 min');
-      await sleep(FALLBACK_MS);
-    }
+    flog('[STEP 6.3] Readiness inicial no confirmado. Reintentando...');
+    await resolveUseHereModal(page).catch(() => {});
+    ready = await waitForWhatsAppReady(page, {
+      timeout: 45000,
+      quietMs: 1200,
+      requireWsTraffic: false,
+    });
   }
 
-  const quiet = await waitForNetworkQuiet(page, {
-    quietMs: FIRST_BOOT_QUIET_MS,
-    timeout: FIRST_BOOT_QUIET_TO
-  }).catch(() => false);
+  if (!ready) {
+    throw new Error('WhatsApp Web no quedo listo despues del arranque.');
+  }
 
-  if (!quiet) flog('⚠️ Quiet time insuficiente; aplicando colchón extra.');
+  const swOk = await waitForSWControlled(page, 15000).catch(() => false);
+  if (!swOk) {
+    flog('[STEP 6.3] SW no confirmado, pero continuo porque WhatsApp respondio.');
+  }
 
-  await sleep(FIRST_BOOT_PAD_MS);
-  const elapsed = Date.now() - tStart;
-  flog(`✅ Primer arranque listo en ${(elapsed/1000).toFixed(1)}s.`);
+  flog('[STEP 6.3] WhatsApp Web listo.');
 }
 
-/* ========= EDITOR / envío (idénticos) ========= */
+/* ========= EDITOR / ENVIO ========= */
+const EDITOR_RETRIES = 40;
+const EDITOR_POLL_MS = 250;
+const PRE_SEND_TIMEOUT_MS = 45000;
+const QUIET_PRE_MS = 1200;
+const CHAT_RETRIES = 3;
+const FALLBACK_MS = 20000;
+
 async function findEditorWithRetry(page) {
   const sels = [
     '[data-testid="conversation-compose-box-input"] div[contenteditable="true"]',
+    'div[aria-label="Escribe un mensaje"][contenteditable="true"]',
+    'div[aria-label="Type a message"][contenteditable="true"]',
     'div[role="textbox"][contenteditable="true"]',
     'div[contenteditable="true"][data-tab]',
   ];
+
   for (let i = 0; i < EDITOR_RETRIES; i++) {
     for (const sel of sels) {
       const loc = page.locator(sel).last();
@@ -315,14 +362,16 @@ async function findEditorWithRetry(page) {
     }
     await sleep(EDITOR_POLL_MS);
   }
+
   return null;
 }
 
 async function focusEditorAtEnd(page, editor) {
   try { await editor.scrollIntoViewIfNeeded?.(); } catch {}
   try { await editor.click({ delay: 20 }); } catch {}
+
   try {
-    await editor.evaluate(el => {
+    await editor.evaluate((el) => {
       const sel = window.getSelection();
       const range = document.createRange();
       range.selectNodeContents(el);
@@ -332,6 +381,7 @@ async function focusEditorAtEnd(page, editor) {
       if (el.focus) el.focus();
     });
   } catch {}
+
   try {
     await page.keyboard.press('ControlOrMeta+End').catch(() => {});
     await page.keyboard.press('End').catch(() => {});
@@ -346,372 +396,306 @@ async function ensureChatReady(page, phone, textEncoded) {
     `https://web.whatsapp.com/send?phone=${encodeURIComponent(phone)}&text=${textEncoded}&app_absent=0`,
   ];
 
-  const tracker = wsTracker(page);
-  await tracker.attach();
-
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= CHAT_RETRIES; attempt++) {
     const urlToOpen = variants[(attempt - 1) % variants.length];
-    flog(`🔁 Abriendo chat (intento ${attempt}/3) con: ${urlToOpen}`);
-    await page.goto(urlToOpen, { waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {});
+    flog(`[STEP 7] Abriendo chat intento ${attempt}/${CHAT_RETRIES}: ${urlToOpen}`);
+
+    await page.goto(urlToOpen, {
+      waitUntil: 'domcontentloaded',
+      timeout: 60000,
+    }).catch(() => {});
+
+    await resolveUseHereModal(page).catch(() => {});
 
     const tResolve = Date.now();
     let resolved = false;
+
     while (Date.now() - tResolve < PRE_SEND_TIMEOUT_MS) {
+      if (page.isClosed()) return false;
+
+      await resolveUseHereModal(page).catch(() => {});
+
       const cur = page.url();
       const isSend = /\/send\/?\?phone=/i.test(cur);
-      if (!isSend && /web\.whatsapp\.com/i.test(cur)) { resolved = true; break; }
+      if (!isSend && /web\.whatsapp\.com/i.test(cur)) {
+        resolved = true;
+        break;
+      }
+
+      const editor = await findEditorWithRetry(page);
+      if (editor) {
+        resolved = true;
+        break;
+      }
+
       await sleep(200);
     }
+
     if (!resolved) {
-      flog('⚠️ Deep link no resolvió; fallback 4 min y reintento');
+      flog('[STEP 7] Deep link no resolvio; reintento corto');
       await sleep(FALLBACK_MS);
-      await hardResetWA(page).catch(() => {});
       continue;
     }
 
-    const swOk = await waitForSWControlled(page, 35_000);
-    if (!swOk) {
-      flog('⚠️ Sin SW controlado; fallback 4 min y reintento');
-      await sleep(FALLBACK_MS);
-      await hardResetWA(page).catch(() => {});
-      continue;
-    }
+    await waitForNetworkQuiet(page, {
+      quietMs: QUIET_PRE_MS,
+      timeout: PRE_SEND_TIMEOUT_MS,
+    }).catch(() => {});
 
-    await waitForNetworkQuiet(page, { quietMs: QUIET_PRE_MS, timeout: PRE_SEND_TIMEOUT_MS }).catch(() => {});
-    await tracker.dispose();
+    await resolveUseHereModal(page).catch(() => {});
     return true;
   }
 
-  await tracker.dispose();
   return false;
 }
 
 async function sendMessage(page) {
   const editor = await findEditorWithRetry(page);
   if (editor) await focusEditorAtEnd(page, editor);
+
   try {
     await page.keyboard.press('Enter');
-    flog('↩️ Enviado (Enter)');
+    flog('[STEP 7] Enviado con Enter');
+    return true;
   } catch (e) {
-    flog('⚠️ No se pudo pulsar Enter: ' + (e?.message || e));
+    flog(`[STEP 7] No se pudo pulsar Enter: ${e?.message || e}`);
+    return false;
   }
 }
 
-/* ========= DB ========= */
-/** Trae Disney / Disney Premium; excluye vencidos y (opcionalmente) incluye los que vencen HOY.
- *  ⚠️ IMPORTANTE: ya NO filtra por correo. Agrupa como en tus queries “que sí funcionan”.
- */
-async function fetchDisneyByCorreo(conn, _correoLower, { includeToday = false } = {}) {
-  // Obtenemos los ids reales de 'Disney' y 'Disney Premium'
-  const platformIds = await getPlatformIds(conn, ['Disney', 'Disney Premium']);
-  if (!platformIds.length) {
-    flog('⚠️ No se encontraron plataformas "Disney"/"Disney Premium" en la tabla plataformas.');
-    return [];
+/* ========= DB / PAYLOAD ========= */
+async function readPayload() {
+  const arg = process.argv.find((a) => a.startsWith('--payload='));
+  if (arg) {
+    const b64 = arg.slice('--payload='.length);
+    const txt = Buffer.from(b64, 'base64').toString('utf8');
+    return JSON.parse(txt);
   }
 
-  const compDateOp = includeToday ? '>=' : '>'; // usa >= para incluir los que vencen HOY
+  if (process.env.NOTIFY_ITEMS_JSON) {
+    return JSON.parse(process.env.NOTIFY_ITEMS_JSON);
+  }
 
-  // === CUENTAS COMPLETAS === (agrupadas SIN filtrar por correo)
+  if (process.stdin.isTTY) return {};
+
+  return await new Promise((resolve, reject) => {
+    let data = '';
+    let done = false;
+    const finish = () => {
+      if (!done) {
+        done = true;
+        try {
+          resolve(data ? JSON.parse(data) : {});
+        } catch (e) {
+          reject(e);
+        }
+      }
+    };
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (c) => (data += c));
+    process.stdin.on('end', finish);
+    process.stdin.on('error', reject);
+    setTimeout(finish, 1500);
+  });
+}
+
+async function fetchRowsForPlatformAndCorreo(conn, platformId, correoLower) {
   const [ccRows] = await conn.query(
     `
     SELECT
-      'Cuenta completa'                          AS servicio,
-      c.contacto                                  AS contacto,
-      u.nombre                                    AS nombre,
-      NULL                                        AS nro_pantalla,
-      MAX(DATE(c.fecha_vencimiento))             AS fecha_vencimiento,
-      pl.nombre                                   AS plataforma_nombre
+      'Cuenta completa' AS servicio,
+      c.contacto AS contacto,
+      u.nombre AS nombre,
+      NULL AS nro_pantalla,
+      DATE(c.fecha_vencimiento) AS fecha_vencimiento,
+      pl.nombre AS plataforma_nombre
     FROM cuentascompletas c
-    LEFT JOIN usuarios u       ON u.contacto   = c.contacto
-    JOIN plataformas pl        ON pl.id        = c.plataforma_id
-    WHERE c.plataforma_id IN (${platformIds.map(()=>'?').join(',')})
-      AND DATE(c.fecha_vencimiento) ${compDateOp} CURDATE()
-      -- AND (c.estado IS NULL OR c.estado <> 'CANCELADA')
-    GROUP BY c.contacto, c.plataforma_id, pl.nombre
+    LEFT JOIN usuarios u ON u.contacto = c.contacto
+    JOIN plataformas pl ON pl.id = c.plataforma_id
+    WHERE c.plataforma_id = ?
+      AND LOWER(TRIM(c.correo)) = ?
+      AND DATE(c.fecha_vencimiento) > CURDATE()
     `,
-    [...platformIds]
+    [platformId, correoLower]
   );
 
-  // === PANTALLAS === (agrupadas SIN filtrar por correo)
   const [pRows] = await conn.query(
     `
     SELECT
-      'Pantalla'                                  AS servicio,
-      p.contacto                                   AS contacto,
-      u.nombre                                     AS nombre,
-      MAX(p.nro_pantalla)                          AS nro_pantalla,
-      MAX(DATE(p.fecha_vencimiento))              AS fecha_vencimiento,
-      pl.nombre                                    AS plataforma_nombre
+      'Pantalla' AS servicio,
+      p.contacto AS contacto,
+      u.nombre AS nombre,
+      p.nro_pantalla AS nro_pantalla,
+      DATE(p.fecha_vencimiento) AS fecha_vencimiento,
+      pl.nombre AS plataforma_nombre
     FROM pantallas p
     JOIN cuentascompartidas cc ON cc.id = p.cuenta_id
-    LEFT JOIN usuarios u        ON u.contacto = p.contacto
-    JOIN plataformas pl         ON pl.id      = cc.plataforma_id
-    WHERE cc.plataforma_id IN (${platformIds.map(()=>'?').join(',')})
-      AND DATE(p.fecha_vencimiento) ${compDateOp} CURDATE()
-      -- AND (p.estado IS NULL OR p.estado <> 'CANCELADA')
-      -- AND (cc.cuenta_caida IS NULL OR cc.cuenta_caida = 0)
-    GROUP BY p.contacto, cc.plataforma_id, pl.nombre
+    LEFT JOIN usuarios u ON u.contacto = p.contacto
+    JOIN plataformas pl ON pl.id = cc.plataforma_id
+    WHERE cc.plataforma_id = ?
+      AND LOWER(TRIM(cc.correo)) = ?
+      AND DATE(p.fecha_vencimiento) > CURDATE()
     `,
-    [...platformIds]
+    [platformId, correoLower]
   );
 
-  // Normaliza a la estructura que usa el resto del script
-  const normalize = (r) => ({
-    servicio: r.servicio,
-    contacto: r.contacto,
-    nombre: r.nombre || null,
-    nro_pantalla: r.nro_pantalla || null,
-    fecha_vencimiento: r.fecha_vencimiento,       // YYYY-MM-DD
-    plataforma_nombre: r.plataforma_nombre || 'Disney',
-    // correo NO se usa desde BD; se tomará del payload
-  });
-
-  return [...ccRows.map(normalize), ...pRows.map(normalize)];
+  return [...ccRows, ...pRows];
 }
 
-
-/* ========= Mensajes ========= */
+/* ========= MENSAJES ========= */
 function toE164(contacto) {
   return String(contacto || '').replace(/\D/g, '');
 }
+
 function fmtDateDDMMYYYY(value) {
   if (!value) return '';
   const s = String(value);
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
   if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+
   const d = new Date(value);
   if (isNaN(d)) return '';
+
   const dd = String(d.getDate()).padStart(2, '0');
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const yyyy = d.getFullYear();
   return `${dd}/${mm}/${yyyy}`;
 }
 
-function buildMessage(nombre, items, correo, nuevaClave) {
+function buildMessage(nombre, plataformaNombre, correo, nuevaClave, servicio, nroPantalla, fechaVencimiento) {
   const first = (nombre ? nombre.trim().split(/\s+/)[0] : null) || '!';
-  const bullets = items
-    .map((it) => {
-      const base = `• ${it.plataforma_nombre || 'Disney'} — ${it.servicio}`;
-      const extra = it.servicio === 'Pantalla' && it.nro_pantalla ? ` | *Pantalla ${it.nro_pantalla}*` : '';
-      const vence = it.fecha_vencimiento ? ` | vence: ${fmtDateDDMMYYYY(it.fecha_vencimiento)}` : '';
-      return `${base}${extra}${vence}`;
-    })
-    .join('\n');
-
-  const notaPantalla = items.some((it) => it.servicio === 'Pantalla')
-    ? '\n*Recuerda tu pantalla es la que ves arriba; solo puedes utilizar esa.*'
+  const pantallaTxt = servicio === 'Pantalla' && nroPantalla ? `\n*Pantalla:* ${nroPantalla}` : '';
+  const venceTxt = fechaVencimiento ? `\n*Vence:* ${fmtDateDDMMYYYY(fechaVencimiento)}` : '';
+  const notaPantalla = servicio === 'Pantalla'
+    ? '\n*Recuerda que solo puedes usar la pantalla asignada.*'
     : '';
 
-  return `Hola ${first}, te notificamos el *cambio de contraseña* de PROTON: *${correo}*.
+  return `Hola ${first}, te notificamos el *cambio de contraseña* de *${plataformaNombre}*: *${correo}*.
 
-${bullets}
+*Servicio:* ${servicio}${pantallaTxt}${venceTxt}
 
-*La nueva contraseña es:* ${nuevaClave} 
-No la compartas con nadie; ¡que estés súper bien!${notaPantalla}
-
-`.trim();
+*La nueva contraseña es:* ${nuevaClave}
+No la compartas con nadie.${notaPantalla}`.trim();
 }
 
 /* ========= MAIN ========= */
 (async function main() {
-  flog('== inicio notify-password-changes-proton ==');
-  let browser = null;
-  let page = null;
+  flog(`LOG_FILE=${LOG_FILE}`);
+  flog('== inicio notify-password-changes ==');
+
   let conn = null;
 
   try {
-    // 1) Payload {correo, clave}
-    const parsed = await readPayload();
-    const correoRaw = String(parsed?.correo || '').trim().toLowerCase();
-    const nuevaClave = String(parsed?.clave || '').trim();
+    const payload = await readPayload();
+    const items = Array.isArray(payload?.items)
+      ? payload.items
+      : (payload?.correo && payload?.clave ? [payload] : []);
 
-    flog(`payload correo="${correoRaw}" clave_len=${nuevaClave.length}`);
-    if (!correoRaw || !nuevaClave) {
-      flog('Sin correo o clave -> aborta');
-      console.log('No hay correo/clave válidos.');
+    flog(`[STEP 1] items recibidos: ${items.length}`);
+    if (!items.length) {
+      flog('[STEP 1] No hay items validos.');
       return;
     }
 
-    // 2) Lanzar .sh y conectar CDP (sin cambios)
-    flog(`START_SH=${START_SH_RESOLVED}`);
-    await startShOnce();
-
-    flog(`Esperando CDP en 127.0.0.1:${DEBUG_PORT}...`);
-    const ok = await waitForDebugger(Number(DEBUG_PORT), 25000);
-    flog(`CDP ok: ${ok}`);
-    if (!ok) throw new Error(`No se detectó CDP en 127.0.0.1:${DEBUG_PORT}`);
-
-    flog('Conectando a Chrome vía CDP...');
-    const cdpUrl = `http://127.0.0.1:${DEBUG_PORT}`;
-    const cdpBrowser = await chromium.connectOverCDP(cdpUrl);
-    const context = cdpBrowser.contexts()[0] || (await cdpBrowser.newContext());
-    browser = cdpBrowser;
-    page = context.pages()[0] || (await context.newPage());
-    flog('CDP conectado.');
+    const uniqueCorreos = new Set(items.map((x) => String(x.correo || '').trim().toLowerCase()).filter(Boolean));
+    const uniquePlats = new Set(items.map((x) => String(x.plataforma_id || '').trim()).filter(Boolean));
+    flog(`[STEP 2] Correos unicos=${uniqueCorreos.size} | plataforma_id unicos=${uniquePlats.size}`);
 
     conn = await mysql.createConnection(DATABASE_URL);
-    flog('DB: conectado');
+    flog('[STEP 3] DB: conectado');
 
-    let rows = [];
-    try {
-      // Diagnóstico: qué plataforma IDs vemos
-      const platformIds = await getPlatformIds(conn, ['Disney', 'Disney Premium']);
-      flog(`Plataformas Disney IDs detectadas: ${JSON.stringify(platformIds)}`);
-
-      // Diagnóstico (sin filtrar por correo): totales futuros en 3/4
-      const [dbg] = await conn.query(
-        `
-        SELECT
-          SUM(CASE WHEN tabla='pantallas' THEN n ELSE 0 END) AS pantallas_futuro,
-          SUM(CASE WHEN tabla='cuentas'   THEN n ELSE 0 END) AS cuentas_futuro
-        FROM (
-          SELECT 'pantallas' AS tabla, COUNT(*) AS n
-          FROM pantallas p
-          JOIN cuentascompartidas cc ON cc.id = p.cuenta_id
-          WHERE cc.plataforma_id IN (${platformIds.map(()=>'?').join(',')})
-            AND DATE(p.fecha_vencimiento) > CURDATE()
-          UNION ALL
-          SELECT 'cuentas' AS tabla, COUNT(*) AS n
-          FROM cuentascompletas c
-          WHERE c.plataforma_id IN (${platformIds.map(()=>'?').join(',')})
-            AND DATE(c.fecha_vencimiento) > CURDATE()
-        ) x
-        `,
-        [...platformIds, ...platformIds]
-      );
-      flog(`DBG: conteos futuros sin correo: ${JSON.stringify(dbg && dbg[0])}`);
-
-      // Consulta “oficial”: trae TODO Disney/Premium futuro (sin filtrar por correo)
-      rows = await fetchDisneyByCorreo(conn, correoRaw, { includeToday: false }); // el 2º arg ya no se usa para filtrar
-      flog(`Filas Disney/+Premium (futuras): ${rows.length}`);
-    } catch (e) {
-      flog(`Error fetchDisneyByCorreo: ${e?.message || e}`);
-      throw e;
-    }
-
-    // 4) Agrupar POR USUARIO (teléfono) -> 1 mensaje por usuario
-    const grouped = new Map(); // key = phone
-    const itemKey = (it) =>
-      [
-        it.servicio ?? '',
-        it.plataforma_nombre ?? '',
-        it.nro_pantalla ?? '',
-        it.fecha_vencimiento ?? '',
-      ].join('|');
-
+    const tasks = [];
     let skippedPhone = 0;
+    let skippedNoClave = 0;
 
-    for (const r of rows) {
-      const phone = toE164(r.contacto);
-      if (!/^\d{8,15}$/.test(phone)) { skippedPhone++; continue; }
+    for (const item of items) {
+      const correo = String(item?.correo || '').trim().toLowerCase();
+      const clave = String(item?.clave || '').trim();
+      const plataformaId = Number(item?.plataforma_id);
 
-      const cur =
-        grouped.get(phone) || {
-          phone,
-          correo: correoRaw,       // correo del payload (front)
-          nuevaClave,              // clave del payload (front)
-          nombre: r.nombre || null,
-          items: [],
-          _kset: new Set(),
-        };
-
-      const item = {
-        servicio: r.servicio,
-        plataforma_nombre: r.plataforma_nombre,
-        nro_pantalla: r.nro_pantalla,
-        fecha_vencimiento: r.fecha_vencimiento,
-      };
-
-      const k = itemKey(item);
-      if (!cur._kset.has(k)) {
-        cur.items.push(item);
-        cur._kset.add(k);
-      }
-
-      if (!cur.nombre && r.nombre) cur.nombre = r.nombre;
-      grouped.set(phone, cur);
-    }
-
-    flog(`grouped.size=${grouped.size} skippedPhone=${skippedPhone}`);
-
-    if (rows.length) {
-      const byPlat = rows.reduce((acc, r) => {
-        const k = r.plataforma_nombre || 'desconocida';
-        acc[k] = (acc[k] || 0) + 1;
-        return acc;
-      }, {});
-      flog(`DBG: desglose por plataforma: ${JSON.stringify(byPlat)}`);
-    }
-    flog(`DBG: teléfonos inválidos (skippedPhone) = ${skippedPhone}`);
-
-    // Deduplicados por contacto: Map ya garantiza 1 por phone
-    const recipients = Array.from(grouped.values())
-      .map((r) => { delete r._kset; return r; })
-      .sort((a, b) => a.phone.localeCompare(b.phone));
-
-    if (!recipients.length) {
-      flog('No hay recipients; saliendo.');
-      console.log('No hay destinatarios (verifica fechas futuras, plataformas 3/4 y teléfonos).');
-      return;
-    }
-
-    flog(`Recipients: ${recipients.length}`);
-    console.log(`Notificando ${recipients.length} mensaje(s) (1 por usuario)…`);
-
-    /* ==== 5) Abrir WhatsApp y esperar (sin cambios) ==== */
-    await page.goto('https://web.whatsapp.com/', { waitUntil: 'domcontentloaded' });
-    flog('⏳ Esperando 8 minutos fijos para la primera carga de WhatsApp Web…');
-    await sleep(480_000);
-    await warmUpFirstLoad(page).catch(async () => {
-      flog('⚠️ warmUpFirstLoad lanzó excepción; fallback 4 min…');
-      await sleep(FALLBACK_MS);
-    });
-
-    /* ==== 6) Envío (sin cambios) ==== */
-    const gapEnv = Number(OPEN_SPACING_MS) || 8000;
-    flog(`gapEnv=${gapEnv}`);
-
-    for (let i = 0; i < recipients.length; i++) {
-      const r = recipients[i];
-
-      if (!Array.isArray(r.items) || r.items.length === 0) {
-        flog(`Skip sin items -> ${r.phone}`);
+      if (!correo || !plataformaId) continue;
+      if (!clave) {
+        skippedNoClave++;
         continue;
       }
 
-      const text = buildMessage(r.nombre, r.items, r.correo, r.nuevaClave);
-      flog(`Enviando [${i + 1}/${recipients.length}] ${r.phone} items=${r.items.length}`);
+      const rows = await fetchRowsForPlatformAndCorreo(conn, plataformaId, correo);
+      flog(`[STEP 3] Filas obtenidas futuras: ${rows.length}`);
 
-      const textEncoded = encodeURIComponent(text);
-      const chatOk = await ensureChatReady(page, r.phone, textEncoded);
+      const phones = [];
+      for (const r of rows) {
+        const phone = toE164(r.contacto);
+        if (!/^\d{8,15}$/.test(phone)) {
+          skippedPhone++;
+          continue;
+        }
+
+        phones.push(phone);
+
+        tasks.push({
+          phone,
+          text: buildMessage(
+            r.nombre,
+            r.plataforma_nombre || 'Plataforma',
+            correo,
+            clave,
+            r.servicio,
+            r.nro_pantalla,
+            r.fecha_vencimiento
+          ),
+        });
+      }
+
+      const platformName = rows[0]?.plataforma_nombre || `id=${plataformaId}`;
+      flog(`[STEP 4][RESUMEN] correo=${correo} plataforma_id=${plataformaId} (${platformName}) filas=${rows.length} phones=${phones.join(',')}`);
+    }
+
+    flog(`[STEP 4] tasks=${tasks.length} skippedPhone=${skippedPhone} skippedNoClave=${skippedNoClave}`);
+
+    if (!tasks.length) {
+      flog('[STEP 5] No hay tareas. Fin.');
+      return;
+    }
+
+    flog('[STEP 5] OK: hay tareas, continuamos a WA/CDP.');
+
+    await launchBrowserScript();
+    const edge = await connectToExistingEdge();
+    const page = edge.page;
+
+    await prepareWhatsApp(page);
+
+    const gapEnv = Number(OPEN_SPACING_MS) || 12000;
+
+    for (let i = 0; i < tasks.length; i++) {
+      const t = tasks[i];
+
+      if (page.isClosed()) {
+        throw new Error('La pestana de WhatsApp se cerro durante el proceso.');
+      }
+
+      flog(`[STEP 7] Enviando [${i + 1}/${tasks.length}] ${t.phone}`);
+
+      const chatOk = await ensureChatReady(page, t.phone, encodeURIComponent(t.text));
       if (!chatOk) {
-        flog(`❌ No se pudo preparar el chat de ${r.phone}; se omite.`);
+        flog(`[STEP 7] No se pudo preparar el chat de ${t.phone}; se omite.`);
       } else {
         await sendMessage(page);
       }
 
-      if (i < recipients.length - 1) {
-        flog(`⏳ Pausa entre contactos: ${Math.round(gapEnv/1000)}s…`);
+      if (i < tasks.length - 1) {
+        flog(`[STEP 7] Pausa entre contactos: ${Math.round(gapEnv / 1000)}s...`);
         await sleep(gapEnv);
       }
     }
 
-    flog('✅ Notificaciones terminadas.');
+    flog('Notificaciones terminadas.');
+    flog('Navegador dejado abierto para revision manual.');
   } catch (err) {
-    flog(`❌ Error notify-password-changes-proton: ${err?.stack || err?.message || err}`);
+    flog(`Error notify-password-changes: ${err?.stack || err?.message || err}`);
     process.exitCode = 1;
   } finally {
-    try { if (page) await page.close(); } catch {}
-    try {
-      if (browser) {
-        try {
-          const cdp = await browser.newBrowserCDPSession?.();
-          if (cdp) await cdp.send('Browser.close').catch(() => {});
-        } catch {}
-        await browser.close().catch(() => {});
-      }
-    } catch {}
     try { if (conn) await conn.end(); } catch {}
+    flog('== fin notify-password-changes ==');
   }
 })();
-

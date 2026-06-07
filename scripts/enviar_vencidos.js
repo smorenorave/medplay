@@ -1,18 +1,22 @@
 #!/usr/bin/env node
-require('dotenv').config({ path: '/home/medplay/medplayapp/medplay/.env' });
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const fs = require('fs');
 const { spawn } = require('child_process');
 const http = require('http');
 const { chromium } = require('playwright');
 const mysql = require('mysql2/promise');
-const path = require('path');
 
 /* =========================
- * LOGS A ARCHIVOS
+ * CONFIG GENERAL
  * ========================= */
-const LOG_DIR = '/home/medplay/medplayapp/medplay/.logs';
+const IS_WIN = process.platform === 'win32';
+const ROOT_DIR = path.resolve(__dirname, '..');
+const LOG_DIR = path.join(ROOT_DIR, '.logs');
+
 try { fs.mkdirSync(LOG_DIR, { recursive: true }); } catch {}
+
 const appOut = fs.createWriteStream(path.join(LOG_DIR, 'app.out.log'), { flags: 'a' });
 const appErr = fs.createWriteStream(path.join(LOG_DIR, 'app.err.log'), { flags: 'a' });
 const ts = () => new Date().toISOString().replace('T', ' ').replace('Z', '');
@@ -22,57 +26,48 @@ const _cwarn = console.warn.bind(console);
 const _cerr = console.error.bind(console);
 
 console.log = (...args) => {
-  const line = `[${ts()}] ${args.map(String).join(' ')}\n`;
+  const line = `[${ts()}] ${args.map(a => String(a)).join(' ')}\n`;
   try { appOut.write(line); } catch {}
   _clog(...args);
 };
+
 console.warn = (...args) => {
-  const line = `[${ts()}] ${args.map(String).join(' ')}\n`;
+  const line = `[${ts()}] ${args.map(a => String(a)).join(' ')}\n`;
   try { appErr.write(line); } catch {}
   _cwarn(...args);
 };
+
 console.error = (...args) => {
-  const line = `[${ts()}] ${args.map(String).join(' ')}\n`;
+  const line = `[${ts()}] ${args.map(a => String(a)).join(' ')}\n`;
   try { appErr.write(line); } catch {}
   _cerr(...args);
 };
 
-const START_SH_RESOLVED = process.env.START_SH
-  ? path.resolve(process.env.START_SH)
-  : path.join(__dirname, 'start-chrome-wa.sh');
-
 const {
   DATABASE_URL,
-  DB_HOST, DB_PORT = '3306', DB_USER, DB_PASS, DB_NAME,
+  DB_HOST,
+  DB_PORT = '3306',
+  DB_USER,
+  DB_PASS,
+  DB_NAME,
   DEBUG_PORT = '9222',
-  START_SH = './start-chrome-wa.sh',
+  START_SCRIPT = './scripts/start-edge-wa.bat',
 } = process.env;
+
+const START_SCRIPT_RESOLVED = path.resolve(ROOT_DIR, START_SCRIPT);
 
 /* =========================
  * TUNABLES
  * ========================= */
-const EDITOR_RETRIES        = 40;
-const EDITOR_POLL_MS        = 250;
+const EDITOR_RETRIES = 40;
+const EDITOR_POLL_MS = 250;
 
-const FALLBACK_MS           = 240_000;   // 4 minutos (fallback global)
+const FALLBACK_MS = 20_000;
+const PRE_SEND_TIMEOUT_MS = 45_000;
+const QUIET_PRE_MS = 1_200;
+const CHAT_RETRIES = 3;
+const GAP_BETWEEN_CONTACTS = 12_000;
 
-// Primer arranque (más largo y paciente)
-const FIRST_BOOT_TOTAL_MS   = 180_000;   // hasta 3 min de preparación total
-const FIRST_BOOT_SW_MS      = 60_000;    // SW controlado (↑)
-const FIRST_BOOT_READY_MS   = 120_000;   // waitForWhatsAppReady (↑)
-const FIRST_BOOT_QUIET_MS   = 2_500;     // quiet más exigente
-const FIRST_BOOT_QUIET_TO   = 40_000;    // timeout para quiet
-const FIRST_BOOT_PAD_MS     = 60_000;    // colchón extra al final
-
-// Antes y después de enviar (máx. 1 min)
-const PRE_SEND_TIMEOUT_MS   = 75_000;    // (↑ de 60s a 75s)
-const QUIET_PRE_MS          = 1_400;     // “red en calma” antes de enviar
-
-const CHAT_RETRIES          = 3;         // reintentos para preparar chat
-const GAP_BETWEEN_CONTACTS  = 60_000;    // pausa entre contactos
-
-// Mensajería
-const CLOSER                = 'Quedamos pendientes, muchas gracias'; // (ya no se usa)
 const BRAND = 'MEDPLAY';
 const NOTE_NEQUI = 'PARA PAGOS POR NEQUI SOLICITAR EL QR POR FAVOR';
 
@@ -84,15 +79,18 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 async function isDebuggerLive(port) {
   return new Promise((resolve) => {
     const req = http.get(
-      { host: '127.0.0.1', port, path: '/json/version', timeout: 1000 },
+      { host: '127.0.0.1', port, path: '/json/version', timeout: 1500 },
       (res) => resolve(res.statusCode === 200)
     );
     req.on('error', () => resolve(false));
-    req.on('timeout', () => { req.destroy(); resolve(false); });
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(false);
+    });
   });
 }
 
-async function waitForDebugger(port, maxMs = 25000) {
+async function waitForDebugger(port, maxMs = 30000) {
   const t0 = Date.now();
   while (Date.now() - t0 < maxMs) {
     if (await isDebuggerLive(port)) return true;
@@ -101,12 +99,58 @@ async function waitForDebugger(port, maxMs = 25000) {
   return false;
 }
 
+function getExistingPage(browser) {
+  const contexts = browser.contexts();
+  if (!contexts.length) {
+    throw new Error('CDP respondió, pero Edge no expuso ningún contexto.');
+  }
+
+  const ctx = contexts[0];
+  const pages = ctx.pages().filter(p => !p.isClosed());
+
+  if (!pages.length) {
+    throw new Error('CDP respondió, pero no hay pestañas disponibles en Edge.');
+  }
+
+  return { ctx, page: pages[0] };
+}
+
 /* =========================
- * ESPERAS ADAPTATIVAS (sin DOM)
+ * MODAL "USAR AQUI"
  * ========================= */
-async function waitForNetworkQuiet(page, { quietMs = 2000, timeout = 60000 } = {}) {
+async function resolveUseHereModal(page) {
+  const candidates = [
+    'button:has-text("Usar aquí")',
+    '[role="button"]:has-text("Usar aquí")',
+    'div[role="button"]:has-text("Usar aquí")',
+    'button:has-text("Use here")',
+    '[role="button"]:has-text("Use here")',
+    'div[role="button"]:has-text("Use here")',
+  ];
+
+  for (const sel of candidates) {
+    try {
+      const btn = page.locator(sel).first();
+      const count = await btn.count().catch(() => 0);
+      if (count > 0) {
+        await btn.click({ timeout: 3000 }).catch(() => {});
+        console.log('✅ Modal resuelto: clic en "Usar aquí".');
+        await sleep(3000);
+        return true;
+      }
+    } catch {}
+  }
+
+  return false;
+}
+
+/* =========================
+ * ESPERAS ADAPTATIVAS
+ * ========================= */
+async function waitForNetworkQuiet(page, { quietMs = 1500, timeout = 20000 } = {}) {
   const client = await page.context().newCDPSession(page);
   await client.send('Network.enable');
+
   let lastActivity = Date.now();
   const bump = () => { lastActivity = Date.now(); };
 
@@ -120,7 +164,10 @@ async function waitForNetworkQuiet(page, { quietMs = 2000, timeout = 60000 } = {
     webSocketFrameSent: bump,
     webSocketClosed: bump,
   };
-  for (const [ev, fn] of Object.entries(handlers)) client.on('Network.' + ev, fn);
+
+  for (const [ev, fn] of Object.entries(handlers)) {
+    client.on('Network.' + ev, fn);
+  }
 
   const start = Date.now();
   try {
@@ -130,42 +177,17 @@ async function waitForNetworkQuiet(page, { quietMs = 2000, timeout = 60000 } = {
     }
     return false;
   } finally {
-    for (const [ev, fn] of Object.entries(handlers)) client.off('Network.' + ev, fn);
+    for (const [ev, fn] of Object.entries(handlers)) {
+      client.off('Network.' + ev, fn);
+    }
     try { await client.detach(); } catch {}
   }
 }
 
-function wsTracker(page) {
-  const state = { frames: 0, attached: false, detach: async () => {} };
-  return {
-    async attach() {
-      if (state.attached) return;
-      const client = await page.context().newCDPSession(page);
-      await client.send('Network.enable');
-      state.attached = true;
-      state.client = client;
-      const onRecv = () => { state.frames++; };
-      const onSent = () => { state.frames++; };
-      client.on('Network.webSocketFrameReceived', onRecv);
-      client.on('Network.webSocketFrameSent', onSent);
-      state.detach = async () => {
-        try {
-          client.off('Network.webSocketFrameReceived', onRecv);
-          client.off('Network.webSocketFrameSent', onSent);
-          await client.detach();
-        } catch {}
-        state.attached = false;
-      };
-    },
-    count() { return state.frames; },
-    async dispose() { await state.detach(); }
-  };
-}
-
 async function waitForWhatsAppReady(page, {
-  timeout = 120_000,
-  quietMs = 2000,
-  requireWsTraffic = true,
+  timeout = 60_000,
+  quietMs = 1500,
+  requireWsTraffic = false,
 } = {}) {
   const ctx = page.context();
   const client = await ctx.newCDPSession(page);
@@ -186,29 +208,35 @@ async function waitForWhatsAppReady(page, {
   });
 
   const t0 = Date.now();
+
   try {
-    await page.waitForLoadState('domcontentloaded', { timeout: 45_000 }).catch(() => {});
-    await page.waitForLoadState('load', { timeout: 60_000 }).catch(() => {});
+    await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
+    await page.waitForLoadState('load', { timeout: 30_000 }).catch(() => {});
 
     while (Date.now() - t0 < timeout) {
+      await resolveUseHereModal(page).catch(() => {});
+
       if (hasWASW || wsOpen) {
-        const quietOk = await waitForNetworkQuiet(page, { quietMs, timeout: 5000 });
+        const quietOk = await waitForNetworkQuiet(page, { quietMs, timeout: 4000 });
         if (quietOk && (!requireWsTraffic || wsFrames > 0)) return true;
       }
-      await sleep(150);
+
+      await sleep(200);
     }
+
     return false;
   } finally {
     try { await client.detach(); } catch {}
   }
 }
 
-// SW controlado (sin DOM)
-async function waitForSWControlled(page, timeout = 30000) {
+async function waitForSWControlled(page, timeout = 20000) {
   const t0 = Date.now();
   while (Date.now() - t0 < timeout) {
     try {
-      const controlled = await page.evaluate(() => !!(navigator.serviceWorker && navigator.serviceWorker.controller));
+      const controlled = await page.evaluate(() =>
+        !!(navigator.serviceWorker && navigator.serviceWorker.controller)
+      );
       if (controlled) return true;
     } catch {}
     await sleep(200);
@@ -216,86 +244,54 @@ async function waitForSWControlled(page, timeout = 30000) {
   return false;
 }
 
-// Reset duro de la app
-async function hardResetWA(page) {
-  console.warn('🔄 Hard reset: recargando WhatsApp Web…');
-  await page.goto('https://web.whatsapp.com/', { waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {});
-  const swOk = await waitForSWControlled(page, 45_000);
-  const ready = await waitForWhatsAppReady(page, { timeout: 90_000, quietMs: 1500 }).catch(() => false);
-  const quiet = await waitForNetworkQuiet(page, { quietMs: 1200, timeout: 10_000 }).catch(() => false);
-  return swOk && ready && quiet;
-}
+async function prepareWhatsApp(page) {
+  console.log('🟡 Preparando WhatsApp Web…');
 
-/* =========================
- * “PRIMER ARRANQUE CON GRACIA”
- * ========================= */
-async function warmUpFirstLoad(page) {
-  console.log('🧊 Primer arranque: preparación extendida…');
-  const tStart = Date.now();
+  await page.goto('https://web.whatsapp.com/', {
+    waitUntil: 'domcontentloaded',
+    timeout: 60_000
+  }).catch(() => {});
 
-  // 1) SW controlado con timeout mayor
-  const swOk = await waitForSWControlled(page, FIRST_BOOT_SW_MS);
-  if (!swOk) {
-    console.warn('⚠️ SW no controlado en primer arranque → intento de hard reset…');
-    const resetOk = await hardResetWA(page).catch(() => false);
-    if (!resetOk) {
-      console.warn('⚠️ Hard reset no aseguró SW; fallback 4 min');
-      await sleep(FALLBACK_MS);
-    }
-  }
+  await resolveUseHereModal(page).catch(() => {});
 
-  // 2) Readiness general con timeout mayor
-  const ready = await waitForWhatsAppReady(page, {
-    timeout: FIRST_BOOT_READY_MS,
-    quietMs: 1800,
-    requireWsTraffic: false, // en primer arranque puede tardar en mostrar frames
-  }).catch(() => false);
+  let ready = await waitForWhatsAppReady(page, {
+    timeout: 60_000,
+    quietMs: 1500,
+    requireWsTraffic: false,
+  });
 
   if (!ready) {
-    console.warn('⚠️ Readiness no confirmado en primer arranque → hard reset y retry corto…');
-    const resetOk = await hardResetWA(page).catch(() => false);
-    if (!resetOk) {
-      console.warn('⚠️ Hard reset no ayudó; fallback 4 min');
-      await sleep(FALLBACK_MS);
-    }
+    console.warn('⚠️ Readiness inicial no confirmado. Reintentando…');
+    await resolveUseHereModal(page).catch(() => {});
+    ready = await waitForWhatsAppReady(page, {
+      timeout: 45_000,
+      quietMs: 1200,
+      requireWsTraffic: false,
+    });
   }
 
-  // 3) Quiet time más exigente
-  const quiet = await waitForNetworkQuiet(page, {
-    quietMs: FIRST_BOOT_QUIET_MS,
-    timeout: FIRST_BOOT_QUIET_TO
-  }).catch(() => false);
-
-  if (!quiet) {
-    console.warn('⚠️ Quiet time insuficiente en primer arranque; se aplica colchón extra.');
+  if (!ready) {
+    throw new Error('WhatsApp Web no quedó listo después del arranque.');
   }
 
-  // 4) Colchón final para que termine de cachear
-  await sleep(FIRST_BOOT_PAD_MS);
+  const swOk = await waitForSWControlled(page, 15_000).catch(() => false);
+  if (!swOk) {
+    console.warn('⚠️ SW no confirmado, pero continúo porque WhatsApp respondió.');
+  }
 
-  const elapsed = Date.now() - tStart;
-  console.log(`✅ Primer arranque listo en ${(elapsed/1000).toFixed(1)}s.`);
+  console.log('✅ WhatsApp Web listo.');
 }
 
 /* =========================
- * EDITOR HELPERS (solo para pulsar Enter)
+ * EDITOR HELPERS
  * ========================= */
-function normalizeEditorText(s) {
-  return String(s || '')
-    .replace(/\u200B/g, '')
-    .replace(/\u00A0/g, ' ')
-    .replace(/\r/g, '')
-    .replace(/\s+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
 async function findEditorWithRetry(page) {
   const sels = [
     '[data-testid="conversation-compose-box-input"] div[contenteditable="true"]',
     'div[role="textbox"][contenteditable="true"]',
     'div[contenteditable="true"][data-tab]',
   ];
+
   for (let i = 0; i < EDITOR_RETRIES; i++) {
     for (const sel of sels) {
       const loc = page.locator(sel).last();
@@ -303,12 +299,14 @@ async function findEditorWithRetry(page) {
     }
     await sleep(EDITOR_POLL_MS);
   }
+
   return null;
 }
 
 async function focusEditorAtEnd(page, editor) {
   try { await editor.scrollIntoViewIfNeeded?.(); } catch {}
   try { await editor.click({ delay: 20 }); } catch {}
+
   try {
     await editor.evaluate(el => {
       const sel = window.getSelection();
@@ -320,6 +318,7 @@ async function focusEditorAtEnd(page, editor) {
       if (el.focus) el.focus();
     });
   } catch {}
+
   try {
     await page.keyboard.press('ControlOrMeta+End').catch(() => {});
     await page.keyboard.press('End').catch(() => {});
@@ -328,73 +327,78 @@ async function focusEditorAtEnd(page, editor) {
 }
 
 /* =========================
- * CHAT READINESS POR CONTACTO (mantiene robustez de apertura)
+ * CHAT READINESS
  * ========================= */
 async function ensureChatReady(page, phone, textEncoded) {
-  // Variantes de deep link
   const variants = [
     `https://web.whatsapp.com/send?phone=${encodeURIComponent(phone)}&text=${textEncoded}`,
     `https://web.whatsapp.com/send/?phone=${encodeURIComponent(phone)}&text=${textEncoded}`,
     `https://web.whatsapp.com/send?phone=${encodeURIComponent(phone)}&text=${textEncoded}&app_absent=0`,
   ];
 
-  const tracker = wsTracker(page);
-  await tracker.attach();
-
   for (let attempt = 1; attempt <= CHAT_RETRIES; attempt++) {
     const urlToOpen = variants[(attempt - 1) % variants.length];
     console.log(`🔁 Abriendo chat (intento ${attempt}/${CHAT_RETRIES}) con: ${urlToOpen}`);
-    await page.goto(urlToOpen, { waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {});
 
-    // 1) Resolver deep link (dejar /send?phone=…)
+    await page.goto(urlToOpen, {
+      waitUntil: 'domcontentloaded',
+      timeout: 60_000
+    }).catch(() => {});
+
+    await resolveUseHereModal(page).catch(() => {});
+
     const tResolve = Date.now();
     let resolved = false;
+
     while (Date.now() - tResolve < PRE_SEND_TIMEOUT_MS) {
+      if (page.isClosed()) return false;
+
+      await resolveUseHereModal(page).catch(() => {});
+
       const cur = page.url();
       const isSend = /\/send\/?\?phone=/i.test(cur);
-      if (!isSend && /web\.whatsapp\.com/i.test(cur)) { resolved = true; break; }
+      if (!isSend && /web\.whatsapp\.com/i.test(cur)) {
+        resolved = true;
+        break;
+      }
+
       await sleep(200);
     }
+
     if (!resolved) {
-      console.warn('⚠️ El deep link no “resolvió” a vista de chat; fallback 4min y reintento');
+      console.warn('⚠️ El deep link no resolvió a vista de chat; reintento corto…');
       await sleep(FALLBACK_MS);
-      await hardResetWA(page).catch(() => {});
       continue;
     }
 
-    // 2) SW controlado
-    const swOk = await waitForSWControlled(page, 35_000);
-    if (!swOk) {
-      console.warn('⚠️ La app no quedó controlada por el SW; fallback 4min y reintento');
-      await sleep(FALLBACK_MS);
-      await hardResetWA(page).catch(() => {});
-      continue;
-    }
+    await waitForNetworkQuiet(page, {
+      quietMs: QUIET_PRE_MS,
+      timeout: PRE_SEND_TIMEOUT_MS
+    }).catch(() => {});
 
-    // 3) Pequeña calma de red antes de enviar
-    await waitForNetworkQuiet(page, { quietMs: QUIET_PRE_MS, timeout: PRE_SEND_TIMEOUT_MS }).catch(() => {});
-    await tracker.dispose();
-    return true; // listo o suficientemente listo
+    await resolveUseHereModal(page).catch(() => {});
+    return true;
   }
 
-  await tracker.dispose();
-  return false; // agotó reintentos
+  return false;
 }
 
 /* =========================
- * ENVÍO: SOLO POR URL (sin escribir nada ni verificar)
+ * ENVIO
  * ========================= */
 async function sendMessage(page) {
-  // El editor ya viene prellenado por el parámetro &text=...
   const editor = await findEditorWithRetry(page);
   if (editor) {
     await focusEditorAtEnd(page, editor);
   }
+
   try {
-    await page.keyboard.press('Enter'); // un solo Enter
+    await page.keyboard.press('Enter');
     console.log('↩️ Enviado (Enter)');
+    return true;
   } catch (e) {
     console.warn('⚠️ No se pudo pulsar Enter:', e?.message || e);
+    return false;
   }
 }
 
@@ -405,9 +409,11 @@ async function getConnection() {
   if (DATABASE_URL && DATABASE_URL.startsWith('mysql://')) {
     return mysql.createConnection(DATABASE_URL);
   }
+
   if (!DB_HOST || !DB_USER || !DB_PASS || !DB_NAME) {
     throw new Error('Faltan credenciales DB en .env');
   }
+
   return mysql.createConnection({
     host: DB_HOST,
     port: Number(DB_PORT || 3306),
@@ -448,32 +454,50 @@ async function fetchExpiringRows(conn) {
   return [...pRows, ...cRows];
 }
 
-function normalizePhone(s) { return String(s || '').replace(/\D/g, ''); }
-function isE164(num) { return /^\d{8,15}$/.test(num); }
+function normalizePhone(s) {
+  return String(s || '').replace(/\D/g, '');
+}
+
+function isE164(num) {
+  return /^\d{8,15}$/.test(num);
+}
+
 function fmtDateDDMMYYYY(value) {
   if (!value) return '';
   const s = String(value);
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
   if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+
   const d = new Date(value);
   if (isNaN(d.getTime())) return '';
+
   const dd = String(d.getDate()).padStart(2, '0');
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const yyyy = d.getFullYear();
   return `${dd}/${mm}/${yyyy}`;
 }
+
 function fmtMoney(v) {
   if (v == null || v === '' || Number.isNaN(Number(v))) return null;
   const num = Number(v);
-  try { return `$ ${new Intl.NumberFormat(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(num)}`; }
-  catch { return `$ ${num.toFixed(2)}`; }
+
+  try {
+    return `$ ${new Intl.NumberFormat(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2
+    }).format(num)}`;
+  } catch {
+    return `$ ${num.toFixed(2)}`;
+  }
 }
+
 function lineForItem(it) {
   const plat = (it.plataforma_nombre || '').trim() || 'tu plataforma';
   const correo = (it.correo || '').trim();
   const vence = fmtDateDDMMYYYY(it.fecha_vencimiento);
   const costo = fmtMoney(it.total_pagado);
   const pant = it.servicio === 'Pantalla' && it.nro_pantalla ? ` (pantalla ${it.nro_pantalla})` : '';
+
   return [
     `• Tu ${plat}${pant}`,
     correo ? `, con el correo ${correo}` : '',
@@ -481,68 +505,113 @@ function lineForItem(it) {
     costo ? `, tiene un costo de *${costo}*.` : '.',
   ].join('');
 }
+
 function groupByPhone(rows) {
   const map = new Map();
+
   for (const r of rows) {
     const phone = normalizePhone(r.contacto);
     if (!isE164(phone)) continue;
+
     const cur = map.get(phone) || { phone, items: [], nombre: r.nombre || null };
     cur.items.push(r);
     if (!cur.nombre && r.nombre) cur.nombre = r.nombre;
     map.set(phone, cur);
   }
+
   const recipients = [];
+
   for (const { phone, items, nombre } of map.values()) {
     const firstName = nombre ? String(nombre).trim().split(/\s+/)[0] : null;
-    const saludo = firstName ? `Hola ${firstName},` : `Hola,`;
+    const saludo = firstName ? `Hola ${firstName},` : 'Hola,';
     const lines = items.map(lineForItem).join('\n');
-    const text = [`${saludo} te escribimos de ${BRAND}.`, '', lines, '', `*${NOTE_NEQUI}*`].join('\n');
+    const text = [
+      `${saludo} te escribimos de ${BRAND}.`,
+      '',
+      lines,
+      '',
+      `*${NOTE_NEQUI}*`
+    ].join('\n');
+
     recipients.push({ phone, text });
   }
+
   return recipients;
 }
 
 /* =========================
  * FLUJO PRINCIPAL
  * ========================= */
-async function sendAll(recipients) {
-  console.log('🚀 Lanzando start-chrome-wa.sh…');
+async function launchBrowserScript() {
+  console.log(`🚀 Lanzando script de navegador: ${START_SCRIPT_RESOLVED}`);
 
-  // Logs del script START_SH a archivos dedicados
-  const scOut = fs.createWriteStream(path.join(LOG_DIR, 'start-chrome.out.log'), { flags: 'a' });
-  const scErr = fs.createWriteStream(path.join(LOG_DIR, 'start-chrome.err.log'), { flags: 'a' });
+  if (!fs.existsSync(START_SCRIPT_RESOLVED)) {
+    throw new Error(`No existe el script de arranque: ${START_SCRIPT_RESOLVED}`);
+  }
 
-  const child = spawn('bash', ['-lc', START_SH_RESOLVED], {
-    stdio: ['ignore', 'pipe', 'pipe'], // << capturamos stdout/err
-    env: process.env,
-    cwd: path.dirname(START_SH_RESOLVED),
-    detached: true
+  const scOut = fs.createWriteStream(path.join(LOG_DIR, 'start-browser.out.log'), { flags: 'a' });
+  const scErr = fs.createWriteStream(path.join(LOG_DIR, 'start-browser.err.log'), { flags: 'a' });
+
+  const child = IS_WIN
+    ? spawn('cmd.exe', ['/c', START_SCRIPT_RESOLVED], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: process.env,
+        cwd: path.dirname(START_SCRIPT_RESOLVED),
+        detached: true
+      })
+    : spawn('bash', ['-lc', START_SCRIPT_RESOLVED], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: process.env,
+        cwd: path.dirname(START_SCRIPT_RESOLVED),
+        detached: true
+      });
+
+  child.on('error', (err) => {
+    console.error('❌ Error lanzando script del navegador:', err?.message || err);
   });
-  // Pipe de logs del proceso hijo
-  if (child.stdout) child.stdout.on('data', (d) => { try { scOut.write(`[${ts()}] ${d}`); } catch {} });
-  if (child.stderr) child.stderr.on('data', (d) => { try { scErr.write(`[${ts()}] ${d}`); } catch {} });
-  child.unref();
 
+  if (child.stdout) {
+    child.stdout.on('data', (d) => {
+      try { scOut.write(`[${ts()}] ${d}`); } catch {}
+    });
+  }
+
+  if (child.stderr) {
+    child.stderr.on('data', (d) => {
+      try { scErr.write(`[${ts()}] ${d}`); } catch {}
+    });
+  }
+
+  child.unref();
+}
+
+async function connectToExistingEdge() {
   console.log('⏳ Esperando CDP…');
-  const ok = await waitForDebugger(Number(DEBUG_PORT), 25000);
-  if (!ok) throw new Error(`No se detectó CDP en 127.0.0.1:${DEBUG_PORT}`);
+  const ok = await waitForDebugger(Number(DEBUG_PORT), 30_000);
+  if (!ok) {
+    throw new Error(`No se detectó CDP en 127.0.0.1:${DEBUG_PORT}`);
+  }
 
   const browser = await chromium.connectOverCDP(`http://127.0.0.1:${Number(DEBUG_PORT)}`);
-  const ctx = browser.contexts()[0] || (await browser.newContext());
-  const page = ctx.pages()[0] || (await ctx.newPage());
+  await sleep(3000);
 
-  console.log('🟡 Abriendo WhatsApp Web…');
-  await page.goto('https://web.whatsapp.com/', { waitUntil: 'domcontentloaded' });
+  const { page } = getExistingPage(browser);
+  if (page.isClosed()) {
+    throw new Error('La pestaña de Edge se cerró antes de iniciar.');
+  }
 
-  // 🔥 Espera fija inicial de 8 minutos (antes 6)
-  console.log('⏳ Esperando 8 minutos fijos para la primera carga completa de WhatsApp Web…');
-  await sleep(480_000);
+  return { browser, page };
+}
 
-  // 🔥 Primer arranque con gracia (chequeos adaptativos adicionales)
-  await warmUpFirstLoad(page).catch(async () => {
-    console.warn('⚠️ warmUpFirstLoad lanzó excepción; aplicando fallback 4 min…');
-    await sleep(FALLBACK_MS);
-  });
+async function sendAll(recipients) {
+  await launchBrowserScript();
+
+  const { browser, page } = await connectToExistingEdge();
+
+  await prepareWhatsApp(page);
+
+  let enviados = 0;
+  let omitidos = 0;
 
   for (let i = 0; i < recipients.length; i++) {
     const r = recipients[i];
@@ -550,31 +619,29 @@ async function sendAll(recipients) {
 
     console.log(`\n[${i + 1}/${recipients.length}] → ${r.phone}`);
 
+    if (page.isClosed()) {
+      throw new Error('La pestaña de WhatsApp se cerró durante el proceso.');
+    }
+
     const chatOk = await ensureChatReady(page, r.phone, textEncoded);
     if (!chatOk) {
       console.error(`❌ No se pudo preparar el chat de ${r.phone} tras reintentos; se omite.`);
+      omitidos++;
       continue;
     }
 
-    // Envío ÚNICO: solo Enter (sin escribir, sin verificar, sin reintentos)
-    console.log('✉️  Enviando (un solo intento, solo URL)…');
-    await sendMessage(page);
+    console.log('✉️ Enviando…');
+    const sent = await sendMessage(page);
 
-    // ⏳ Siempre esperar el mismo GAP, incluso para el ÚLTIMO contacto
+    if (sent) enviados++;
+    else omitidos++;
+
     console.log(`⏳ Pausa post-envío: ${GAP_BETWEEN_CONTACTS / 1000}s…`);
     await sleep(GAP_BETWEEN_CONTACTS);
   }
 
-  console.log('\n✅ Finalizado.');
-
-  // ==== CIERRE DE CHROME ====
-  try {
-    const cdp = await browser.newBrowserCDPSession?.();
-    if (cdp) {
-      await cdp.send('Browser.close').catch(() => {});
-    }
-  } catch {}
-  try { await browser.close(); } catch {}
+  console.log(`\n✅ Finalizado. Enviados: ${enviados}. Omitidos: ${omitidos}.`);
+  console.log('ℹ️ Navegador dejado abierto para revisión manual.');
 }
 
 /* =========================
@@ -583,6 +650,7 @@ async function sendAll(recipients) {
 (async () => {
   try {
     const conn = await getConnection();
+
     try {
       const rows = await fetchExpiringRows(conn);
       const recipients = groupByPhone(rows);
@@ -604,4 +672,3 @@ async function sendAll(recipients) {
     process.exit(1);
   }
 })();
-
