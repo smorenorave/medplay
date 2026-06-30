@@ -3,7 +3,8 @@ node_modules/
 
 # Build de Next.js
 .next/
-
+.logs/
+.locks/
 # Variables de entorno
 .env
 .env.local
