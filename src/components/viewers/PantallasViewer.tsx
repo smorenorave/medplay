@@ -483,7 +483,7 @@ export default function PantallasViewer() {
   const [emailFreeMap, setEmailFreeMap] = useState<Record<string, number>>({});
   // ↓ NUEVO: control del dropdown de correos (mismo estilo que el form)
   const [emailDropdownOpen, setEmailDropdownOpen] = useState(false);
-  const emailDropdownRef = useRef<HTMLDivElement | null>(null);
+  const emailDropdownRef = useRef<HTMLLabelElement | null>(null);
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
