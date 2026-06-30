@@ -20,7 +20,13 @@ export async function GET(req: Request) {
 
     const items = await prisma.plataformas.findMany({
       where,
-      select: { id: true, nombre: true, cantidad_pantallas: true },
+      select: {
+        id: true,
+        nombre: true,
+        cantidad_pantallas: true,
+        total_pago: true,
+        total_pagado_proveedor: true,
+      },
       orderBy: { nombre: "asc" },
     });
 
@@ -29,7 +35,7 @@ export async function GET(req: Request) {
     console.error("GET /api/plataformas error:", err);
     return NextResponse.json(
       { error: "No se pudieron listar las plataformas" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -41,7 +47,7 @@ export async function GET(req: Request) {
  */
 export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => ({} as any));
+    const body = await req.json().catch(() => ({}) as any);
 
     const rawNombre = (body?.nombre ?? "").toString();
     const nombre = rawNombre.trim();
@@ -49,13 +55,13 @@ export async function POST(req: Request) {
     if (!nombre) {
       return NextResponse.json(
         { error: 'El campo "nombre" es obligatorio.' },
-        { status: 400 }
+        { status: 400 },
       );
     }
     if (nombre.length > 100) {
       return NextResponse.json(
         { error: "El nombre no puede exceder 100 caracteres." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -68,18 +74,64 @@ export async function POST(req: Request) {
       if (!Number.isInteger(n) || n < 0) {
         return NextResponse.json(
           { error: '"cantidad_pantallas" debe ser un entero >= 0.' },
-          { status: 400 }
+          { status: 400 },
         );
       }
       cantidad_pantallas = n;
     }
 
+    let total_pago: number | undefined = undefined;
+
+    if (body?.total_pago !== undefined && body?.total_pago !== null) {
+      const n = Number(body.total_pago);
+
+      if (Number.isNaN(n) || n < 0) {
+        return NextResponse.json(
+          { error: '"total_pago" debe ser mayor o igual a 0.' },
+          { status: 400 },
+        );
+      }
+
+      total_pago = n;
+    }
+
+    let total_pagado_proveedor: number | undefined = undefined;
+
+    if (
+      body?.total_pagado_proveedor !== undefined &&
+      body?.total_pagado_proveedor !== null
+    ) {
+      const n = Number(body.total_pagado_proveedor);
+
+      if (Number.isNaN(n) || n < 0) {
+        return NextResponse.json(
+          { error: '"total_pagado_proveedor" debe ser mayor o igual a 0.' },
+          { status: 400 },
+        );
+      }
+
+      total_pagado_proveedor = n;
+    }
+
     const created = await prisma.plataformas.create({
       data: {
         nombre,
+
         ...(cantidad_pantallas !== undefined ? { cantidad_pantallas } : {}),
+
+        ...(total_pago !== undefined ? { total_pago } : {}),
+
+        ...(total_pagado_proveedor !== undefined
+          ? { total_pagado_proveedor }
+          : {}),
       },
-      select: { id: true, nombre: true, cantidad_pantallas: true },
+      select: {
+        id: true,
+        nombre: true,
+        cantidad_pantallas: true,
+        total_pago: true,
+        total_pagado_proveedor: true,
+      },
     });
 
     return NextResponse.json(created, { status: 201 });
@@ -87,13 +139,13 @@ export async function POST(req: Request) {
     if (err?.code === "P2002") {
       return NextResponse.json(
         { error: "Ya existe una plataforma con ese nombre." },
-        { status: 409 }
+        { status: 409 },
       );
     }
     console.error("POST /api/plataformas error:", err);
     return NextResponse.json(
       { error: "No se pudo crear la plataforma" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

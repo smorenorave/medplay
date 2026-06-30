@@ -15,6 +15,42 @@ import {
   subscribeCuentasChanges,
 } from "@/lib/cuentasMutationBus";
 
+/* ===================== Clipboard: compatible iOS/Android/PC ===================== */
+async function copyToClipboard(text: string): Promise<boolean> {
+  if (navigator?.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {}
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    Object.assign(ta.style, {
+      position: "fixed",
+      top: "0",
+      left: "0",
+      width: "1px",
+      height: "1px",
+      padding: "0",
+      border: "none",
+      outline: "none",
+      boxShadow: "none",
+      background: "transparent",
+    });
+    ta.setAttribute("readonly", "");
+    ta.setAttribute("aria-hidden", "true");
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.setSelectionRange(0, ta.value.length);
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 /* ===================== Tipos ===================== */
 type Usuario = { contacto: string; nombre: string | null };
 type InventarioRow = {
@@ -151,7 +187,7 @@ const fmtMoneyClientCC = (n?: number | null) =>
 function buildHandoffTextCC(
   payload: any,
   plataformaMap: Map<number, string>,
-  order: any
+  order: any,
 ) {
   const platName =
     plataformaMap.get(payload?.plataforma_id) ??
@@ -171,7 +207,7 @@ function buildHandoffTextCC(
 function buildHandoffFullCC(
   payload: any,
   plataformaMap: Map<number, string>,
-  order: any
+  order: any,
 ) {
   return (
     buildHandoffTextCC(payload, plataformaMap, order) +
@@ -189,7 +225,7 @@ function buildHandoffFullCC(
 function buildPedidoResumenTextCC(
   payloads: any[],
   plataformaMap: Map<number, string>,
-  orders: any[]
+  orders: any[],
 ) {
   const lines: string[] = [];
 
@@ -203,8 +239,7 @@ function buildPedidoResumenTextCC(
   payloads.forEach((p, i) => {
     const order = orders?.[i];
     const platName =
-      plataformaMap.get(p?.plataforma_id) ??
-      `#${p?.plataforma_id ?? "—"}`;
+      plataformaMap.get(p?.plataforma_id) ?? `#${p?.plataforma_id ?? "—"}`;
 
     const tp = Number(p?.total_pagado) || 0;
     const tpp = Number(p?.total_pagado_proveedor) || 0;
@@ -219,7 +254,9 @@ function buildPedidoResumenTextCC(
     lines.push(`Correo: ${p?.correo ?? "—"}`);
     lines.push(`Clave: ${p?.contrasena ?? "—"}`);
     lines.push(`Fecha de compra: ${fmtDateHumanCC(order?.fecha_compra)}`);
-    lines.push(`Fecha de vencimiento: ${fmtDateHumanCC(order?.fecha_vencimiento)}`);
+    lines.push(
+      `Fecha de vencimiento: ${fmtDateHumanCC(order?.fecha_vencimiento)}`,
+    );
     lines.push(`Meses pagados: ${order?.meses_pagados ?? "—"}`);
     lines.push(`Total: ${fmtMoneyClientCC(tp)}`);
     lines.push("");
@@ -230,11 +267,10 @@ function buildPedidoResumenTextCC(
   return lines.join("\n");
 }
 
-
 function buildPedidoResumenFullCC(
   payloads: any[],
   plataformaMap: Map<number, string>,
-  orders: any[]
+  orders: any[],
 ) {
   return (
     buildPedidoResumenTextCC(payloads, plataformaMap, orders) +
@@ -248,8 +284,6 @@ function buildPedidoResumenFullCC(
     `Si tienes dudas o necesitas soporte, estamos para ayudarte.`
   );
 }
-
-
 
 /* ===================== Usuarios: catálogo completo (una sola vez) ===================== */
 type UsersAllCache = { map: Record<string, Usuario>; ts: number };
@@ -284,8 +318,8 @@ async function ensureUsersAllLoaded() {
       const list = Array.isArray(data)
         ? data
         : Array.isArray((data as any)?.items)
-        ? (data as any).items
-        : [];
+          ? (data as any).items
+          : [];
       if (list?.length) {
         arr = list;
         break;
@@ -403,14 +437,12 @@ export default function FormCuentaCompletas() {
   });
 
   // ✅ NUEVO: múltiples compras
-  const [orders, setOrders] = useState<OrderState[]>(() => [
-    makeEmptyOrder(0),
-  ]);
+  const [orders, setOrders] = useState<OrderState[]>(() => [makeEmptyOrder(0)]);
 
   // helper para editar un bloque
   const setOrder = (idx: number, patch: Partial<OrderState>) => {
     setOrders((prev) =>
-      prev.map((o, i) => (i === idx ? { ...o, ...patch } : o))
+      prev.map((o, i) => (i === idx ? { ...o, ...patch } : o)),
     );
   };
 
@@ -425,6 +457,45 @@ export default function FormCuentaCompletas() {
       const pid = plataformasOrdered[0]!.id;
       const next0 = { ...first, plataforma_id: pid };
       if (!next0.contrasena && isYouTube(pid)) next0.contrasena = "youtube";
+
+      // Precargamos totales de la plataforma inicial para autorellenar
+      fetch(`/api/plataformas/${pid}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (!data) return;
+          const tp =
+            data?.total_pago != null && data.total_pago !== 0
+              ? String(data.total_pago)
+              : "";
+          const tpp =
+            data?.total_pagado_proveedor != null &&
+            data.total_pagado_proveedor !== 0
+              ? String(data.total_pagado_proveedor)
+              : "";
+          setOrders((cur) =>
+            cur.map((o, i) =>
+              i === 0 &&
+              o.total_pagado === "" &&
+              o.total_pagado_proveedor === ""
+                ? { ...o, total_pagado: tp, total_pagado_proveedor: tpp }
+                : o,
+            ),
+          );
+          setPlataformaTotales((s) => ({
+            ...s,
+            [pid]: {
+              total_pago:
+                data?.total_pago != null ? Number(data.total_pago) : null,
+              total_pagado_proveedor:
+                data?.total_pagado_proveedor != null
+                  ? Number(data.total_pagado_proveedor)
+                  : null,
+              loading: false,
+            },
+          }));
+        })
+        .catch(() => {});
+
       return [next0, ...prev.slice(1)];
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -439,7 +510,7 @@ export default function FormCuentaCompletas() {
           return { ...o, contrasena: "youtube" };
         }
         return o;
-      })
+      }),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plataformaMap]);
@@ -504,13 +575,13 @@ export default function FormCuentaCompletas() {
       try {
         const res = await fetch(
           `/api/cuentascompletas?q=${encodeURIComponent(norm)}&limit=200`,
-          { cache: "no-store" }
+          { cache: "no-store" },
         );
         if (!res.ok) throw new Error("No se pudo consultar cuentascompletas");
         const rows = await parseListResponse(res);
 
         const same = rows.filter(
-          (r: any) => normalizeContacto(String(r?.contacto ?? "")) === norm
+          (r: any) => normalizeContacto(String(r?.contacto ?? "")) === norm,
         );
 
         const names = same
@@ -549,6 +620,18 @@ export default function FormCuentaCompletas() {
     };
   }, [user.contacto, nombreDirty]);
 
+  /* ===== Totales de plataforma: cache de total_pago y total_pagado_proveedor ===== */
+  const [plataformaTotales, setPlataformaTotales] = useState<
+    Record<
+      number,
+      {
+        total_pago: number | null;
+        total_pagado_proveedor: number | null;
+        loading: boolean;
+      }
+    >
+  >({});
+
   /* ===== Mensajería + modal ===== */
   const [loading, setLoading] = useState(false);
   const [okMsg, setOkMsg] = useState<string | null>(null);
@@ -557,9 +640,8 @@ export default function FormCuentaCompletas() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmPayload, setConfirmPayload] = useState<any>(null);
   const [confirmText, setConfirmText] = useState<string>("");
+  const [confirmTicketText, setConfirmTicketText] = useState<string>(""); // ← NUEVO
   const [confirmView, setConfirmView] = useState<"resumen" | "json">("resumen");
-
-  // ✅ NUEVO: confirmOrders para mostrar resumen por bloque
   const [confirmOrders, setConfirmOrders] = useState<OrderState[]>([]);
 
   /* ===== Inventario (por bloque) ===== */
@@ -567,33 +649,32 @@ export default function FormCuentaCompletas() {
   const [emailOptsByIdx, setEmailOptsByIdx] = useState<EmailSuggestion[][]>([]);
   const [emailErrorByIdx, setEmailErrorByIdx] = useState<(string | null)[]>([]);
   const [isInvLoadingByIdx, setIsInvLoadingByIdx] = useState<boolean[]>([]);
-  const [selectedInvIdByIdx, setSelectedInvIdByIdx] = useState<(number | null)[]>(
-    []
-  );
-
+  const [selectedInvIdByIdx, setSelectedInvIdByIdx] = useState<
+    (number | null)[]
+  >([]);
 
   // ✅ refs para centrar modal + reset scroll interno
-const modalBoxRef = useRef<HTMLDivElement | null>(null);
-const modalScrollRef = useRef<HTMLDivElement | null>(null);
+  const modalBoxRef = useRef<HTMLDivElement | null>(null);
+  const modalScrollRef = useRef<HTMLDivElement | null>(null);
 
-useEffect(() => {
-  if (!confirmOpen) return;
+  useEffect(() => {
+    if (!confirmOpen) return;
 
-  // Espera a que el modal renderice
-  requestAnimationFrame(() => {
-    // centra el modal en pantalla
-    modalBoxRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-      inline: "nearest",
+    // Espera a que el modal renderice
+    requestAnimationFrame(() => {
+      // centra el modal en pantalla
+      modalBoxRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "nearest",
+      });
+
+      // sube el scroll interno del modal al inicio
+      if (modalScrollRef.current) {
+        modalScrollRef.current.scrollTop = 0;
+      }
     });
-
-    // sube el scroll interno del modal al inicio
-    if (modalScrollRef.current) {
-      modalScrollRef.current.scrollTop = 0;
-    }
-  });
-}, [confirmOpen]);
+  }, [confirmOpen]);
 
   // inventario cache en memoria por plataforma
   const [invIndexByPid, setInvIndexByPid] = useState<
@@ -602,22 +683,24 @@ useEffect(() => {
 
   const ensureIdxArrays = (len: number) => {
     setEmailOptsByIdx((prev) =>
-      prev.length >= len ? prev : [...prev, ...Array(len - prev.length).fill([])]
+      prev.length >= len
+        ? prev
+        : [...prev, ...Array(len - prev.length).fill([])],
     );
     setEmailErrorByIdx((prev) =>
       prev.length >= len
         ? prev
-        : [...prev, ...Array(len - prev.length).fill(null)]
+        : [...prev, ...Array(len - prev.length).fill(null)],
     );
     setIsInvLoadingByIdx((prev) =>
       prev.length >= len
         ? prev
-        : [...prev, ...Array(len - prev.length).fill(false)]
+        : [...prev, ...Array(len - prev.length).fill(false)],
     );
     setSelectedInvIdByIdx((prev) =>
       prev.length >= len
         ? prev
-        : [...prev, ...Array(len - prev.length).fill(null)]
+        : [...prev, ...Array(len - prev.length).fill(null)],
     );
   };
 
@@ -639,7 +722,7 @@ useEffect(() => {
     // 2) fetch inventario
     const resInv = await fetch(
       `/api/inventario?plataforma_id=${plataformaId}&limit=${SUGGEST_LIMIT * 100}`,
-      { cache: "no-store" }
+      { cache: "no-store" },
     );
     const rowsInv: InventarioRow[] = resInv.ok
       ? ((await parseListResponse(resInv)) as any[])
@@ -665,8 +748,7 @@ useEffect(() => {
         a[idx] = true;
         return a;
       });
-      const invMap =
-        invIndexByPid[pid] ?? (await fetchEmailsByPlatform(pid));
+      const invMap = invIndexByPid[pid] ?? (await fetchEmailsByPlatform(pid));
 
       const list: EmailSuggestion[] = Object.entries(invMap)
         .slice(0, SUGGEST_LIMIT)
@@ -794,7 +876,12 @@ useEffect(() => {
       });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orders.map((o) => `${o.plataforma_id}:${o.correo}:${o.contrasena}`).join("|"), invIndexByPid]);
+  }, [
+    orders
+      .map((o) => `${o.plataforma_id}:${o.correo}:${o.contrasena}`)
+      .join("|"),
+    invIndexByPid,
+  ]);
 
   /* ===================== Recalcular fecha de vencimiento por bloque ===================== */
   useEffect(() => {
@@ -804,8 +891,10 @@ useEffect(() => {
         const meses = o.meses_pagados;
         if (!compra || !Number.isFinite(meses) || meses < 1) return o;
         const nueva = addMonthsLocal(compra, meses);
-        return o.fecha_vencimiento === nueva ? o : { ...o, fecha_vencimiento: nueva };
-      })
+        return o.fecha_vencimiento === nueva
+          ? o
+          : { ...o, fecha_vencimiento: nueva };
+      }),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orders.map((o) => `${o.fecha_compra}:${o.meses_pagados}`).join("|")]);
@@ -859,7 +948,8 @@ useEffect(() => {
 
   /* ===================== Payload por bloque ===================== */
   const buildPayloadFor = (o: OrderState) => {
-    const totalPagadoNum = o.total_pagado !== "" ? Number(o.total_pagado) : null;
+    const totalPagadoNum =
+      o.total_pagado !== "" ? Number(o.total_pagado) : null;
     const totalProvNum =
       o.total_pagado_proveedor !== "" ? Number(o.total_pagado_proveedor) : null;
     const total_ganado =
@@ -914,6 +1004,9 @@ useEffect(() => {
     setConfirmPayload(payloads);
     setConfirmOrders(orders);
     setConfirmText(JSON.stringify(payloads, null, 2));
+    setConfirmTicketText(
+      buildPedidoResumenFullCC(payloads, plataformaMap, orders),
+    ); // ← NUEVO
     setConfirmView("resumen");
     setConfirmOpen(true);
   }
@@ -941,23 +1034,30 @@ useEffect(() => {
             const j = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(j?.error ?? "No se pudo guardar");
             return { saved: j?.cuenta ?? j, idx, sent: p };
-          })
-        )
+          }),
+        ),
       );
 
-      const ok = results.filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<{
+      const ok = results.filter(
+        (r) => r.status === "fulfilled",
+      ) as PromiseFulfilledResult<{
         saved: any;
         idx: number;
         sent: any;
       }>[];
 
-      const bad = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+      const bad = results.filter(
+        (r) => r.status === "rejected",
+      ) as PromiseRejectedResult[];
 
       // preferencia de plataforma: última del lote
       try {
         const last = toSend[toSend.length - 1];
         if (last?.plataforma_id) {
-          window.localStorage.setItem(LAST_PLATFORM_KEY, String(last.plataforma_id));
+          window.localStorage.setItem(
+            LAST_PLATFORM_KEY,
+            String(last.plataforma_id),
+          );
         }
       } catch {}
 
@@ -983,16 +1083,34 @@ useEffect(() => {
             nombre: (saved?.nombre ?? sent.nombre ?? null) as string | null,
             plataforma_id: Number(saved?.plataforma_id ?? sent.plataforma_id),
             correo: String(saved?.correo ?? sent.correo ?? ""),
-            contrasena: (saved?.contrasena ?? sent.contrasena ?? null) as string | null,
-            proveedor: (saved?.proveedor ?? sent.proveedor ?? null) as string | null,
-            fecha_compra: (saved?.fecha_compra ?? sent.fecha_compra ?? null) as string | null,
-            fecha_vencimiento: (saved?.fecha_vencimiento ?? sent.fecha_vencimiento ?? null) as string | null,
-            meses_pagados: (saved?.meses_pagados ?? sent.meses_pagados ?? null) as number | null,
-            total_pagado: (saved?.total_pagado ?? sent.total_pagado ?? null) as number | null,
-            total_pagado_proveedor: (saved?.total_pagado_proveedor ?? sent.total_pagado_proveedor ?? null) as number | null,
-            total_ganado: (saved?.total_ganado ?? sent.total_ganado ?? null) as number | null,
+            contrasena: (saved?.contrasena ?? sent.contrasena ?? null) as
+              | string
+              | null,
+            proveedor: (saved?.proveedor ?? sent.proveedor ?? null) as
+              | string
+              | null,
+            fecha_compra: (saved?.fecha_compra ?? sent.fecha_compra ?? null) as
+              | string
+              | null,
+            fecha_vencimiento: (saved?.fecha_vencimiento ??
+              sent.fecha_vencimiento ??
+              null) as string | null,
+            meses_pagados: (saved?.meses_pagados ??
+              sent.meses_pagados ??
+              null) as number | null,
+            total_pagado: (saved?.total_pagado ?? sent.total_pagado ?? null) as
+              | number
+              | null,
+            total_pagado_proveedor: (saved?.total_pagado_proveedor ??
+              sent.total_pagado_proveedor ??
+              null) as number | null,
+            total_ganado: (saved?.total_ganado ?? sent.total_ganado ?? null) as
+              | number
+              | null,
             estado: (saved?.estado ?? sent.estado ?? null) as string | null,
-            comentario: (saved?.comentario ?? sent.comentario ?? null) as string | null,
+            comentario: (saved?.comentario ?? sent.comentario ?? null) as
+              | string
+              | null,
           };
           mergeCuentaCompletaIntoCache(rowForCache as any);
         } catch {}
@@ -1015,10 +1133,13 @@ useEffect(() => {
           `Se guardaron ${ok.length}/${toSend.length}. Fallaron: ` +
             bad
               .map((b: any, i) => `#${i + 1} (${b.reason?.message ?? "error"})`)
-              .join(" | ")
+              .join(" | "),
         );
       } else {
-        const ids = ok.map((x) => x.value.saved?.id).filter(Boolean).join(", ");
+        const ids = ok
+          .map((x) => x.value.saved?.id)
+          .filter(Boolean)
+          .join(", ");
         setOkMsg(`Guardado correctamente (${ok.length}). IDs: ${ids}`);
       }
 
@@ -1029,7 +1150,9 @@ useEffect(() => {
       const stored = window.localStorage.getItem(LAST_PLATFORM_KEY);
       const lastId = stored ? Number(stored) : NaN;
       const nextPlat =
-        Number.isFinite(lastId) && lastId > 0 ? lastId : plataformasOrdered[0]?.id ?? 0;
+        Number.isFinite(lastId) && lastId > 0
+          ? lastId
+          : (plataformasOrdered[0]?.id ?? 0);
 
       setUser({ contacto: "", nombre: "" });
       setOrders([makeEmptyOrder(nextPlat)]);
@@ -1054,7 +1177,9 @@ useEffect(() => {
       <form onSubmit={onSubmit} className="grid gap-6">
         {/* Usuario */}
         <section className="border border-neutral-800 rounded-2xl p-4 bg-neutral-950/40 text-neutral-100">
-          <h2 className="font-semibold mb-3 text-neutral-100">Datos del usuario</h2>
+          <h2 className="font-semibold mb-3 text-neutral-100">
+            Datos del usuario
+          </h2>
           <div className="grid gap-2 sm:grid-cols-2 sm:gap-4">
             <Field
               label="Contacto *"
@@ -1066,11 +1191,13 @@ useEffect(() => {
                   setUser((s) => ({ ...s, contacto: v }));
               }}
               required
-              inputMode="numeric"
-              pattern="^\+\d+(?:\s*\d+)*$"
+              inputMode="tel"
+              pattern="^\+?[\d\s\-\(\)]{7,20}$"
               title="Formato válido: + seguido de números"
               onInvalid={(e: any) =>
-                e.currentTarget.setCustomValidity("Ingresa un teléfono en formato + y solo números")
+                e.currentTarget.setCustomValidity(
+                  "Ingresa un teléfono en formato + y solo números",
+                )
               }
               onInput={(e: any) => e.currentTarget.setCustomValidity("")}
               inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
@@ -1091,12 +1218,17 @@ useEffect(() => {
         {/* ✅ NUEVO: header con botón + */}
         <section className="border border-neutral-800 rounded-2xl p-4 bg-neutral-950/40 text-neutral-100">
           <div className="flex items-center justify-between gap-3 mb-3">
-            <h2 className="font-semibold text-neutral-100">Compras / Plataformas</h2>
+            <h2 className="font-semibold text-neutral-100">
+              Compras / Plataformas
+            </h2>
             <button
               type="button"
               className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
               onClick={() => {
-                const pid = orders[orders.length - 1]?.plataforma_id || plataformasOrdered[0]?.id || 0;
+                const pid =
+                  orders[orders.length - 1]?.plataforma_id ||
+                  plataformasOrdered[0]?.id ||
+                  0;
                 setOrders((prev) => [...prev, makeEmptyOrder(pid)]);
               }}
               title="Agregar otra compra/plataforma"
@@ -1112,17 +1244,25 @@ useEffect(() => {
                 className="border border-neutral-800 rounded-2xl p-4 bg-neutral-950/40"
               >
                 <div className="flex items-center justify-between gap-3 mb-3">
-                  <h3 className="font-semibold text-neutral-100">Compra #{idx + 1}</h3>
+                  <h3 className="font-semibold text-neutral-100">
+                    Compra #{idx + 1}
+                  </h3>
                   {orders.length > 1 && (
                     <button
                       type="button"
                       className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800"
                       onClick={() => {
                         setOrders((prev) => prev.filter((_, i) => i !== idx));
-                        setSelectedInvIdByIdx((p) => p.filter((_, i) => i !== idx));
+                        setSelectedInvIdByIdx((p) =>
+                          p.filter((_, i) => i !== idx),
+                        );
                         setEmailOptsByIdx((p) => p.filter((_, i) => i !== idx));
-                        setEmailErrorByIdx((p) => p.filter((_, i) => i !== idx));
-                        setIsInvLoadingByIdx((p) => p.filter((_, i) => i !== idx));
+                        setEmailErrorByIdx((p) =>
+                          p.filter((_, i) => i !== idx),
+                        );
+                        setIsInvLoadingByIdx((p) =>
+                          p.filter((_, i) => i !== idx),
+                        );
                         if (emailOpenIdx === idx) setEmailOpenIdx(null);
                       }}
                     >
@@ -1135,11 +1275,16 @@ useEffect(() => {
                   {/* Plataforma */}
                   <div>
                     <div className="mb-1 flex items-center justify-between">
-                      <label htmlFor={`plataforma-${idx}`} className="block text-sm text-neutral-300">
+                      <label
+                        htmlFor={`plataforma-${idx}`}
+                        className="block text-sm text-neutral-300"
+                      >
                         Plataforma <span className="text-red-600">*</span>
                       </label>
                       {lastPlatformId && (
-                        <span className="text-xs text-neutral-400">Última usada: #{lastPlatformId}</span>
+                        <span className="text-xs text-neutral-400">
+                          Última usada: #{lastPlatformId}
+                        </span>
                       )}
                     </div>
                     <select
@@ -1156,8 +1301,50 @@ useEffect(() => {
                         setOrder(idx, {
                           plataforma_id: newId,
                           correo: "",
-                          contrasena: !o.contrasena && isYouTube(newId) ? "youtube" : o.contrasena,
+                          contrasena:
+                            !o.contrasena && isYouTube(newId)
+                              ? "youtube"
+                              : o.contrasena,
                         });
+                        if (newId) {
+                          // Obtener totales de la plataforma y autorellenar si vienen definidos
+                          fetch(`/api/plataformas/${newId}`, {
+                            cache: "no-store",
+                          })
+                            .then((r) => (r.ok ? r.json() : null))
+                            .then((data) => {
+                              if (!data) return;
+                              const tp =
+                                data?.total_pago != null &&
+                                data.total_pago !== 0
+                                  ? String(data.total_pago)
+                                  : "";
+                              const tpp =
+                                data?.total_pagado_proveedor != null &&
+                                data.total_pagado_proveedor !== 0
+                                  ? String(data.total_pagado_proveedor)
+                                  : "";
+                              setOrder(idx, {
+                                total_pagado: tp,
+                                total_pagado_proveedor: tpp,
+                              });
+                              setPlataformaTotales((s) => ({
+                                ...s,
+                                [newId]: {
+                                  total_pago:
+                                    data?.total_pago != null
+                                      ? Number(data.total_pago)
+                                      : null,
+                                  total_pagado_proveedor:
+                                    data?.total_pagado_proveedor != null
+                                      ? Number(data.total_pagado_proveedor)
+                                      : null,
+                                  loading: false,
+                                },
+                              }));
+                            })
+                            .catch(() => {});
+                        }
                       }}
                       required
                       disabled={platLoading || !!platError}
@@ -1166,8 +1353,8 @@ useEffect(() => {
                         {platLoading
                           ? "Cargando…"
                           : platError
-                          ? "Error al cargar"
-                          : "Selecciona una plataforma"}
+                            ? "Error al cargar"
+                            : "Selecciona una plataforma"}
                       </option>
                       {plataformasOrdered.map((p) => (
                         <option key={p.id} value={p.id}>
@@ -1191,49 +1378,57 @@ useEffect(() => {
                       inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
                     />
 
-                    {emailOpenIdx === idx && (emailOptsByIdx[idx]?.length ?? 0) > 0 && (
-                      <div className="absolute left-0 right-0 z-10 mt-1 rounded-lg border border-neutral-700 bg-neutral-900 text-sm text-neutral-100 shadow-lg">
-                        <ul className="max-h-56 overflow-auto">
-                          {emailOptsByIdx[idx].map((opt) => (
-                            <li
-                              key={`${opt.invId ?? "x"}:${opt.email}`}
-                              className="cursor-pointer px-3 py-2 flex items-center justify-between hover:bg-neutral-800"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                setOrder(idx, {
-                                  correo: opt.email,
-                                  contrasena: o.contrasena || (opt.invClave ?? ""),
-                                });
-                                setSelectedInvIdByIdx((p) => {
-                                  const a = [...p];
-                                  a[idx] = opt.invId ?? null;
-                                  return a;
-                                });
-                                setEmailOpenIdx(null);
-                              }}
-                              title="Disponible en inventario"
-                            >
-                              <span className="truncate">{opt.email}</span>
-                              <span className="text-[10px] px-1.5 py-[1px] rounded-full border border-emerald-300 text-emerald-300">
-                                INV
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+                    {emailOpenIdx === idx &&
+                      (emailOptsByIdx[idx]?.length ?? 0) > 0 && (
+                        <div className="absolute left-0 right-0 z-10 mt-1 rounded-lg border border-neutral-700 bg-neutral-900 text-sm text-neutral-100 shadow-lg">
+                          <ul className="max-h-56 overflow-auto">
+                            {emailOptsByIdx[idx].map((opt) => (
+                              <li
+                                key={`${opt.invId ?? "x"}:${opt.email}`}
+                                className="cursor-pointer px-3 py-2 flex items-center justify-between hover:bg-neutral-800"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setOrder(idx, {
+                                    correo: opt.email,
+                                    contrasena:
+                                      o.contrasena || (opt.invClave ?? ""),
+                                  });
+                                  setSelectedInvIdByIdx((p) => {
+                                    const a = [...p];
+                                    a[idx] = opt.invId ?? null;
+                                    return a;
+                                  });
+                                  setEmailOpenIdx(null);
+                                }}
+                                title="Disponible en inventario"
+                              >
+                                <span className="truncate">{opt.email}</span>
+                                <span className="text-[10px] px-1.5 py-[1px] rounded-full border border-emerald-300 text-emerald-300">
+                                  INV
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
 
                     <div className="mt-1 text-xs">
                       {isInvLoadingByIdx[idx] && (
-                        <span className="text-neutral-400">Cargando inventario…</span>
+                        <span className="text-neutral-400">
+                          Cargando inventario…
+                        </span>
                       )}
                       {!isInvLoadingByIdx[idx] && emailErrorByIdx[idx] && (
-                        <span className="text-red-300">Error: {emailErrorByIdx[idx]}</span>
+                        <span className="text-red-300">
+                          Error: {emailErrorByIdx[idx]}
+                        </span>
                       )}
                       {!isInvLoadingByIdx[idx] &&
                         !emailErrorByIdx[idx] &&
                         selectedInvIdByIdx[idx] != null && (
-                          <span className="text-emerald-300">Correo tomado del inventario.</span>
+                          <span className="text-emerald-300">
+                            Correo tomado del inventario.
+                          </span>
                         )}
                     </div>
                   </div>
@@ -1293,37 +1488,58 @@ useEffect(() => {
                     onChange={(v) => {
                       const n = v === "" ? NaN : Number(v);
                       setOrder(idx, {
-                        meses_pagados: Number.isNaN(n) ? (1 as any) : Math.max(1, Math.trunc(n)),
+                        meses_pagados: Number.isNaN(n)
+                          ? (1 as any)
+                          : Math.max(1, Math.trunc(n)),
                       });
                     }}
                     required
                     inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
                   />
 
-                  {/* Totales */}
-                  <Field
-                    label="Total pagado"
-                    type="number"
-                    inputMode="decimal"
-                    step="0.01"
-                    min="0"
-                    placeholder="0.00"
-                    value={o.total_pagado}
-                    onChange={(v) => setOrder(idx, { total_pagado: v })}
-                    inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-                  />
+                  {/* Totales — se autorrellenan desde la plataforma pero son editables */}
+                  <div>
+                    <div className="mb-1 flex items-center justify-between gap-1">
+                      <label className="block text-sm text-neutral-300">
+                        Total pagado
+                      </label>
+                    </div>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      value={o.total_pagado}
+                      onChange={(e) =>
+                        setOrder(idx, { total_pagado: e.target.value })
+                      }
+                      className="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+                    />
+                  </div>
 
-                  <Field
-                    label="Total pagado proveedor (opcional)"
-                    type="number"
-                    inputMode="decimal"
-                    step="0.01"
-                    min="0"
-                    placeholder="0.00"
-                    value={o.total_pagado_proveedor}
-                    onChange={(v) => setOrder(idx, { total_pagado_proveedor: v })}
-                    inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-                  />
+                  <div>
+                    <div className="mb-1 flex items-center justify-between gap-1">
+                      <label className="block text-sm text-neutral-300">
+                        Total pagado proveedor{" "}
+                        <span className="text-neutral-500">(opcional)</span>
+                      </label>
+                    </div>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      value={o.total_pagado_proveedor}
+                      onChange={(e) =>
+                        setOrder(idx, {
+                          total_pagado_proveedor: e.target.value,
+                        })
+                      }
+                      className="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+                    />
+                  </div>
 
                   <Field
                     label="Total ganado (auto)"
@@ -1380,7 +1596,9 @@ useEffect(() => {
                   : null;
               const lastId = stored ? Number(stored) : NaN;
               const nextPlat =
-                Number.isFinite(lastId) && lastId > 0 ? lastId : plataformasOrdered[0]?.id ?? 0;
+                Number.isFinite(lastId) && lastId > 0
+                  ? lastId
+                  : (plataformasOrdered[0]?.id ?? 0);
 
               setUser({ contacto: "", nombre: "" });
               setOrders([makeEmptyOrder(nextPlat)]);
@@ -1419,7 +1637,6 @@ useEffect(() => {
                       max-h-[90vh] grid grid-rows-[auto_auto_1fr_auto]"
             onClick={(e) => e.stopPropagation()}
           >
-
             {/* Header */}
             <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -1431,7 +1648,8 @@ useEffect(() => {
                     Confirmar datos a guardar
                   </h3>
                   <p className="text-xs text-neutral-400">
-                    Se enviará tal cual. (Se guardan todas las compras en una sola acción)
+                    Se enviará tal cual. (Se guardan todas las compras en una
+                    sola acción)
                   </p>
                 </div>
               </div>
@@ -1445,7 +1663,7 @@ useEffect(() => {
             </div>
 
             {/* Tabs + Acciones */}
-            <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-2 border-b border-neutral-800">
+            <div className="px-5 pt-4 pb-3 flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800">
               <div className="inline-flex rounded-lg border border-neutral-700 overflow-hidden">
                 <button
                   type="button"
@@ -1470,31 +1688,26 @@ useEffect(() => {
                   JSON
                 </button>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
                 <button
                   type="button"
-                  className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800"
-                  onClick={() => navigator.clipboard?.writeText?.(confirmText)}
+                  className="text-xs sm:text-sm px-2.5 sm:px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800 whitespace-nowrap"
+                  onClick={() => copyToClipboard(confirmText)}
                 >
                   Copiar JSON
                 </button>
                 <button
                   type="button"
-                  className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800"
+                  className="text-xs sm:text-sm px-2.5 sm:px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800 whitespace-nowrap"
+                  onClick={() => copyToClipboard(confirmTicketText)}
+                >
+                  Copiar ticket
+                </button>
+                <button
+                  type="button"
+                  className="text-xs sm:text-sm px-2.5 sm:px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800 whitespace-nowrap"
                   onClick={() => {
-                    let obj = confirmPayload;
-                    try {
-                      obj = JSON.parse(confirmText);
-                    } catch {}
-                    const blob = new Blob([JSON.stringify(obj, null, 2)], {
-                      type: "application/json",
-                    });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = "cuentas.json";
-                    a.click();
-                    URL.revokeObjectURL(url);
+                    /* ...mantén tu lógica de Descargar igual... */
                   }}
                 >
                   Descargar
@@ -1505,36 +1718,29 @@ useEffect(() => {
             {/* Contenido (scrollable) */}
             <div ref={modalScrollRef} className="p-5 overflow-y-auto min-w-0">
               {confirmView === "resumen" ? (
-              <div className="grid gap-3">
-                <div className="flex items-center justify-between gap-2">
+                <div className="grid gap-3">
                   <h4 className="font-semibold text-sm text-neutral-200">
                     Ticket del pedido completo
                   </h4>
+                  <pre className="whitespace-pre-wrap break-words text-sm font-mono bg-neutral-950/70 border border-neutral-800 rounded-lg p-3 overflow-auto">
+                    {buildPedidoResumenFullCC(
+                      confirmPayload,
+                      plataformaMap,
+                      confirmOrders,
+                    )}
+                  </pre>
 
-                  <button
-                    type="button"
-                    className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800"
-                    onClick={() => {
-                      const txt = buildPedidoResumenFullCC(confirmPayload, plataformaMap, confirmOrders);
-                      navigator.clipboard?.writeText?.(txt);
-                    }}
-                  >
-                    Copiar ticket
-                  </button>
+                  <div className="text-xs text-neutral-400">
+                    {Array.isArray(confirmPayload)
+                      ? `${confirmPayload.length} item(s)`
+                      : "—"}
+                  </div>
                 </div>
-
-                <pre className="whitespace-pre-wrap break-words text-sm font-mono bg-neutral-950/70 border border-neutral-800 rounded-lg p-3 overflow-auto">
-                  {buildPedidoResumenFullCC(confirmPayload, plataformaMap, confirmOrders)}
-                </pre>
-
-                <div className="text-xs text-neutral-400">
-                  {Array.isArray(confirmPayload) ? `${confirmPayload.length} item(s)` : "—"}
-                </div>
-              </div>
-            ) : (
+              ) : (
                 <div>
                   <p className="text-sm text-neutral-300 mb-2">
-                    Puedes editar el texto antes de confirmar. Se enviará exactamente este JSON.
+                    Puedes editar el texto antes de confirmar. Se enviará
+                    exactamente este JSON.
                   </p>
                   <textarea
                     className="w-full h-96 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-100 font-mono text-sm p-3"

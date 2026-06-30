@@ -12,10 +12,15 @@ export async function GET(req: Request) {
     const q = (searchParams.get('q') ?? '').trim();
     const plataformaIdStr = searchParams.get('plataforma_id');
     const plataforma_id = plataformaIdStr ? Number(plataformaIdStr) : undefined;
+    const disponibles = searchParams.get("disponibles") === "1";
 
     const where: any = {};
     if (plataforma_id && !Number.isNaN(plataforma_id)) where.plataforma_id = plataforma_id;
     if (q) where.correo = { contains: q }; // sin 'mode'
+    // SOLO cuando pidan disponibles
+    if (disponibles) {
+        where.cuenta_caida = false;
+    }
 
     const data = await prisma.cuentascompartidas.findMany({
       where,

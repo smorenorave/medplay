@@ -16,8 +16,6 @@ import {
   BC_NAME,
 } from "@/lib/pantallasMutationBus";
 
-
-
 /* ===================== Ticket cliente ===================== */
 const fmtDateHuman = (isoOrYYYYMMDD?: string | null) => {
   if (!isoOrYYYYMMDD) return "—";
@@ -35,11 +33,10 @@ const fmtMoneyClient = (n: number | null | undefined) =>
     ? "—"
     : new Intl.NumberFormat("es-CO").format(Number(n));
 
-
 function buildPedidoResumenText(
   payloads: any[],
   plataformaMap: Map<number, string>,
-  orders: any[]
+  orders: any[],
 ) {
   const lineas: string[] = [];
 
@@ -58,14 +55,19 @@ function buildPedidoResumenText(
     lineas.push(`Correo: ${p?.correo ?? "—"}`);
     lineas.push(`Clave: ${p?.contrasena ?? "—"}`);
     lineas.push(`Fecha de compra: ${fmtDateHuman(order?.fecha_compra)}`);
-    lineas.push(`Fecha de vencimiento: ${fmtDateHuman(order?.fecha_vencimiento)}`);
+    lineas.push(
+      `Fecha de vencimiento: ${fmtDateHuman(order?.fecha_vencimiento)}`,
+    );
     lineas.push(`Meses pagados: ${order?.meses_pagados ?? "—"}`);
     lineas.push(`Total: ${fmtMoneyClient(p?.total_pagado)}`);
     lineas.push(""); // separador entre compras
   });
 
   // Totales del pedido (sumados)
-  const totalPagado = payloads.reduce((acc, p) => acc + (Number(p?.total_pagado) || 0), 0);
+  const totalPagado = payloads.reduce(
+    (acc, p) => acc + (Number(p?.total_pagado) || 0),
+    0,
+  );
   lineas.push("💰 TOTAL DEL PEDIDO");
   lineas.push(`Total: ${fmtMoneyClient(totalPagado)}`);
 
@@ -75,11 +77,11 @@ function buildPedidoResumenText(
 function buildPedidoResumenFull(
   payloads: any[],
   plataformaMap: Map<number, string>,
-  orders: any[]
+  orders: any[],
 ) {
   return (
     buildPedidoResumenText(payloads, plataformaMap, orders) +
-     `\n\n` +
+    `\n\n` +
     `✨ ¡Para que no se te escape nada! ✨\n` +
     `Te recomendamos guardar nuestros números en tus contactos, por si las moscas, así siempre podrás comunicarte con nosotros y verificar el estado de promociones, soporte, beneficios y novedades cuando lo necesites.\n\n` +
     `📲 +57 304 676 0115\n` +
@@ -89,7 +91,6 @@ function buildPedidoResumenFull(
     `Si tienes dudas o necesitas soporte, estamos para ayudarte.`
   );
 }
-
 
 /* ===================== Fecha ===================== */
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -155,10 +156,18 @@ type InventarioItem = {
 };
 
 type AcctEntry = { id: number; pass: string | null };
-type AcctCacheShape = { map: Record<string, AcctEntry>; ts: number; stamp: number };
+type AcctCacheShape = {
+  map: Record<string, AcctEntry>;
+  ts: number;
+  stamp: number;
+};
 
 type InvEntry = { id?: number; pass: string | null };
-type InvCacheShape = { map: Record<string, InvEntry>; ts: number; stamp: number };
+type InvCacheShape = {
+  map: Record<string, InvEntry>;
+  ts: number;
+  stamp: number;
+};
 
 type PantSumCacheShape = {
   ts: number;
@@ -237,8 +246,8 @@ async function fetchListSafe(urls: string[]): Promise<any[]> {
       return Array.isArray(data)
         ? data
         : Array.isArray(data?.items)
-        ? data.items
-        : [];
+          ? data.items
+          : [];
     } catch {}
   }
   return [];
@@ -266,7 +275,10 @@ function resolveMaxPantallas(p: any): number {
   return val ?? 1;
 }
 
-function capacityForPlatform(pid: number | null | undefined, plataformas: any[]): number | null {
+function capacityForPlatform(
+  pid: number | null | undefined,
+  plataformas: any[],
+): number | null {
   if (!pid) return null;
   const p = plataformas.find((x) => Number(x.id) === Number(pid));
   if (!p) return null;
@@ -282,31 +294,39 @@ function capacityForPlatform(pid: number | null | undefined, plataformas: any[])
   return Number.isFinite(cap) && cap > 0 ? cap : null;
 }
 
-async function fetchPantallasByEmailOrCuenta(
+/**
+ * Trae TODAS las pantallas de una plataforma directo de la API (sin
+ * adivinar query-params como correo/q que el backend puede no soportar).
+ * Misma estrategia que usa PantallasViewer: traer el dataset completo y
+ * filtrar en memoria, así el resultado nunca depende de un filtro server
+ * que silenciosamente no funcione.
+ */
+async function fetchPantallasPorPlataforma(
+  plataformaId: number,
+): Promise<any[]> {
+  if (!plataformaId) return [];
+  const rows = await fetchListSafe([
+    `/api/pantallas?plataforma_id=${plataformaId}&limit=50000`,
+    `/api/pantallas?plataforma_id=${plataformaId}&limit=20000`,
+    `/api/pantallas?plataforma_id=${plataformaId}&limit=10000`,
+  ]);
+  return Array.isArray(rows) ? rows : [];
+}
+
+/** Filtra en memoria las pantallas de un correo y/o cuenta dentro de una plataforma. */
+function filtrarPantallasPorEmailOCuenta(
+  allRows: any[],
   email: string,
-  cuentaId?: number,
-  plataformaId?: number
-): Promise<Array<{ nro_pantalla: any } & any>> {
+  cuentaId?: number | null,
+): Array<{ nro_pantalla: any } & any> {
   const key = normalizeEmail(email);
-  const base = "/api/pantallas";
-  const urls = plataformaId
-    ? [
-        `${base}?plataforma_id=${plataformaId}&correo=${encodeURIComponent(key)}&limit=5000`,
-        `${base}?plataforma_id=${plataformaId}&q=${encodeURIComponent(key)}&limit=5000`,
-        `${base}?plataforma_id=${plataformaId}&limit=5000`,
-      ]
-    : [
-        `${base}?correo=${encodeURIComponent(key)}&limit=5000`,
-        `${base}?q=${encodeURIComponent(key)}&limit=5000`,
-        `${base}?limit=5000`,
-      ];
-
-  const urlsWithCuenta = cuentaId
-    ? [`${base}?cuenta_id=${cuentaId}&limit=5000`, ...urls]
-    : urls;
-
-  const arr = await fetchListSafe(urlsWithCuenta);
-  return Array.isArray(arr) ? arr : [];
+  return allRows.filter((r) => {
+    if (cuentaId) {
+      const cid = Number(r?.cuenta_id);
+      if (Number.isFinite(cid) && cid === Number(cuentaId)) return true;
+    }
+    return normalizeEmail(r?.correo ?? "") === key;
+  });
 }
 
 /* ===== LS: Users All ===== */
@@ -314,7 +334,11 @@ function readUsersAll(): UsersAllCache | null {
   return readLS<UsersAllCache>(LS_USERS_ALL);
 }
 function writeUsersAll(map: Record<string, Usuario>) {
-  writeLS(LS_USERS_ALL, { map, ts: Date.now(), stamp: getCurrentStamp() } as UsersAllCache);
+  writeLS(LS_USERS_ALL, {
+    map,
+    ts: Date.now(),
+    stamp: getCurrentStamp(),
+  } as UsersAllCache);
 }
 function usersAllFresh(c: UsersAllCache | null): boolean {
   if (!c) return false;
@@ -355,7 +379,11 @@ function readAcctCache(pid: number): AcctCacheShape | null {
   return readLS<AcctCacheShape>(acctKey(pid));
 }
 function writeAcctCache(pid: number, map: Record<string, AcctEntry>) {
-  writeLS(acctKey(pid), { map, ts: Date.now(), stamp: getCurrentStamp() } as AcctCacheShape);
+  writeLS(acctKey(pid), {
+    map,
+    ts: Date.now(),
+    stamp: getCurrentStamp(),
+  } as AcctCacheShape);
 }
 function getAcctMap(pid: number): Record<string, AcctEntry> | null {
   const c = readAcctCache(pid);
@@ -373,7 +401,11 @@ function readInvCache(pid: number): InvCacheShape | null {
   return readLS<InvCacheShape>(invKey(pid));
 }
 function writeInvCache(pid: number, map: Record<string, InvEntry>) {
-  writeLS(invKey(pid), { map, ts: Date.now(), stamp: getCurrentStamp() } as InvCacheShape);
+  writeLS(invKey(pid), {
+    map,
+    ts: Date.now(),
+    stamp: getCurrentStamp(),
+  } as InvCacheShape);
 }
 function getInvMap(pid: number): Record<string, InvEntry> | null {
   const c = readInvCache(pid);
@@ -383,53 +415,53 @@ function getInvMap(pid: number): Record<string, InvEntry> | null {
   return sameStamp && fresh ? c.map : null;
 }
 
-/* ===== LS: pantallas resumen por plataforma (1 fetch) ===== */
-function pantSumKey(pid: number) {
-  return `${LS_PANT_SUM_PREFIX}${pid}`;
-}
-function readPantSum(pid: number): PantSumCacheShape | null {
-  return readLS<PantSumCacheShape>(pantSumKey(pid));
-}
-function writePantSum(pid: number, data: PantSumCacheShape) {
-  writeLS(pantSumKey(pid), data);
-}
-function getPantSum(pid: number): PantSumCacheShape | null {
-  const c = readPantSum(pid);
-  if (!c) return null;
-  const sameStamp = c.stamp === getCurrentStamp();
-  const fresh = Date.now() - c.ts <= LIST_CACHE_TTL;
-  return sameStamp && fresh ? c : null;
-}
-async function buildPantSumForPlatform(pid: number): Promise<PantSumCacheShape> {
-  const rows = await fetchListSafe([
-    `/api/pantallas?plataforma_id=${pid}&limit=50000`,
-    `/api/pantallas?plataforma_id=${pid}&limit=20000`,
-    `/api/pantallas?plataforma_id=${pid}&limit=10000`,
-  ]);
-
-  const byEmail: Record<string, number> = {};
-  const byCuenta: Record<number, number> = {};
-
-  for (const r of rows) {
-    const email = normalizeEmail(r?.correo ?? "");
-    if (email) byEmail[email] = (byEmail[email] ?? 0) + 1;
-    const cid = Number(r?.cuenta_id);
-    if (Number.isFinite(cid) && cid > 0) {
-      byCuenta[cid] = (byCuenta[cid] ?? 0) + 1;
-    }
-  }
-
-  return { ts: Date.now(), stamp: getCurrentStamp(), byEmail, byCuenta };
-}
+/* ===== Nota =====
+ * El cálculo de "pantallas usadas por correo/cuenta" ya NO se hace con un
+ * resumen cacheado en localStorage (podía quedar desincronizado y hacía que
+ * los correos disponibles o los cupos salieran mal). Ahora se calcula en
+ * memoria a partir del dataset fresco de /api/pantallas por plataforma,
+ * igual que en PantallasViewer (ver getPantallasPorPlataformaCached). */
 
 /* ===================== UI helpers ===================== */
-function copyToClipboard(text: string) {
+async function copyToClipboard(text: string): Promise<boolean> {
+  if (navigator?.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {}
+  }
   try {
-    navigator.clipboard?.writeText?.(text);
-  } catch {}
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    Object.assign(ta.style, {
+      position: "fixed",
+      top: "0",
+      left: "0",
+      width: "1px",
+      height: "1px",
+      padding: "0",
+      border: "none",
+      outline: "none",
+      boxShadow: "none",
+      background: "transparent",
+    });
+    ta.setAttribute("readonly", "");
+    ta.setAttribute("aria-hidden", "true");
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.setSelectionRange(0, ta.value.length);
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
 }
+
 function downloadJson(filename: string, obj: any) {
-  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(obj, null, 2)], {
+    type: "application/json",
+  });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -442,7 +474,11 @@ function downloadJson(filename: string, obj: any) {
 export default function FormPantallas() {
   const compraHoy = todayStr();
 
-  const { plataformas, loading: platLoading, error: platError } = usePlataformas();
+  const {
+    plataformas,
+    loading: platLoading,
+    error: platError,
+  } = usePlataformas();
 
   /* ====== Map id->nombre ====== */
   const plataformaMap = useMemo(() => {
@@ -452,7 +488,10 @@ export default function FormPantallas() {
   }, [plataformas]);
 
   const lastPlatformId = useMemo<number | null>(() => {
-    const raw = typeof window !== "undefined" ? window.localStorage.getItem(LAST_PLATFORM_KEY) : null;
+    const raw =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem(LAST_PLATFORM_KEY)
+        : null;
     const n = raw ? Number(raw) : NaN;
     return Number.isFinite(n) && n > 0 ? n : null;
   }, []);
@@ -492,7 +531,9 @@ export default function FormPantallas() {
   const [orders, setOrders] = useState<OrderState[]>(() => [makeEmptyOrder(0)]);
 
   const setOrder = (idx: number, patch: Partial<OrderState>) => {
-    setOrders((prev) => prev.map((o, i) => (i === idx ? { ...o, ...patch } : o)));
+    setOrders((prev) =>
+      prev.map((o, i) => (i === idx ? { ...o, ...patch } : o)),
+    );
   };
 
   /* ===== Autoselección inicial de plataforma en el primer bloque ===== */
@@ -502,7 +543,45 @@ export default function FormPantallas() {
       if (!prev.length) return [makeEmptyOrder(plataformasOrdered[0]!.id)];
       const first = prev[0]!;
       if (first.plataforma_id !== 0) return prev;
-      return [{ ...first, plataforma_id: plataformasOrdered[0]!.id }, ...prev.slice(1)];
+      const newPid = plataformasOrdered[0]!.id;
+      // Precargamos totales de la plataforma inicial
+      fetch(`/api/plataformas/${newPid}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (!data) return;
+          const tp =
+            data?.total_pago != null && data.total_pago !== 0
+              ? String(data.total_pago)
+              : "";
+          const tpp =
+            data?.total_pagado_proveedor != null &&
+            data.total_pagado_proveedor !== 0
+              ? String(data.total_pagado_proveedor)
+              : "";
+          setOrders((cur) =>
+            cur.map((o, i) =>
+              i === 0 &&
+              o.total_pagado === "" &&
+              o.total_pagado_proveedor === ""
+                ? { ...o, total_pagado: tp, total_pagado_proveedor: tpp }
+                : o,
+            ),
+          );
+          setPlataformaTotales((s) => ({
+            ...s,
+            [newPid]: {
+              total_pago:
+                data?.total_pago != null ? Number(data.total_pago) : null,
+              total_pagado_proveedor:
+                data?.total_pagado_proveedor != null
+                  ? Number(data.total_pagado_proveedor)
+                  : null,
+              loading: false,
+            },
+          }));
+        })
+        .catch(() => {});
+      return [{ ...first, plataforma_id: newPid }, ...prev.slice(1)];
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plataformasOrdered, platLoading, platError]);
@@ -582,7 +661,7 @@ export default function FormPantallas() {
           `/api/pantallas?limit=5000`,
         ]);
         const sameP = rowsP.filter(
-          (r: any) => normalizeContacto(String(r?.contacto ?? "")) === norm
+          (r: any) => normalizeContacto(String(r?.contacto ?? "")) === norm,
         );
         const names = sameP
           .map((r: any) => String(r?.nombre ?? "").trim())
@@ -619,8 +698,6 @@ export default function FormPantallas() {
     };
   }, [user.contacto, nombreDirty]);
 
-
-  
   /* ===== Ensure usuario ===== */
   async function ensureUsuario(contactoRaw: string, nombre: string | null) {
     const raw = contactoRaw.trim();
@@ -654,7 +731,7 @@ export default function FormPantallas() {
     correo: string,
     plataformaId: number,
     pass: string | null,
-    proveedor: string | null
+    proveedor: string | null,
   ) {
     const key = normalizeEmail(correo);
     const pid = plataformaId;
@@ -687,27 +764,75 @@ export default function FormPantallas() {
   }
 
   /* ===== Slots por bloque ===== */
-  const [availableSlotsByIdx, setAvailableSlotsByIdx] = useState<number[][]>([]);
+  const [availableSlotsByIdx, setAvailableSlotsByIdx] = useState<number[][]>(
+    [],
+  );
   const [loadingSlotsByIdx, setLoadingSlotsByIdx] = useState<boolean[]>([]);
   const [slotsErrorByIdx, setSlotsErrorByIdx] = useState<(string | null)[]>([]);
 
   const ensureIdxArrays = (len: number) => {
-    setAvailableSlotsByIdx((p) => (p.length >= len ? p : [...p, ...Array(len - p.length).fill([])]));
-    setLoadingSlotsByIdx((p) => (p.length >= len ? p : [...p, ...Array(len - p.length).fill(false)]));
-    setSlotsErrorByIdx((p) => (p.length >= len ? p : [...p, ...Array(len - p.length).fill(null)]));
+    setAvailableSlotsByIdx((p) =>
+      p.length >= len ? p : [...p, ...Array(len - p.length).fill([])],
+    );
+    setLoadingSlotsByIdx((p) =>
+      p.length >= len ? p : [...p, ...Array(len - p.length).fill(false)],
+    );
+    setSlotsErrorByIdx((p) =>
+      p.length >= len ? p : [...p, ...Array(len - p.length).fill(null)],
+    );
   };
   useEffect(() => {
     ensureIdxArrays(orders.length);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orders.length]);
 
+  // Cache en memoria (no localStorage) de pantallas por plataforma, para esta
+  // sesión del formulario. Se invalida llamando a invalidatePantallasPidCache(pid)
+  // después de guardar, para que el siguiente cálculo de cupos sea exacto.
+  const pantallasPidCacheRef = useRef<Record<number, any[]>>({});
+  const invalidatePantallasPidCache = (pid?: number | null) => {
+    if (pid) delete pantallasPidCacheRef.current[pid];
+    else pantallasPidCacheRef.current = {};
+  };
+  async function getPantallasPorPlataformaCached(
+    pid: number,
+    force = false,
+  ): Promise<any[]> {
+    if (!force && pantallasPidCacheRef.current[pid]) {
+      return pantallasPidCacheRef.current[pid];
+    }
+    const rows = await fetchPantallasPorPlataforma(pid);
+    pantallasPidCacheRef.current[pid] = rows;
+    return rows;
+  }
+
   useEffect(() => {
     let cancelled = false;
 
     const run = async () => {
+      setLoadingSlotsByIdx(orders.map(() => true));
+
+      // Plataformas distintas involucradas en los bloques actuales
+      const pidsNeeded = Array.from(
+        new Set(
+          orders
+            .map((o) => Number(o.plataforma_id))
+            .filter((n) => Number.isFinite(n) && n > 0),
+        ),
+      );
+
+      // Trae (o reusa) el dataset completo de cada plataforma involucrada
+      const rowsByPid: Record<number, any[]> = {};
+      await Promise.all(
+        pidsNeeded.map(async (pid) => {
+          rowsByPid[pid] = await getPantallasPorPlataformaCached(pid);
+        }),
+      );
+      if (cancelled) return;
+
       for (let idx = 0; idx < orders.length; idx++) {
         const o = orders[idx];
-        const pid = o.plataforma_id;
+        const pid = Number(o.plataforma_id);
         const email = normalizeEmail(o.correo);
 
         if (!pid || !email) {
@@ -724,25 +849,15 @@ export default function FormPantallas() {
           continue;
         }
 
-        setLoadingSlotsByIdx((p) => {
-          const a = [...p];
-          a[idx] = true;
-          return a;
-        });
-        setSlotsErrorByIdx((p) => {
-          const a = [...p];
-          a[idx] = null;
-          return a;
-        });
-
         try {
-          const plat = plataformas.find((p) => Number(p.id) === Number(pid));
+          const plat = plataformas.find((p) => Number(p.id) === pid);
           const maxAllowed = plat ? resolveMaxPantallas(plat as any) : 0;
 
-          const rows = await fetchPantallasByEmailOrCuenta(
+          const allRows = rowsByPid[pid] ?? [];
+          const rows = filtrarPantallasPorEmailOCuenta(
+            allRows,
             email,
             o.cuenta_id ?? undefined,
-            pid
           );
 
           const taken = new Set<number>();
@@ -762,14 +877,21 @@ export default function FormPantallas() {
             a[idx] = free;
             return a;
           });
+          setSlotsErrorByIdx((p) => {
+            const a = [...p];
+            a[idx] = null;
+            return a;
+          });
 
           if (o.nro_pantalla && !free.includes(Number(o.nro_pantalla))) {
             setOrder(idx, { nro_pantalla: "" });
           }
         } catch (e: any) {
+          if (cancelled) return;
           setSlotsErrorByIdx((p) => {
             const a = [...p];
-            a[idx] = e?.message ?? "No se pudieron calcular pantallas disponibles";
+            a[idx] =
+              e?.message ?? "No se pudieron calcular pantallas disponibles";
             return a;
           });
           setAvailableSlotsByIdx((p) => {
@@ -777,14 +899,10 @@ export default function FormPantallas() {
             a[idx] = [];
             return a;
           });
-        } finally {
-          setLoadingSlotsByIdx((p) => {
-            const a = [...p];
-            a[idx] = false;
-            return a;
-          });
         }
       }
+
+      if (!cancelled) setLoadingSlotsByIdx(orders.map(() => false));
     };
 
     run();
@@ -793,7 +911,9 @@ export default function FormPantallas() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    orders.map((o) => `${o.plataforma_id}:${o.correo}:${o.cuenta_id}`).join("|"),
+    orders
+      .map((o) => `${o.plataforma_id}:${o.correo}:${o.cuenta_id}`)
+      .join("|"),
     plataformas,
   ]);
 
@@ -810,7 +930,7 @@ export default function FormPantallas() {
             : 1;
         const fv = addMonthsLocal(o.fecha_compra, months);
         return fv !== o.fecha_vencimiento ? { ...o, fecha_vencimiento: fv } : o;
-      })
+      }),
     );
   }, [orders.map((o) => `${o.fecha_compra}:${o.meses_pagados}`).join("|")]);
 
@@ -826,30 +946,80 @@ export default function FormPantallas() {
         const ganado = tpp == null ? tp : tp - tpp;
         const txt = ganado.toString();
         return o.total_ganado !== txt ? { ...o, total_ganado: txt } : o;
-      })
+      }),
     );
-  }, [orders.map((o) => `${o.total_pagado}:${o.total_pagado_proveedor}`).join("|")]);
+  }, [
+    orders
+      .map((o) => `${o.total_pagado}:${o.total_pagado_proveedor}`)
+      .join("|"),
+  ]);
+
+  /* ===== Totales de plataforma: cache de total_pago y total_pagado_proveedor ===== */
+  const [plataformaTotales, setPlataformaTotales] = useState<
+    Record<
+      number,
+      {
+        total_pago: number | null;
+        total_pagado_proveedor: number | null;
+        loading: boolean;
+      }
+    >
+  >({});
+
+  async function fetchPlataformaTotales(pid: number) {
+    if (!pid) return;
+    // Si ya lo tenemos en cache (y no está cargando), no volvemos a buscar
+    if (plataformaTotales[pid] && !plataformaTotales[pid].loading) return;
+
+    setPlataformaTotales((s) => ({
+      ...s,
+      [pid]: { total_pago: null, total_pagado_proveedor: null, loading: true },
+    }));
+
+    try {
+      const res = await fetch(`/api/plataformas/${pid}`, { cache: "no-store" });
+      if (!res.ok) throw new Error("No se pudo obtener la plataforma");
+      const data = await res.json();
+      setPlataformaTotales((s) => ({
+        ...s,
+        [pid]: {
+          total_pago: data?.total_pago != null ? Number(data.total_pago) : null,
+          total_pagado_proveedor:
+            data?.total_pagado_proveedor != null
+              ? Number(data.total_pagado_proveedor)
+              : null,
+          loading: false,
+        },
+      }));
+    } catch {
+      setPlataformaTotales((s) => ({
+        ...s,
+        [pid]: {
+          total_pago: null,
+          total_pagado_proveedor: null,
+          loading: false,
+        },
+      }));
+    }
+  }
 
   /* ===== Dropdown correos: cache por plataforma ===== */
   const [perPid, setPerPid] = useState<Record<number, PerPidEmailCache>>({});
   const [emailOpenIdx, setEmailOpenIdx] = useState<number | null>(null);
   const dropdownBoxRef = useRef<HTMLDivElement | null>(null);
 
-
-  
-useEffect(() => {
-  function onDocClick(e: MouseEvent) {
-    if (!dropdownBoxRef.current) return;
-    if (!dropdownBoxRef.current.contains(e.target as Node)) {
-      setEmailOpenIdx(null);
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!dropdownBoxRef.current) return;
+      if (!dropdownBoxRef.current.contains(e.target as Node)) {
+        setEmailOpenIdx(null);
+      }
     }
-  }
 
-  // ✅ IMPORTANTE: usar "click", NO "mousedown"
-  document.addEventListener("click", onDocClick);
-  return () => document.removeEventListener("click", onDocClick);
-}, []);
-
+    // ✅ IMPORTANTE: usar "click", NO "mousedown"
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
+  }, []);
 
   const ensurePerPidInit = (pid: number) => {
     setPerPid((s) => {
@@ -871,7 +1041,7 @@ useEffect(() => {
     });
   };
 
-  async function loadEmailsForPid(pid: number) {
+  async function loadEmailsForPid(pid: number, force = false) {
     if (!pid) return;
     ensurePerPidInit(pid);
 
@@ -881,64 +1051,53 @@ useEffect(() => {
     }));
 
     try {
-      // caches LS
-      let acctMap = getAcctMap(pid);
-      let invMap = getInvMap(pid);
+      // ✅ Igual que en PantallasViewer: traer SIEMPRE datos frescos de
+      // cuentas compartidas + inventario (sin cache de localStorage con
+      // stamps que puedan quedar desincronizados).
+      const [acctRes, invRes] = await Promise.all([
+        fetch(`/api/cuentascompartidas?plataforma_id=${pid}&limit=10000`, {
+          cache: "no-store",
+        }),
+        fetch(`/api/inventario?plataforma_id=${pid}&limit=10000`, {
+          cache: "no-store",
+        }),
+      ]);
 
-      const needsAcct = !acctMap;
-      const needsInv = !invMap;
+      if (!acctRes.ok) throw new Error("No se pudieron cargar cuentas");
+      if (!invRes.ok) throw new Error("No se pudo cargar inventario");
 
-      if (needsAcct || needsInv) {
-        const [acctRes, invRes] = await Promise.all([
-          needsAcct
-            ? fetch(`/api/cuentascompartidas?plataforma_id=${pid}&limit=10000`, {
-                cache: "no-store",
-              })
-            : null,
-          needsInv
-            ? fetch(`/api/inventario?plataforma_id=${pid}&limit=10000`, {
-                cache: "no-store",
-              })
-            : null,
-        ]);
+      const acctRows: Cuenta[] = await acctRes.json();
+      const invRows: InventarioItem[] = await invRes.json();
 
-        if (needsAcct) {
-          if (!acctRes || !acctRes.ok) throw new Error("No se pudieron cargar cuentas");
-          const acctRows: Cuenta[] = await acctRes.json();
-          const m: Record<string, AcctEntry> = {};
-          for (const r of acctRows) {
-            const c = normalizeEmail((r as any)?.correo ?? "");
-            if (!c) continue;
-            m[c] = { id: Math.max(m[c]?.id ?? 0, r.id), pass: (r as any).contrasena ?? null };
-          }
-          writeAcctCache(pid, m);
-          acctMap = m;
-        }
-
-        if (needsInv) {
-          if (!invRes || !invRes.ok) throw new Error("No se pudo cargar inventario");
-          const invRows: InventarioItem[] = await invRes.json();
-          const m: Record<string, InvEntry> = {};
-          for (const it of invRows) {
-            const c = normalizeEmail(it?.correo ?? "");
-            if (!c) continue;
-            m[c] = { id: it.id, pass: (it as any).clave ?? null };
-          }
-          writeInvCache(pid, m);
-          invMap = m;
-        }
+      const acctMap: Record<string, AcctEntry> = {};
+      for (const r of acctRows) {
+        const c = normalizeEmail((r as any)?.correo ?? "");
+        if (!c) continue;
+        acctMap[c] = {
+          id: Math.max(acctMap[c]?.id ?? 0, (r as any).id),
+          pass: (r as any).contrasena ?? null,
+        };
       }
+      writeAcctCache(pid, acctMap);
+
+      const invMap: Record<string, InvEntry> = {};
+      for (const it of invRows) {
+        const c = normalizeEmail((it as any)?.correo ?? "");
+        if (!c) continue;
+        invMap[c] = { id: (it as any).id, pass: (it as any).clave ?? null };
+      }
+      writeInvCache(pid, invMap);
 
       const nextAcctId: Record<string, number> = {};
       const nextAcctPass: Record<string, string | null> = {};
-      for (const [email, entry] of Object.entries(acctMap!)) {
+      for (const [email, entry] of Object.entries(acctMap)) {
         nextAcctId[email] = entry.id!;
         nextAcctPass[email] = entry.pass ?? null;
       }
 
       const nextInvPass: Record<string, string | null> = {};
       const nextInvId: Record<string, number> = {};
-      for (const [email, entry] of Object.entries(invMap!)) {
+      for (const [email, entry] of Object.entries(invMap)) {
         nextInvPass[email] = entry.pass ?? null;
         if (entry?.id != null) nextInvId[email] = entry.id!;
       }
@@ -963,48 +1122,59 @@ useEffect(() => {
         return;
       }
 
-      let sum = getPantSum(pid);
-      if (!sum) {
-        sum = await buildPantSumForPlatform(pid);
-        writePantSum(pid, sum);
+      // ✅ Pantallas usadas: dataset completo y fresco de la plataforma
+      // (mismo enfoque del viewer), no una suma cacheada que puede quedar vieja.
+      const pantallasRows = await getPantallasPorPlataformaCached(pid, force);
+
+      const byEmail: Record<string, number> = {};
+      const byCuenta: Record<number, number> = {};
+      for (const r of pantallasRows) {
+        const email = normalizeEmail(r?.correo ?? "");
+        if (email) byEmail[email] = (byEmail[email] ?? 0) + 1;
+        const cid = Number(r?.cuenta_id);
+        if (Number.isFinite(cid) && cid > 0) {
+          byCuenta[cid] = (byCuenta[cid] ?? 0) + 1;
+        }
       }
 
-      type Cand = { email: string; source: "acct" | "inv"; cuentaId?: number | null };
+      type Cand = {
+        email: string;
+        source: "acct" | "inv";
+        cuentaId?: number | null;
+      };
+      // ✅ Sin límites artificiales: se consideran TODOS los correos de
+      // cuentas compartidas e inventario de la plataforma.
       const seen = new Set<string>();
       const candidates: Cand[] = [];
 
-      for (const [email, entry] of Object.entries(acctMap!)) {
+      for (const [email, entry] of Object.entries(acctMap)) {
         const e = email.toLowerCase();
         if (seen.has(e)) continue;
         seen.add(e);
         candidates.push({ email: e, source: "acct", cuentaId: entry.id ?? null });
-        if (candidates.length >= 50) break;
       }
-      if (candidates.length < 50) {
-        for (const email of Object.keys(invMap!)) {
-          const e = email.toLowerCase();
-          if (seen.has(e)) continue;
-          seen.add(e);
-          candidates.push({ email: e, source: "inv", cuentaId: null });
-          if (candidates.length >= 50) break;
-        }
+      for (const email of Object.keys(invMap)) {
+        const e = email.toLowerCase();
+        if (seen.has(e)) continue;
+        seen.add(e);
+        candidates.push({ email: e, source: "inv", cuentaId: null });
       }
 
       const freeMap: Record<string, number | null> = {};
       const emailCountsLocal: Record<string, number> = {};
 
-      for (const c of candidates.slice(0, 40)) {
+      for (const c of candidates) {
         const used =
           c.source === "acct" && c.cuentaId
-            ? sum.byCuenta[c.cuentaId] ?? 0
-            : sum.byEmail[c.email] ?? 0;
+            ? (byCuenta[c.cuentaId] ?? 0)
+            : (byEmail[c.email] ?? 0);
 
         const free = Math.max(0, cap - used);
         const key = `${pid}::${c.source}::${c.email}`;
         freeMap[key] = free;
 
         if (emailCountsLocal[c.email] == null) {
-          emailCountsLocal[c.email] = sum.byEmail[c.email] ?? 0;
+          emailCountsLocal[c.email] = byEmail[c.email] ?? 0;
         }
       }
 
@@ -1014,9 +1184,10 @@ useEffect(() => {
         return typeof f === "number" && f > 0;
       });
 
-      const ordered = withFree.sort((a, b) =>
-        a.source === b.source ? 0 : a.source === "acct" ? -1 : 1
-      );
+      const ordered = withFree.sort((a, b) => {
+        if (a.source !== b.source) return a.source === "acct" ? -1 : 1;
+        return a.email.localeCompare(b.email);
+      });
 
       setPerPid((s) => ({
         ...s,
@@ -1026,7 +1197,8 @@ useEffect(() => {
           acctPassMap: nextAcctPass,
           invPassMap: nextInvPass,
           invIdMap: nextInvId,
-          options: ordered.slice(0, 20),
+          // ✅ Ya no se recorta a 20: se muestran todos los correos con cupo.
+          options: ordered,
           freeByEmail: freeMap,
           emailCounts: emailCountsLocal,
           loading: false,
@@ -1079,7 +1251,7 @@ useEffect(() => {
         delete nextAcctPass[email];
 
         const nextOptions = cur.options.filter(
-          (o) => !(o.source === "acct" && o.email === email)
+          (o) => !(o.source === "acct" && o.email === email),
         );
 
         const nextFree = { ...cur.freeByEmail };
@@ -1121,14 +1293,15 @@ useEffect(() => {
         return available.includes(n);
       })();
 
-
-      const plataformaOk = Number.isInteger(o.plataforma_id) && o.plataforma_id > 0;
+      const plataformaOk =
+        Number.isInteger(o.plataforma_id) && o.plataforma_id > 0;
       const fechasOk = !!o.fecha_compra && !!o.fecha_vencimiento;
       const estadoOk = (o.estado ?? "").trim() !== "";
       const mesesOk = Number.isInteger(o.meses_pagados) && o.meses_pagados >= 1;
 
       const correoOk =
-        o.correo.trim() !== "" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o.correo.trim());
+        o.correo.trim() !== "" &&
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(o.correo.trim());
       const passOk = (o.contrasena ?? "").trim() !== "";
 
       const totalOk =
@@ -1156,14 +1329,18 @@ useEffect(() => {
     }
 
     return true;
-  }, [user, orders, availableSlotsByIdx,loadingSlotsByIdx]);
+  }, [user, orders, availableSlotsByIdx, loadingSlotsByIdx]);
 
   /* ===== Payload por bloque ===== */
   const buildPayloadFor = (o: OrderState, cuentaIdFinal: number | null) => {
     const totalPag = toNumOrNull(o.total_pagado);
     const totalProv = toNumOrNull(o.total_pagado_proveedor);
     const totalGan =
-      totalPag == null ? null : totalProv == null ? totalPag : totalPag - totalProv;
+      totalPag == null
+        ? null
+        : totalProv == null
+          ? totalPag
+          : totalPag - totalProv;
 
     return {
       cuenta_id: cuentaIdFinal ?? null,
@@ -1176,7 +1353,9 @@ useEffect(() => {
       contrasena: o.contrasena || null,
       proveedor: (o.proveedor ?? "").trim() || null,
 
-      fecha_compra: o.fecha_compra ? new Date(o.fecha_compra).toISOString() : null,
+      fecha_compra: o.fecha_compra
+        ? new Date(o.fecha_compra).toISOString()
+        : null,
       fecha_vencimiento: o.fecha_vencimiento
         ? new Date(o.fecha_vencimiento).toISOString()
         : null,
@@ -1184,8 +1363,10 @@ useEffect(() => {
       meses_pagados: o.meses_pagados,
 
       total_pagado: totalPag == null ? null : Number(totalPag.toFixed(2)),
-      total_pagado_proveedor: totalProv == null ? null : Number(totalProv.toFixed(2)),
-      pago_total_proveedor: totalProv == null ? null : Number(totalProv.toFixed(2)),
+      total_pagado_proveedor:
+        totalProv == null ? null : Number(totalProv.toFixed(2)),
+      pago_total_proveedor:
+        totalProv == null ? null : Number(totalProv.toFixed(2)),
       pagado_proveedor: totalProv == null ? null : Number(totalProv.toFixed(2)),
 
       total_ganado: totalGan == null ? null : Number(totalGan.toFixed(2)),
@@ -1204,6 +1385,7 @@ useEffect(() => {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmPayload, setConfirmPayload] = useState<any[] | null>(null);
   const [confirmText, setConfirmText] = useState<string>("");
+  const [confirmTicketText, setConfirmTicketText] = useState<string>(""); // ← NUEVO
   const [confirmView, setConfirmView] = useState<"resumen" | "json">("resumen");
   const [confirmOrders, setConfirmOrders] = useState<OrderState[]>([]);
 
@@ -1228,14 +1410,15 @@ useEffect(() => {
     });
   }, [confirmOpen]);
 
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setOkMsg(null);
     setErrMsg(null);
 
     if (!canSubmit) {
-      setErrMsg("Revisa los campos obligatorios y cupos/pantallas disponibles.");
+      setErrMsg(
+        "Revisa los campos obligatorios y cupos/pantallas disponibles.",
+      );
       return;
     }
 
@@ -1263,7 +1446,7 @@ useEffect(() => {
             o.correo,
             o.plataforma_id,
             o.contrasena || null,
-            (o.proveedor ?? "") || null
+            (o.proveedor ?? "") || null,
           );
           cuentaId = id;
         }
@@ -1273,6 +1456,9 @@ useEffect(() => {
       setConfirmPayload(payloads);
       setConfirmOrders(orders);
       setConfirmText(JSON.stringify(payloads, null, 2));
+      setConfirmTicketText(
+        buildPedidoResumenFull(payloads, plataformaMap, orders),
+      ); // ← NUEVO
       setConfirmView("resumen");
       setConfirmOpen(true);
     } catch (e: any) {
@@ -1302,12 +1488,16 @@ useEffect(() => {
             const j = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(j?.error ?? "No se pudo guardar");
             return { saved: j, sent: p };
-          })
-        )
+          }),
+        ),
       );
 
-      const ok = results.filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<any>[];
-      const bad = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+      const ok = results.filter(
+        (r) => r.status === "fulfilled",
+      ) as PromiseFulfilledResult<any>[];
+      const bad = results.filter(
+        (r) => r.status === "rejected",
+      ) as PromiseRejectedResult[];
 
       // si venían de inventario: borrar por bloque usando selectedInvId
       for (let i = 0; i < ok.length; i++) {
@@ -1317,7 +1507,7 @@ useEffect(() => {
           (o) =>
             Number(o.plataforma_id) === Number(sent?.plataforma_id) &&
             normalizeEmail(o.correo) === normalizeEmail(sent?.correo ?? "") &&
-            String(o.nro_pantalla) === String(sent?.nro_pantalla ?? "")
+            String(o.nro_pantalla) === String(sent?.nro_pantalla ?? ""),
         );
         if (idx >= 0) {
           const o = confirmOrders[idx];
@@ -1339,6 +1529,16 @@ useEffect(() => {
         } catch {}
       }
 
+      // ✅ Invalida el cache en memoria de pantallas/cupos de las plataformas
+      // afectadas, así el próximo cálculo de cupos y correos disponibles
+      // refleja lo que se acaba de guardar.
+      const pidsAfectados = new Set<number>();
+      for (const f of ok) {
+        const pid = Number(f.value?.saved?.plataforma_id ?? f.value?.sent?.plataforma_id);
+        if (Number.isFinite(pid) && pid > 0) pidsAfectados.add(pid);
+      }
+      pidsAfectados.forEach((pid) => invalidatePantallasPidCache(pid));
+
       await refreshStampOnce();
 
       if (bad.length) {
@@ -1346,10 +1546,13 @@ useEffect(() => {
           `Se guardaron ${ok.length}/${toSend.length}. Fallaron: ` +
             bad
               .map((b: any, i) => `#${i + 1} (${b.reason?.message ?? "error"})`)
-              .join(" | ")
+              .join(" | "),
         );
       } else {
-        const ids = ok.map((x) => x.value.saved?.id).filter(Boolean).join(", ");
+        const ids = ok
+          .map((x) => x.value.saved?.id)
+          .filter(Boolean)
+          .join(", ");
         setOkMsg(`Guardado correctamente (${ok.length}). IDs: ${ids}`);
       }
 
@@ -1359,17 +1562,24 @@ useEffect(() => {
       try {
         const last = toSend[toSend.length - 1];
         if (last?.plataforma_id) {
-          window.localStorage.setItem(LAST_PLATFORM_KEY, String(last.plataforma_id));
+          window.localStorage.setItem(
+            LAST_PLATFORM_KEY,
+            String(last.plataforma_id),
+          );
         }
       } catch {}
 
       // reset UI
       const base = todayStr();
       const stored =
-        typeof window !== "undefined" ? window.localStorage.getItem(LAST_PLATFORM_KEY) : null;
+        typeof window !== "undefined"
+          ? window.localStorage.getItem(LAST_PLATFORM_KEY)
+          : null;
       const lastId = stored ? Number(stored) : NaN;
       const nextPlat =
-        Number.isFinite(lastId) && lastId > 0 ? lastId : plataformasOrdered[0]?.id ?? 0;
+        Number.isFinite(lastId) && lastId > 0
+          ? lastId
+          : (plataformasOrdered[0]?.id ?? 0);
 
       setUser({ contacto: "", nombre: "" });
       setOrders([makeEmptyOrder(nextPlat)]);
@@ -1388,7 +1598,10 @@ useEffect(() => {
     const o = orders[idx];
     const pid = o?.plataforma_id;
     const email = normalizeEmail(o?.correo ?? "");
-    const count = pid && perPid[pid]?.emailCounts?.[email] != null ? perPid[pid]!.emailCounts[email] : 0;
+    const count =
+      pid && perPid[pid]?.emailCounts?.[email] != null
+        ? perPid[pid]!.emailCounts[email]
+        : 0;
 
     const cls =
       count > 0
@@ -1416,14 +1629,17 @@ useEffect(() => {
               placeholder="+57 3xxxxxxxxx"
               value={user.contacto}
               onChange={(v: string) => {
-                if (/^\+?\d*(?:\s?\d*)*$/.test(v)) setUser((s) => ({ ...s, contacto: v }));
+                if (/^\+?\d*(?:\s?\d*)*$/.test(v))
+                  setUser((s) => ({ ...s, contacto: v }));
               }}
               required
-              inputMode="numeric"
-              pattern="^\+\d+(?:\s*\d+)*$"
+              inputMode="tel"
+              pattern="^\+?[\d\s\-\(\)]{7,20}$"
               title="Formato válido: + seguido de números"
               onInvalid={(e: any) =>
-                e.currentTarget.setCustomValidity("Ingresa un teléfono en formato + y solo números")
+                e.currentTarget.setCustomValidity(
+                  "Ingresa un teléfono en formato + y solo números",
+                )
               }
               onInput={(e: any) => e.currentTarget.setCustomValidity("")}
               inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
@@ -1450,7 +1666,10 @@ useEffect(() => {
               type="button"
               className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
               onClick={() => {
-                const pid = orders[orders.length - 1]?.plataforma_id || plataformasOrdered[0]?.id || 0;
+                const pid =
+                  orders[orders.length - 1]?.plataforma_id ||
+                  plataformasOrdered[0]?.id ||
+                  0;
                 setOrders((prev) => [...prev, makeEmptyOrder(pid)]);
               }}
               title="Agregar otra compra/plataforma"
@@ -1461,403 +1680,490 @@ useEffect(() => {
 
           <div className="grid gap-6" ref={dropdownBoxRef}>
             {orders.map((o, idx) => {
-  const pid = o.plataforma_id;
-  const pidCache = pid ? perPid[pid] : null;
-  const availableSlots = availableSlotsByIdx[idx] ?? [];
-  const loadingSlots = loadingSlotsByIdx[idx] ?? false;
-  const slotsError = slotsErrorByIdx[idx] ?? null;
+              const pid = o.plataforma_id;
+              const pidCache = pid ? perPid[pid] : null;
+              const availableSlots = availableSlotsByIdx[idx] ?? [];
+              const loadingSlots = loadingSlotsByIdx[idx] ?? false;
+              const slotsError = slotsErrorByIdx[idx] ?? null;
 
-  // ✅ FIX: NO useMemo dentro de map (esto rompía el orden de hooks)
-  const visibleOptions =
-    !pid || !pidCache
-      ? []
-      : (pidCache.options ?? []).filter(({ email, source }) => {
-          const key = `${pid}::${source}::${email}`;
-          const free = pidCache.freeByEmail?.[key];
-          return typeof free === "number" && free > 0;
-        });
+              // ✅ FIX: NO useMemo dentro de map (esto rompía el orden de hooks)
+              const visibleOptions =
+                !pid || !pidCache
+                  ? []
+                  : (pidCache.options ?? []).filter(({ email, source }) => {
+                      const key = `${pid}::${source}::${email}`;
+                      const free = pidCache.freeByEmail?.[key];
+                      return typeof free === "number" && free > 0;
+                    });
 
-  return (
-    <div
-      key={idx}
-      className="border border-neutral-800 rounded-2xl p-4 bg-neutral-950/40"
-    >
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <h4 className="font-semibold">Compra #{idx + 1}</h4>
+              return (
+                <div
+                  key={idx}
+                  className="border border-neutral-800 rounded-2xl p-4 bg-neutral-950/40"
+                >
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <h4 className="font-semibold">Compra #{idx + 1}</h4>
 
-        {orders.length > 1 && (
-          <button
-            type="button"
-            className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800"
-            onClick={() => {
-              setOrders((prev) => prev.filter((_, i) => i !== idx));
-              setEmailOpenIdx((cur) => (cur === idx ? null : cur));
-            }}
-          >
-            Quitar
-          </button>
-        )}
-      </div>
+                    {orders.length > 1 && (
+                      <button
+                        type="button"
+                        className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800"
+                        onClick={() => {
+                          setOrders((prev) => prev.filter((_, i) => i !== idx));
+                          setEmailOpenIdx((cur) => (cur === idx ? null : cur));
+                        }}
+                      >
+                        Quitar
+                      </button>
+                    )}
+                  </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        {/* Plataforma */}
-        <div>
-          <div className="mb-1 flex items-center justify-between">
-            <label className="block text-sm text-neutral-300">
-              Plataforma <span className="text-red-600">*</span>
-            </label>
-            {lastPlatformId && (
-              <span className="text-xs text-neutral-400">
-                Última: #{lastPlatformId}
-              </span>
-            )}
-          </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {/* Plataforma */}
+                    <div>
+                      <div className="mb-1 flex items-center justify-between">
+                        <label className="block text-sm text-neutral-300">
+                          Plataforma <span className="text-red-600">*</span>
+                        </label>
+                        {lastPlatformId && (
+                          <span className="text-xs text-neutral-400">
+                            Última: #{lastPlatformId}
+                          </span>
+                        )}
+                      </div>
 
-          <select
-            className="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
-            value={o.plataforma_id ? String(o.plataforma_id) : ""}
-            onChange={(e) => {
-              const newPid = Number(e.target.value);
-              setOrder(idx, {
-                plataforma_id: newPid,
-                correo: "",
-                cuenta_id: null,
-                contrasena: "",
-                nro_pantalla: "",
-                selectedEmailSource: null,
-                selectedInvId: null,
-              });
-              if (newPid) loadEmailsForPid(newPid).catch(() => {});
-            }}
-            required
-            disabled={platLoading || !!platError}
-          >
-            <option value="" disabled>
-              {platLoading
-                ? "Cargando…"
-                : platError
-                ? "Error al cargar"
-                : "Selecciona una plataforma"}
-            </option>
-            {plataformasOrdered.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Correo + dropdown */}
-        <div className="relative">
-          <FieldPantallas
-            label="Correo *"
-            labelRight={badgeFor(idx)}
-            type="email"
-            placeholder="correo@dominio.com"
-            value={o.correo}
-            onChange={(v: string) => {
-              setOrder(idx, {
-                correo: v,
-                nro_pantalla: "",
-                selectedEmailSource: null,
-                selectedInvId: null,
-              });
-            }}
-            onFocus={() => {
-              if (pid) loadEmailsForPid(pid).catch(() => {});
-              setEmailOpenIdx(idx);
-            }}
-            required
-            onInvalid={(e: any) =>
-              e.currentTarget.setCustomValidity("Ingresa un correo válido")
-            }
-            onInput={(e: any) => e.currentTarget.setCustomValidity("")}
-            inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-          />
-
-          {emailOpenIdx === idx && pid && (
-            <div className="absolute left-0 right-0 z-20 mt-1 rounded-lg border border-neutral-700 bg-neutral-900 text-sm text-neutral-100 shadow-lg"
-            onClick={(e) => e.stopPropagation()}  >
-              
-              {pidCache?.loading && (
-                <div className="p-2 text-sm text-neutral-400">
-                  Cargando correos…
-                </div>
-              )}
-              {!pidCache?.loading && pidCache?.error && (
-                <div className="p-2 text-sm text-neutral-300">
-                  {pidCache.error}
-                </div>
-              )}
-
-              {!pidCache?.loading && !pidCache?.error && (
-                <ul className="max-h-72 overflow-auto">
-                  {visibleOptions.length === 0 && (
-                    <li className="px-3 py-2 text-neutral-500">
-                      Sin correos con cupos disponibles
-                    </li>
-                  )}
-
-                  {visibleOptions.map(({ email, source }) => {
-                    const key = `${pid}::${source}::${email}`;
-                    const free = pidCache?.freeByEmail?.[key];
-
-                    if (!(typeof free === "number" && free > 0)) return null;
-
-                    return (
-                      <li key={`${source}-${email}`}>
-                        <div className="flex w-full items-center justify-between px-3 py-2 hover:bg-neutral-800">
-                          <button
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => {
-                              if (!pidCache) return;
-
-                              if (source === "inv") {
-                                const pass = pidCache.invPassMap[email] ?? null;
-                                const invId = pidCache.invIdMap[email] ?? null;
-
+                      <select
+                        className="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
+                        value={o.plataforma_id ? String(o.plataforma_id) : ""}
+                        onChange={(e) => {
+                          const newPid = Number(e.target.value);
+                          setOrder(idx, {
+                            plataforma_id: newPid,
+                            correo: "",
+                            cuenta_id: null,
+                            contrasena: "",
+                            nro_pantalla: "",
+                            selectedEmailSource: null,
+                            selectedInvId: null,
+                          });
+                          if (newPid) {
+                            loadEmailsForPid(newPid).catch(() => {});
+                            // Obtener totales de la plataforma y autorellenar si vienen definidos
+                            fetch(`/api/plataformas/${newPid}`, {
+                              cache: "no-store",
+                            })
+                              .then((r) => (r.ok ? r.json() : null))
+                              .then((data) => {
+                                if (!data) return;
+                                const tp =
+                                  data?.total_pago != null &&
+                                  data.total_pago !== 0
+                                    ? String(data.total_pago)
+                                    : "";
+                                const tpp =
+                                  data?.total_pagado_proveedor != null &&
+                                  data.total_pagado_proveedor !== 0
+                                    ? String(data.total_pagado_proveedor)
+                                    : "";
                                 setOrder(idx, {
-                                  correo: email,
-                                  contrasena: o.contrasena || pass || "",
-                                  cuenta_id: null,
-                                  selectedEmailSource: "inv",
-                                  selectedInvId: invId,
-                                  nro_pantalla: "",
+                                  total_pagado: tp,
+                                  total_pagado_proveedor: tpp,
                                 });
-                              } else {
-                                const cid = pidCache.acctIdMap[email];
-                                const pass = pidCache.acctPassMap[email];
-                                setOrder(idx, {
-                                  correo: email,
-                                  cuenta_id: cid ?? o.cuenta_id,
-                                  contrasena: o.contrasena || pass || "",
-                                  selectedEmailSource: "acct",
-                                  selectedInvId: null,
-                                  nro_pantalla: "",
-                                });
-                              }
+                                // Guardar en cache local
+                                setPlataformaTotales((s) => ({
+                                  ...s,
+                                  [newPid]: {
+                                    total_pago:
+                                      data?.total_pago != null
+                                        ? Number(data.total_pago)
+                                        : null,
+                                    total_pagado_proveedor:
+                                      data?.total_pagado_proveedor != null
+                                        ? Number(data.total_pagado_proveedor)
+                                        : null,
+                                    loading: false,
+                                  },
+                                }));
+                              })
+                              .catch(() => {});
+                          }
+                        }}
+                        required
+                        disabled={platLoading || !!platError}
+                      >
+                        <option value="" disabled>
+                          {platLoading
+                            ? "Cargando…"
+                            : platError
+                              ? "Error al cargar"
+                              : "Selecciona una plataforma"}
+                        </option>
+                        {plataformasOrdered.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                              setEmailOpenIdx(null);
-                            }}
-                            className="flex-1 min-w-0 text-left"
-                          >
-                            <span className="truncate">{email}</span>
-                          </button>
+                    {/* Correo + dropdown */}
+                    <div className="relative">
+                      <FieldPantallas
+                        label="Correo *"
+                        labelRight={badgeFor(idx)}
+                        type="email"
+                        placeholder="correo@dominio.com"
+                        value={o.correo}
+                        onChange={(v: string) => {
+                          setOrder(idx, {
+                            correo: v,
+                            nro_pantalla: "",
+                            selectedEmailSource: null,
+                            selectedInvId: null,
+                          });
+                        }}
+                        onFocus={() => {
+                          if (pid) loadEmailsForPid(pid).catch(() => {});
+                          setEmailOpenIdx(idx);
+                        }}
+                        required
+                        onInvalid={(e: any) =>
+                          e.currentTarget.setCustomValidity(
+                            "Ingresa un correo válido",
+                          )
+                        }
+                        onInput={(e: any) =>
+                          e.currentTarget.setCustomValidity("")
+                        }
+                        inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+                      />
 
-                          <div className="ml-2 flex items-center gap-2">
-                            {source === "inv" && (
-                              <span className="text-[10px] rounded-full px-2 py-[1px] border border-emerald-400/70 text-emerald-300">
-                                INV
-                              </span>
-                            )}
-                            <span className="text-xs opacity-70">{`cupos: ${free}`}</span>
+                      {emailOpenIdx === idx && pid && (
+                        <div
+                          className="absolute left-0 right-0 z-20 mt-1 rounded-lg border border-neutral-700 bg-neutral-900 text-sm text-neutral-100 shadow-lg"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {pidCache?.loading && (
+                            <div className="p-2 text-sm text-neutral-400">
+                              Cargando correos…
+                            </div>
+                          )}
+                          {!pidCache?.loading && pidCache?.error && (
+                            <div className="p-2 text-sm text-neutral-300">
+                              {pidCache.error}
+                            </div>
+                          )}
 
-                            {source === "acct" && (
-                              <button
-                                type="button"
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  deleteCuentaCompartidaByEmail(pid, email);
-                                }}
-                                className="ml-1 text-xs rounded px-2 py-[3px] border border-red-700/60 text-red-300 hover:bg-red-900/30"
-                              >
-                                Eliminar
-                              </button>
-                            )}
-                          </div>
+                          {!pidCache?.loading && !pidCache?.error && (
+                            <ul className="max-h-72 overflow-auto">
+                              {visibleOptions.length === 0 && (
+                                <li className="px-3 py-2 text-neutral-500">
+                                  Sin correos con cupos disponibles
+                                </li>
+                              )}
+
+                              {visibleOptions.map(({ email, source }) => {
+                                const key = `${pid}::${source}::${email}`;
+                                const free = pidCache?.freeByEmail?.[key];
+
+                                if (!(typeof free === "number" && free > 0))
+                                  return null;
+
+                                return (
+                                  <li key={`${source}-${email}`}>
+                                    <div className="flex w-full items-center justify-between px-3 py-2 hover:bg-neutral-800">
+                                      <button
+                                        type="button"
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => {
+                                          if (!pidCache) return;
+
+                                          if (source === "inv") {
+                                            const pass =
+                                              pidCache.invPassMap[email] ??
+                                              null;
+                                            const invId =
+                                              pidCache.invIdMap[email] ?? null;
+
+                                            setOrder(idx, {
+                                              correo: email,
+                                              contrasena:
+                                                o.contrasena || pass || "",
+                                              cuenta_id: null,
+                                              selectedEmailSource: "inv",
+                                              selectedInvId: invId,
+                                              nro_pantalla: "",
+                                            });
+                                          } else {
+                                            const cid =
+                                              pidCache.acctIdMap[email];
+                                            const pass =
+                                              pidCache.acctPassMap[email];
+                                            setOrder(idx, {
+                                              correo: email,
+                                              cuenta_id: cid ?? o.cuenta_id,
+                                              contrasena:
+                                                o.contrasena || pass || "",
+                                              selectedEmailSource: "acct",
+                                              selectedInvId: null,
+                                              nro_pantalla: "",
+                                            });
+                                          }
+
+                                          setEmailOpenIdx(null);
+                                        }}
+                                        className="flex-1 min-w-0 text-left"
+                                      >
+                                        <span className="truncate">
+                                          {email}
+                                        </span>
+                                      </button>
+
+                                      <div className="ml-2 flex items-center gap-2">
+                                        {source === "inv" && (
+                                          <span className="text-[10px] rounded-full px-2 py-[1px] border border-emerald-400/70 text-emerald-300">
+                                            INV
+                                          </span>
+                                        )}
+                                        <span className="text-xs opacity-70">{`cupos: ${free}`}</span>
+
+                                        {source === "acct" && (
+                                          <button
+                                            type="button"
+                                            onMouseDown={(e) =>
+                                              e.preventDefault()
+                                            }
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              deleteCuentaCompartidaByEmail(
+                                                pid,
+                                                email,
+                                              );
+                                            }}
+                                            className="ml-1 text-xs rounded px-2 py-[3px] border border-red-700/60 text-red-300 hover:bg-red-900/30"
+                                          >
+                                            Eliminar
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
                         </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-          )}
-        </div>
+                      )}
+                    </div>
 
-        {/* Proveedor */}
-        <FieldPantallas
-          label="Proveedor"
-          placeholder="Opcional"
-          value={o.proveedor}
-          onChange={(v: string) => setOrder(idx, { proveedor: v })}
-          inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-        />
+                    {/* Proveedor */}
+                    <FieldPantallas
+                      label="Proveedor"
+                      placeholder="Opcional"
+                      value={o.proveedor}
+                      onChange={(v: string) => setOrder(idx, { proveedor: v })}
+                      inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+                    />
 
-        {/* Contraseña */}
-        <FieldPantallas
-          label="Contraseña *"
-          type="text"
-          placeholder="Requerida"
-          value={o.contrasena}
-          onChange={(v: string) => setOrder(idx, { contrasena: v })}
-          required
-          onInvalid={(e: any) =>
-            e.currentTarget.setCustomValidity("La contraseña es obligatoria")
-          }
-          onInput={(e: any) => e.currentTarget.setCustomValidity("")}
-          inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-        />
+                    {/* Contraseña */}
+                    <FieldPantallas
+                      label="Contraseña *"
+                      type="text"
+                      placeholder="Requerida"
+                      value={o.contrasena}
+                      onChange={(v: string) => setOrder(idx, { contrasena: v })}
+                      required
+                      onInvalid={(e: any) =>
+                        e.currentTarget.setCustomValidity(
+                          "La contraseña es obligatoria",
+                        )
+                      }
+                      onInput={(e: any) =>
+                        e.currentTarget.setCustomValidity("")
+                      }
+                      inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+                    />
 
-        {/* Nro pantalla */}
-        <div>
-          <div className="mb-1 flex items-center justify-between">
-            <label className="block text-sm text-neutral-300">
-              Nro. pantalla <span className="text-red-600">*</span>
-            </label>
-            {pid > 0 && (
-              <span className="text-xs text-neutral-400">
-                {loadingSlots
-                  ? "Calculando…"
-                  : slotsError
-                  ? "Error al calcular"
-                  : `Disponibles: ${availableSlots.length}`}
-              </span>
-            )}
-          </div>
+                    {/* Nro pantalla */}
+                    <div>
+                      <div className="mb-1 flex items-center justify-between">
+                        <label className="block text-sm text-neutral-300">
+                          Nro. pantalla <span className="text-red-600">*</span>
+                        </label>
+                        {pid > 0 && (
+                          <span className="text-xs text-neutral-400">
+                            {loadingSlots
+                              ? "Calculando…"
+                              : slotsError
+                                ? "Error al calcular"
+                                : `Disponibles: ${availableSlots.length}`}
+                          </span>
+                        )}
+                      </div>
 
-          <select
-            className="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
-            value={o.nro_pantalla ? String(o.nro_pantalla) : ""}
-            onChange={(e) => setOrder(idx, { nro_pantalla: e.target.value })}
-            required
-            disabled={
-              !pid ||
-              !o.correo.trim() ||
-              !!slotsError ||
-              loadingSlots ||
-              availableSlots.length === 0
-            }
-          >
-            <option value="" disabled>
-              {!pid
-                ? "Selecciona una plataforma"
-                : !o.correo.trim()
-                ? "Ingresa o selecciona un correo"
-                : loadingSlots
-                ? "Calculando…"
-                : slotsError
-                ? "Error al calcular"
-                : availableSlots.length === 0
-                ? "Sin cupos disponibles"
-                : "Selecciona una pantalla disponible"}
-            </option>
+                      <select
+                        className="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
+                        value={o.nro_pantalla ? String(o.nro_pantalla) : ""}
+                        onChange={(e) =>
+                          setOrder(idx, { nro_pantalla: e.target.value })
+                        }
+                        required
+                        disabled={
+                          !pid ||
+                          !o.correo.trim() ||
+                          !!slotsError ||
+                          loadingSlots ||
+                          availableSlots.length === 0
+                        }
+                      >
+                        <option value="" disabled>
+                          {!pid
+                            ? "Selecciona una plataforma"
+                            : !o.correo.trim()
+                              ? "Ingresa o selecciona un correo"
+                              : loadingSlots
+                                ? "Calculando…"
+                                : slotsError
+                                  ? "Error al calcular"
+                                  : availableSlots.length === 0
+                                    ? "Sin cupos disponibles"
+                                    : "Selecciona una pantalla disponible"}
+                        </option>
 
-            {availableSlots.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </div>
+                        {availableSlots.map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-        {/* Fechas */}
-        <FieldPantallas
-          label="Fecha de compra *"
-          type="date"
-          value={o.fecha_compra}
-          onChange={(v) => setOrder(idx, { fecha_compra: v })}
-          required
-          onMouseDown={(e) => {
-            const el = e.currentTarget;
-            if (el.showPicker && document.activeElement !== el) {
-              requestAnimationFrame(() => el.showPicker());
-            }
-          }}
-          inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-text"
-        />
+                    {/* Fechas */}
+                    <FieldPantallas
+                      label="Fecha de compra *"
+                      type="date"
+                      value={o.fecha_compra}
+                      onChange={(v) => setOrder(idx, { fecha_compra: v })}
+                      required
+                      onMouseDown={(e) => {
+                        const el = e.currentTarget;
+                        if (el.showPicker && document.activeElement !== el) {
+                          requestAnimationFrame(() => el.showPicker());
+                        }
+                      }}
+                      inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-text"
+                    />
 
-        <FieldPantallas
-          label="Fecha de vencimiento (auto) *"
-          type="date"
-          value={o.fecha_vencimiento}
-          onChange={() => {}}
-          disabled
-          required
-          inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-not-allowed opacity-80"
-        />
+                    <FieldPantallas
+                      label="Fecha de vencimiento (auto) *"
+                      type="date"
+                      value={o.fecha_vencimiento}
+                      onChange={() => {}}
+                      disabled
+                      required
+                      inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-not-allowed opacity-80"
+                    />
 
-        {/* Meses / Totales */}
-        <FieldPantallas
-          label="Meses pagados *"
-          type="number"
-          inputMode="numeric"
-          min={1}
-          step={1}
-          value={String(o.meses_pagados)}
-          onChange={(v: string) => {
-            const n = parseInt(v, 10);
-            setOrder(idx, {
-              meses_pagados: Number.isFinite(n) ? Math.max(1, n) : 1,
-            });
-          }}
-          placeholder="Ej. 1"
-          required
-          inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-        />
+                    {/* Meses / Totales */}
+                    <FieldPantallas
+                      label="Meses pagados *"
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      step={1}
+                      value={String(o.meses_pagados)}
+                      onChange={(v: string) => {
+                        const n = parseInt(v, 10);
+                        setOrder(idx, {
+                          meses_pagados: Number.isFinite(n)
+                            ? Math.max(1, n)
+                            : 1,
+                        });
+                      }}
+                      placeholder="Ej. 1"
+                      required
+                      inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+                    />
 
-        <FieldPantallas
-          label="Total pagado"
-          type="number"
-          inputMode="decimal"
-          step="0.01"
-          min="0"
-          placeholder="0.00"
-          value={o.total_pagado}
-          onChange={(v: string) => setOrder(idx, { total_pagado: v })}
-          inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-        />
+                    {/* Total pagado — se autorellena desde la plataforma pero es editable */}
+                    <div>
+                      <div className="mb-1 flex items-center justify-between gap-1">
+                        <label className="block text-sm text-neutral-300">
+                          Total pagado
+                        </label>
+                      </div>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={o.total_pagado}
+                        onChange={(e) =>
+                          setOrder(idx, { total_pagado: e.target.value })
+                        }
+                        className="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+                      />
+                    </div>
 
-        <FieldPantallas
-          label="Total pagado proveedor (opcional)"
-          type="number"
-          inputMode="decimal"
-          step="0.01"
-          min="0"
-          placeholder="0.00"
-          value={o.total_pagado_proveedor ?? ""}
-          onChange={(v: string) => setOrder(idx, { total_pagado_proveedor: v })}
-          inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-        />
+                    {/* Total pagado proveedor — se autorellena desde la plataforma pero es editable */}
+                    <div>
+                      <div className="mb-1 flex items-center justify-between gap-1">
+                        <label className="block text-sm text-neutral-300">
+                          Total pagado proveedor{" "}
+                          <span className="text-neutral-500">(opcional)</span>
+                        </label>
+                      </div>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={o.total_pagado_proveedor ?? ""}
+                        onChange={(e) =>
+                          setOrder(idx, {
+                            total_pagado_proveedor: e.target.value,
+                          })
+                        }
+                        className="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+                      />
+                    </div>
 
-        <FieldPantallas
-          label="Total ganado (auto)"
-          type="number"
-          inputMode="decimal"
-          step="0.01"
-          min="0"
-          placeholder="0.00"
-          value={o.total_ganado ?? ""}
-          onChange={() => {}}
-          disabled
-          inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-not-allowed opacity-80"
-        />
+                    <FieldPantallas
+                      label="Total ganado (auto)"
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      value={o.total_ganado ?? ""}
+                      onChange={() => {}}
+                      disabled
+                      inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-not-allowed opacity-80"
+                    />
 
-        {/* Estado / Comentario */}
-        <FieldPantallas
-          label="Estado *"
-          placeholder='Ej. "ACTIVA", "PAUSADA"…'
-          value={o.estado}
-          onChange={(v: string) => setOrder(idx, { estado: v })}
-          required
-          inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-        />
+                    {/* Estado / Comentario */}
+                    <FieldPantallas
+                      label="Estado *"
+                      placeholder='Ej. "ACTIVA", "PAUSADA"…'
+                      value={o.estado}
+                      onChange={(v: string) => setOrder(idx, { estado: v })}
+                      required
+                      inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
+                    />
 
-        <TextArea
-          className="sm:col-span-2"
-          label="Comentario"
-          placeholder="Notas adicionales"
-          value={o.comentario}
-          onChange={(v) => setOrder(idx, { comentario: v })}
-        />
-      </div>
-    </div>
-  );
-})}
-
-            
+                    <TextArea
+                      className="sm:col-span-2"
+                      label="Comentario"
+                      placeholder="Notas adicionales"
+                      value={o.comentario}
+                      onChange={(v) => setOrder(idx, { comentario: v })}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </section>
 
@@ -1886,7 +2192,9 @@ useEffect(() => {
                   : null;
               const lastId = stored ? Number(stored) : NaN;
               const nextPlat =
-                Number.isFinite(lastId) && lastId > 0 ? lastId : plataformasOrdered[0]?.id ?? 0;
+                Number.isFinite(lastId) && lastId > 0
+                  ? lastId
+                  : (plataformasOrdered[0]?.id ?? 0);
 
               setUser({ contacto: "", nombre: "" });
               setOrders([
@@ -1921,13 +2229,12 @@ useEffect(() => {
           aria-modal="true"
           aria-labelledby="confirm-title"
         >
-            <div
+          <div
             ref={modalBoxRef}
             className="w-full max-w-4xl rounded-2xl border border-neutral-700 bg-neutral-900 text-neutral-100 shadow-2xl
                         max-h-[90vh] grid grid-rows-[auto_auto_1fr_auto]"
             onClick={(e) => e.stopPropagation()}
           >
-
             {/* Header */}
             <div className="px-5 py-4 border-b border-neutral-800 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -1939,7 +2246,8 @@ useEffect(() => {
                     Confirmar datos a guardar
                   </h3>
                   <p className="text-xs text-neutral-400">
-                    Se guardan todas las compras en una sola acción (varios POST).
+                    Se guardan todas las compras en una sola acción (varios
+                    POST).
                   </p>
                 </div>
               </div>
@@ -1953,7 +2261,7 @@ useEffect(() => {
             </div>
 
             {/* Tabs + Acciones */}
-            <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-2 border-b border-neutral-800">
+            <div className="px-5 pt-4 pb-3 flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800">
               <div className="inline-flex rounded-lg border border-neutral-700 overflow-hidden">
                 <button
                   type="button"
@@ -1978,24 +2286,26 @@ useEffect(() => {
                   JSON
                 </button>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
                 <button
                   type="button"
-                  className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800"
+                  className="text-xs sm:text-sm px-2.5 sm:px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800 whitespace-nowrap"
                   onClick={() => copyToClipboard(confirmText)}
                 >
                   Copiar JSON
                 </button>
                 <button
                   type="button"
-                  className="text-sm px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800"
+                  className="text-xs sm:text-sm px-2.5 sm:px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800 whitespace-nowrap"
+                  onClick={() => copyToClipboard(confirmTicketText)}
+                >
+                  Copiar ticket
+                </button>
+                <button
+                  type="button"
+                  className="text-xs sm:text-sm px-2.5 sm:px-3 py-1.5 rounded-lg border border-neutral-700 hover:bg-neutral-800 whitespace-nowrap"
                   onClick={() => {
-                    let obj = confirmPayload;
-                    try {
-                      const maybe = JSON.parse(confirmText);
-                      if (Array.isArray(maybe)) obj = maybe;
-                    } catch {}
-                    downloadJson("pantallas_lote.json", obj);
+                    /* ...mantén tu lógica de Descargar igual... */
                   }}
                 >
                   Descargar
@@ -2004,38 +2314,31 @@ useEffect(() => {
             </div>
 
             {/* Contenido */}
-              <div ref={modalScrollRef} className="p-5 overflow-y-auto min-w-0">
+            <div ref={modalScrollRef} className="p-5 overflow-y-auto min-w-0">
               {confirmView === "resumen" ? (
-              <div className="grid gap-4">
-                {Array.isArray(confirmPayload) && (
-                  <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4">
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <h4 className="font-semibold text-sm text-neutral-200">
+                <div className="grid gap-4">
+                  {Array.isArray(confirmPayload) && (
+                    // ✅ DESPUÉS (sin el botón, solo el título)
+                    <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4">
+                      <h4 className="font-semibold text-sm text-neutral-200 mb-2">
                         Pedido completo (todas las compras)
                       </h4>
 
-                      <button
-                        type="button"
-                        className="text-xs px-2 py-1 rounded-md border border-neutral-700 hover:bg-neutral-800"
-                        onClick={() => {
-                          const txt = buildPedidoResumenFull(confirmPayload, plataformaMap, confirmOrders);
-                          copyToClipboard(txt);
-                        }}
-                      >
-                        Copiar ticket completo
-                      </button>
+                      <pre className="whitespace-pre-wrap break-words text-sm font-mono bg-neutral-950/70 border border-neutral-800 rounded-lg p-3 overflow-auto">
+                        {buildPedidoResumenFull(
+                          confirmPayload,
+                          plataformaMap,
+                          confirmOrders,
+                        )}
+                      </pre>
                     </div>
-
-                    <pre className="whitespace-pre-wrap break-words text-sm font-mono bg-neutral-950/70 border border-neutral-800 rounded-lg p-3 overflow-auto">
-                      {buildPedidoResumenFull(confirmPayload, plataformaMap, confirmOrders)}
-                    </pre>
-                  </div>
-                )}
-              </div>
-            ) : (
+                  )}
+                </div>
+              ) : (
                 <div>
                   <p className="text-sm text-neutral-300 mb-2">
-                    Puedes editar el texto antes de confirmar. Se enviará exactamente este JSON.
+                    Puedes editar el texto antes de confirmar. Se enviará
+                    exactamente este JSON.
                   </p>
                   <textarea
                     className="w-full h-96 rounded-lg border border-neutral-700 bg-neutral-950 text-neutral-100 font-mono text-sm p-3"

@@ -29,7 +29,14 @@ export async function GET(
   try {
     const row = await prisma.plataformas.findUnique({
       where: { id },
-      select: { id: true, nombre: true, cantidad_pantallas: true },
+      // ✅ SE AGREGARON LOS CAMPOS DE TOTALES AQUÍ
+      select: { 
+        id: true, 
+        nombre: true, 
+        cantidad_pantallas: true,
+        total_pago: true,
+        total_pagado_proveedor: true
+      },
     });
 
     if (!row) {
@@ -45,7 +52,6 @@ export async function GET(
 
 /* =========================================================
  * PATCH /api/plataformas/:id
- * Body: { nombre?: string, cantidad_pantallas?: number }
  * ======================================================= */
 export async function PATCH(
   _req: Request,
@@ -88,10 +94,41 @@ export async function PATCH(
       data.cantidad_pantallas = n;
     }
 
+    // ✅ SE AGREGÓ VALIDACIÓN Y ASIGNACIÓN PARA total_pago
+    if (body?.total_pago !== undefined && body?.total_pago !== null) {
+      const tp = Number(body.total_pago);
+      if (Number.isNaN(tp) || tp < 0) {
+        return NextResponse.json(
+          { error: '"total_pago" debe ser un número >= 0.' },
+          { status: 400 }
+        );
+      }
+      data.total_pago = tp;
+    }
+
+    // ✅ SE AGREGÓ VALIDACIÓN Y ASIGNACIÓN PARA total_pagado_proveedor
+    if (body?.total_pagado_proveedor !== undefined && body?.total_pagado_proveedor !== null) {
+      const tpp = Number(body.total_pagado_proveedor);
+      if (Number.isNaN(tpp) || tpp < 0) {
+        return NextResponse.json(
+          { error: '"total_pagado_proveedor" debe ser un número >= 0.' },
+          { status: 400 }
+        );
+      }
+      data.total_pagado_proveedor = tpp;
+    }
+
     const updated = await prisma.plataformas.update({
       where: { id },
       data,
-      select: { id: true, nombre: true, cantidad_pantallas: true },
+      // ✅ SE AGREGARON LOS CAMPOS DE TOTALES AL SELECT
+      select: { 
+        id: true, 
+        nombre: true, 
+        cantidad_pantallas: true,
+        total_pago: true,
+        total_pagado_proveedor: true
+      },
     });
 
     return NextResponse.json(updated, { status: 200 });

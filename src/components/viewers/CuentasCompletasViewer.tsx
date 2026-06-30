@@ -302,6 +302,83 @@ export default function CuentasCompletasViewer() {
 
   // edición
   const [edit, setEdit] = useState<EditState | null>(null);
+  // ↓ correos disponibles EN INVENTARIO por plataforma (misma lógica que FormCuentaCompletas)
+  const [availableEmails, setAvailableEmails] = useState<
+    { email: string; invId: number | null; invClave: string | null }[]
+  >([]);
+  const [loadingEmails, setLoadingEmails] = useState(false);
+  // ↓ NUEVO: control del dropdown de correos (mismo estilo que el form)
+  const [emailDropdownOpen, setEmailDropdownOpen] = useState(false);
+  const emailDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!emailDropdownRef.current) return;
+      if (!emailDropdownRef.current.contains(e.target as Node)) {
+        setEmailDropdownOpen(false);
+      }
+    }
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
+  }, []);
+
+  // 👇 lista filtrada según lo escrito (correos disponibles en inventario)
+  const visibleAvailableEmails = useMemo(() => {
+    const term = (edit?.correo ?? "").trim().toLowerCase();
+    return availableEmails.filter((e) => !term || e.email.includes(term));
+  }, [availableEmails, edit?.correo]);
+
+  useEffect(() => {
+    const pid = edit?.plataforma_id;
+    if (!edit || !pid) {
+      setAvailableEmails([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingEmails(true);
+    (async () => {
+      try {
+        // ✅ Misma fuente y lógica que FormCuentaCompletas: SOLO /api/inventario
+        // (esto ya excluye lo que está ocupado/usado; cuentascompartidas NO aplica aquí)
+        const res = await fetch(
+          `/api/inventario?plataforma_id=${pid}&limit=2000`,
+          { cache: "no-store" }
+        );
+        const data = res.ok ? await res.json().catch(() => null) : null;
+        const rows: any[] = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.items)
+          ? data.items
+          : [];
+
+        const map = new Map<
+          string,
+          { email: string; invId: number | null; invClave: string | null }
+        >();
+        for (const r of rows) {
+          const email = String(r?.correo ?? "").trim().toLowerCase();
+          if (!email) continue;
+          map.set(email, {
+            email,
+            invId: r?.id != null ? Number(r.id) : null,
+            invClave: r?.clave ?? null,
+          });
+        }
+
+        const list = Array.from(map.values()).sort((a, b) =>
+          a.email.localeCompare(b.email)
+        );
+        if (!cancelled) setAvailableEmails(list);
+      } catch {
+        if (!cancelled) setAvailableEmails([]);
+      } finally {
+        if (!cancelled) setLoadingEmails(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [edit?.plataforma_id]);
   const [saving, setSaving] = useState(false);
 
   // selección múltiple
@@ -1247,18 +1324,82 @@ export default function CuentasCompletasViewer() {
                     />
                   </label>
 
-                  <label className="grid gap-1">
-                    <span className="text-sm text-neutral-300">Correo</span>
+                  <label className="grid gap-1 relative" ref={emailDropdownRef}>
+                    <span className="text-sm text-neutral-300 flex items-center gap-2">
+                      Correo
+                      {loadingEmails && (
+                        <span className="text-xs text-neutral-500">
+                          cargando…
+                        </span>
+                      )}
+                      {!loadingEmails && visibleAvailableEmails.length > 0 && (
+                        <span className="text-xs text-sky-400">
+                          {visibleAvailableEmails.length} disponible(s)
+                        </span>
+                      )}
+                    </span>
                     <input
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
                       value={edit.correo ?? ""}
-                      onChange={(e) =>
+                      placeholder="Escribe o elige uno disponible"
+                      autoComplete="off"
+                      onFocus={() => setEmailDropdownOpen(true)}
+                      onChange={(e) => {
                         setEdit((s) => ({
                           ...(s as EditState),
                           correo: e.target.value,
-                        }))
-                      }
+                        }));
+                        setEmailDropdownOpen(true);
+                      }}
                     />
+
+                    {emailDropdownOpen && (
+                      <div
+                        className="absolute left-0 right-0 top-full z-20 mt-1 rounded-lg border border-neutral-700 bg-neutral-900 text-sm text-neutral-100 shadow-lg"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {loadingEmails && (
+                          <div className="p-2 text-sm text-neutral-400">
+                            Cargando correos…
+                          </div>
+                        )}
+
+                        {!loadingEmails && (
+                          <ul className="max-h-60 overflow-auto">
+                            {visibleAvailableEmails.length === 0 && (
+                              <li className="px-3 py-2 text-neutral-500">
+                                Sin correos disponibles
+                              </li>
+                            )}
+                            {visibleAvailableEmails.map((opt) => (
+                              <li key={opt.email}>
+                                <button
+                                  type="button"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => {
+                                    setEdit((s) => ({
+                                      ...(s as EditState),
+                                      correo: opt.email,
+                                      // Autocompleta la clave del inventario si el campo está vacío
+                                      contrasena:
+                                        opt.invClave &&
+                                        !(s as EditState)?.contrasena
+                                          ? opt.invClave
+                                          : (s as EditState)?.contrasena,
+                                    }));
+                                    setEmailDropdownOpen(false);
+                                  }}
+                                  className="w-full text-left px-3 py-2 hover:bg-neutral-800 truncate"
+                                  title="Disponible en inventario"
+                                >
+                                  {opt.email}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
                   </label>
                   <label className="grid gap-1">
                     <span className="text-sm text-neutral-300">Contraseña</span>

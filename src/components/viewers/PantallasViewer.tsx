@@ -438,8 +438,164 @@ export default function PantallasViewer() {
   const [q, setQ] = useState("");
   const [platFilter, setPlatFilter] = useState<number | "all">("all");
 
+  // Capacidad por plataforma (desde usePlataformas)
+  // ⚠️ Debe declararse ANTES de cualquier efecto/memo que la use en su
+  // arreglo de dependencias, ya que ese arreglo se evalúa en cada render.
+  const capacityByPlatform = useMemo(() => {
+    const m = new Map<number, number | null>();
+    for (const p of plataformas) {
+      // soporta snake y camel, y castea string/number
+      const raw =
+        (p as any).cantidad_pantallas ?? (p as any).cantidadPantallas ?? null;
+
+      if (raw === null || raw === undefined || raw === "") {
+        m.set(Number(p.id), null); // capacidad desconocida (AÚN no pintamos rojo)
+        continue;
+      }
+
+      const cap = Number(raw);
+      m.set(Number(p.id), Number.isFinite(cap) ? cap : null);
+    }
+    return m;
+  }, [plataformas]);
+
+  // Pantallas usadas por (correo + plataforma) sobre TODO el dataset
+  // key: `${pid}__${email}` -> value: usadas
+  const usedByEmailPlat = useMemo(() => {
+    const m = new Map<string, number>(); // key: `${pid}__${email}`
+    const norm = (s?: string | null) => (s ?? "").trim().toLowerCase();
+    for (const r of rows) {
+      const pid = Number(r.plataforma_id);
+      const em = norm(r.correo);
+      if (!Number.isFinite(pid) || !em) continue;
+      const k = `${pid}__${em}`;
+      m.set(k, (m.get(k) ?? 0) + 1);
+    }
+    return m;
+  }, [rows]);
+
   // edición
   const [edit, setEdit] = useState<EditState | null>(null);
+  // ↓ NUEVO: correos disponibles (inventario + cuentas compartidas) por plataforma
+  const [availableEmails, setAvailableEmails] = useState<string[]>([]);
+  const [loadingEmails, setLoadingEmails] = useState(false);
+  // ↓ NUEVO: cupos disponibles por correo (igual que en el form) -> key: email, value: cupos libres
+  const [emailFreeMap, setEmailFreeMap] = useState<Record<string, number>>({});
+  // ↓ NUEVO: control del dropdown de correos (mismo estilo que el form)
+  const [emailDropdownOpen, setEmailDropdownOpen] = useState(false);
+  const emailDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!emailDropdownRef.current) return;
+      if (!emailDropdownRef.current.contains(e.target as Node)) {
+        setEmailDropdownOpen(false);
+      }
+    }
+    document.addEventListener("click", onDocClick);
+    return () => document.removeEventListener("click", onDocClick);
+  }, []);
+
+  // 👇 NUEVO: correos marcados como "cuenta caída" (no deben sugerirse)
+  const caidaEmailSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of rows) {
+      if (!r.cuenta_caida) continue;
+      const c = (r.correo ?? "").trim().toLowerCase();
+      if (c) set.add(c);
+    }
+    return set;
+  }, [rows]);
+
+  // 👇 NUEVO: correo original de la fila que se está editando (para no descontarle
+  // su propio cupo: ese registro ya "ocupa" un cupo de su correo actual, pero
+  // seguir eligiéndolo no debería contar como exceder el límite)
+  const originalCorreoForEdit = useMemo(() => {
+    if (!edit?.id) return "";
+    const row = rows.find((r) => r.id === edit.id);
+    return (row?.correo ?? "").trim().toLowerCase();
+  }, [edit?.id, rows]);
+
+  // 👇 NUEVO: lista filtrada según lo escrito + excluyendo cuentas caídas + solo con cupos disponibles
+  const visibleAvailableEmails = useMemo(() => {
+    const term = (edit?.correo ?? "").trim().toLowerCase();
+    return availableEmails
+      .filter((em) => !caidaEmailSet.has(em))
+      .filter((em) => {
+        const free =
+          (emailFreeMap[em] ?? 0) + (em === originalCorreoForEdit ? 1 : 0);
+        return free > 0;
+      })
+      .filter((em) => !term || em.includes(term));
+  }, [
+    availableEmails,
+    caidaEmailSet,
+    edit?.correo,
+    emailFreeMap,
+    originalCorreoForEdit,
+  ]);
+
+  // 👇 NUEVO: cupos efectivos a mostrar junto a cada correo en el dropdown
+  const effectiveFreeForEmail = (email: string) =>
+    (emailFreeMap[email] ?? 0) + (email === originalCorreoForEdit ? 1 : 0);
+
+  useEffect(() => {
+    const pid = edit?.plataforma_id;
+    if (!edit || !pid) {
+      setAvailableEmails([]);
+      setEmailFreeMap({});
+      return;
+    }
+    let cancelled = false;
+    setLoadingEmails(true);
+    (async () => {
+      try {
+        const [acctRes, invRes] = await Promise.all([
+          fetch(`/api/cuentascompartidas?plataforma_id=${pid}&limit=10000`, {
+            cache: "no-store",
+          }),
+          fetch(`/api/inventario?plataforma_id=${pid}&limit=10000`, {
+            cache: "no-store",
+          }),
+        ]);
+        const acctRows = acctRes.ok ? await acctRes.json() : [];
+        const invRows = invRes.ok ? await invRes.json() : [];
+        const set = new Set<string>();
+        for (const r of acctRows) {
+          const c = String((r as any)?.correo ?? "").trim().toLowerCase();
+          if (c) set.add(c);
+        }
+        for (const r of invRows) {
+          const c = String((r as any)?.correo ?? "").trim().toLowerCase();
+          if (c) set.add(c);
+        }
+
+        // ✅ Igual que en el form: cupos = capacidad de la plataforma - pantallas ya usadas con ese correo
+        const cap = capacityByPlatform.get(Number(pid));
+        const free: Record<string, number> = {};
+        if (cap != null && cap > 0) {
+          for (const email of set) {
+            const used = usedByEmailPlat.get(`${Number(pid)}__${email}`) ?? 0;
+            free[email] = Math.max(0, cap - used);
+          }
+        }
+        if (!cancelled) {
+          setAvailableEmails(Array.from(set).sort());
+          setEmailFreeMap(free);
+        }
+      } catch {
+        if (!cancelled) {
+          setAvailableEmails([]);
+          setEmailFreeMap({});
+        }
+      } finally {
+        if (!cancelled) setLoadingEmails(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [edit?.plataforma_id, capacityByPlatform, usedByEmailPlat]);
   const [saving, setSaving] = useState(false);
 
   // selección múltiple
@@ -727,25 +883,6 @@ export default function PantallasViewer() {
   // Normaliza email
   const emailKey = (s?: string | null) => (s ?? "").trim().toLowerCase();
 
-  // Capacidad por plataforma (desde usePlataformas)
-  const capacityByPlatform = useMemo(() => {
-    const m = new Map<number, number | null>();
-    for (const p of plataformas) {
-      // soporta snake y camel, y castea string/number
-      const raw =
-        (p as any).cantidad_pantallas ?? (p as any).cantidadPantallas ?? null;
-
-      if (raw === null || raw === undefined || raw === "") {
-        m.set(Number(p.id), null); // capacidad desconocida (AÚN no pintamos rojo)
-        continue;
-      }
-
-      const cap = Number(raw);
-      m.set(Number(p.id), Number.isFinite(cap) ? cap : null);
-    }
-    return m;
-  }, [plataformas]);
-
   // Nombre por plataforma (para mostrar en el badge)
   const nameByPlatform = useMemo(() => {
     const m = new Map<number, string>();
@@ -754,21 +891,6 @@ export default function PantallasViewer() {
     }
     return m;
   }, [plataformas]);
-
-  // Pantallas usadas por (correo + plataforma) sobre TODO el dataset
-  // key: `${pid}__${email}` -> value: usadas
-  const usedByEmailPlat = useMemo(() => {
-    const m = new Map<string, number>(); // key: `${pid}__${email}`
-    const norm = (s?: string | null) => (s ?? "").trim().toLowerCase();
-    for (const r of rows) {
-      const pid = Number(r.plataforma_id);
-      const em = norm(r.correo);
-      if (!Number.isFinite(pid) || !em) continue;
-      const k = `${pid}__${em}`;
-      m.set(k, (m.get(k) ?? 0) + 1);
-    }
-    return m;
-  }, [rows]);
 
   // Helper que arma los items para los badges de un email dado
   // REEMPLAZA tu función actual por esta
@@ -1946,18 +2068,76 @@ export default function PantallasViewer() {
                     />
                   </label>
 
-                  <label className="grid gap-1">
-                    <span className="text-sm text-neutral-300">Correo</span>
+                  <label className="grid gap-1 relative" ref={emailDropdownRef}>
+                    <span className="text-sm text-neutral-300 flex items-center gap-2">
+                      Correo
+                      {loadingEmails && (
+                        <span className="text-xs text-neutral-500">
+                          cargando…
+                        </span>
+                      )}
+                      {!loadingEmails && visibleAvailableEmails.length > 0 && (
+                        <span className="text-xs text-sky-400">
+                          {visibleAvailableEmails.length} disponible(s)
+                        </span>
+                      )}
+                    </span>
                     <input
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
                       value={edit.correo ?? ""}
-                      onChange={(e) =>
+                      placeholder="Escribe o elige uno disponible"
+                      autoComplete="off"
+                      onFocus={() => setEmailDropdownOpen(true)}
+                      onChange={(e) => {
                         setEdit((s) => ({
                           ...(s as EditState),
                           correo: e.target.value,
-                        }))
-                      }
+                        }));
+                        setEmailDropdownOpen(true);
+                      }}
                     />
+
+                    {emailDropdownOpen && (
+                      <div
+                        className="absolute left-0 right-0 top-full z-20 mt-1 rounded-lg border border-neutral-700 bg-neutral-900 text-sm text-neutral-100 shadow-lg"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {loadingEmails && (
+                          <div className="p-2 text-sm text-neutral-400">
+                            Cargando correos…
+                          </div>
+                        )}
+
+                        {!loadingEmails && (
+                          <ul className="max-h-60 overflow-auto">
+                            {visibleAvailableEmails.length === 0 && (
+                              <li className="px-3 py-2 text-neutral-500">
+                                Sin correos con cupos disponibles
+                              </li>
+                            )}
+                            {visibleAvailableEmails.map((em) => (
+                              <li key={em}>
+                                <button
+                                  type="button"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => {
+                                    setEdit((s) => ({
+                                      ...(s as EditState),
+                                      correo: em,
+                                    }));
+                                    setEmailDropdownOpen(false);
+                                  }}
+                                  className="flex w-full items-center justify-between gap-2 text-left px-3 py-2 hover:bg-neutral-800"
+                                >
+                                  <span className="truncate">{em}</span>
+                                  <span className="text-xs opacity-70 shrink-0">{`cupos: ${effectiveFreeForEmail(em)}`}</span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
                   </label>
                   {/* dentro del modal edición, por ejemplo arriba de “Guardar” */}
                   <label className="flex items-center gap-2 sm:col-span-2">
