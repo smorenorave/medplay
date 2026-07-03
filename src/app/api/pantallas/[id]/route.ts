@@ -50,7 +50,7 @@ const pad2 = (n: number) => String(n).padStart(2, "0");
 function toYMDUTC(d?: Date | null): string | null {
   if (!d) return null;
   return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(
-    d.getUTCDate()
+    d.getUTCDate(),
   )}`;
 }
 
@@ -113,7 +113,7 @@ const PatchSchema = z.object({
 /* ===================== GET ===================== */
 export async function GET(
   _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -163,7 +163,7 @@ export async function GET(
 /* ===================== PATCH ===================== */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -174,7 +174,7 @@ export async function PATCH(
     if (!parsed.success) {
       return NextResponse.json(
         { error: "validation_error", details: parsed.error.flatten() },
-        { status: 400 }
+        { status: 400 },
       );
     }
     const c = parsed.data;
@@ -269,7 +269,7 @@ export async function PATCH(
     ) {
       return NextResponse.json(
         { error: "no_fields_to_update" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -362,7 +362,9 @@ export async function PATCH(
     const wantsMove = c.plataforma_id !== undefined || c.correo !== undefined;
 
     if (wantsMove) {
+      const oldCuentaId = updated.cuentascompartidas?.id ?? null;
       // Datos actuales
+
       const currentCorreo = updated.cuentascompartidas?.correo ?? null;
       const currentPlatId = updated.cuentascompartidas?.plataforma_id ?? null;
 
@@ -376,13 +378,13 @@ export async function PATCH(
       if (!targetCorreo) {
         return NextResponse.json(
           { error: "correo_required_for_move" },
-          { status: 400 }
+          { status: 400 },
         );
       }
       if (targetPlatId == null) {
         return NextResponse.json(
           { error: "plataforma_required_for_move" },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
@@ -427,6 +429,23 @@ export async function PATCH(
         data: { cuentascompartidas: { connect: { id: targetCuentaId } } },
       });
 
+      // Si la cuenta anterior quedó sin pantallas, eliminarla
+      if (oldCuentaId && oldCuentaId !== targetCuentaId) {
+        const restantes = await prisma.pantallas.count({
+          where: {
+            cuenta_id: oldCuentaId,
+          },
+        });
+
+        if (restantes === 0) {
+          await prisma.cuentascompartidas.delete({
+            where: {
+              id: oldCuentaId,
+            },
+          });
+        }
+      }
+
       // 4) Refrescar 'updated' tras la reconexión
       updated = await prisma.pantallas.findUnique({
         where: { id: pid },
@@ -455,8 +474,8 @@ export async function PATCH(
         c.nombre == null
           ? null
           : String(c.nombre).trim() === ""
-          ? null
-          : String(c.nombre).trim();
+            ? null
+            : String(c.nombre).trim();
 
       const usuarioContacto = updated.usuarios?.contacto;
       if (usuarioContacto) {
@@ -506,7 +525,7 @@ export async function PATCH(
     if (e?.code === "P2003")
       return NextResponse.json(
         { error: "foreign_key_violation" },
-        { status: 409 }
+        { status: 409 },
       );
     if (e?.code === "P2002")
       return NextResponse.json({ error: "unique_violation" }, { status: 409 });
@@ -519,7 +538,7 @@ export async function PATCH(
 /* ===================== PUT (reusa PATCH) ===================== */
 export async function PUT(
   req: NextRequest,
-  ctx: { params: Promise<{ id: string }> }
+  ctx: { params: Promise<{ id: string }> },
 ) {
   return PATCH(req, ctx);
 }
@@ -527,7 +546,7 @@ export async function PUT(
 /* ===================== DELETE ===================== */
 export async function DELETE(
   _req: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
@@ -594,7 +613,7 @@ export async function DELETE(
     }
     return NextResponse.json(
       { error: e?.message ?? "Error eliminando pantalla" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -7,6 +7,9 @@ import { todayStr } from "@/lib/dates";
 import { FieldPantallas } from "@/components/ui/FieldPantallas";
 import TextArea from "@/components/ui/TextArea";
 import type { Usuario, Cuenta, FormState } from "@/types/pantallas";
+import { buildDisponibilidadCorreos } from "@/lib/cuentasDisponibles";
+import { buildNumerosPantallaDisponibles } from "@/lib/cantidadPantallasDisponibles";
+import { upsertCuentaCompartida } from "@/lib/cuentasCompartidasUpsert";
 
 // Reutiliza tu bus de mutaciones / cache
 import {
@@ -32,6 +35,13 @@ const fmtMoneyClient = (n: number | null | undefined) =>
   n == null || Number.isNaN(Number(n))
     ? "—"
     : new Intl.NumberFormat("es-CO").format(Number(n));
+
+// Límite superior para "total_pagado" / "total_pagado_proveedor". Evita el
+// error de Prisma "Value out of range for the type" cuando alguien escribe
+// un número con dígitos de más por error. Ajustado a DECIMAL(10,2): hasta
+// 8 dígitos enteros + 2 decimales. Si la columna en la BD cambia de tipo,
+// este valor debe actualizarse junto con ella.
+const MAX_MONTO_COP = 99_999_999.99;
 
 function buildPedidoResumenText(
   payloads: any[],
@@ -178,7 +188,12 @@ type PantSumCacheShape = {
 
 type PerPidEmailCache = {
   // dropdown
-  options: Array<{ email: string; source: "acct" | "inv" }>;
+
+  options: Array<{
+    email: string;
+    source: "acct" | "inv";
+    cuentaId: number | null;
+  }>;
   // maps
   acctIdMap: Record<string, number>;
   acctPassMap: Record<string, string | null>;
@@ -253,47 +268,6 @@ async function fetchListSafe(urls: string[]): Promise<any[]> {
   return [];
 }
 
-/** Detecta el campo correcto de “pantallas permitidas” en la plataforma. */
-function resolveMaxPantallas(p: any): number {
-  const toNum = (x: any) => {
-    const n = Number(x);
-    return Number.isFinite(n) ? n : undefined;
-  };
-
-  const candidates = [
-    toNum(p?.cantidad_pantallas),
-    toNum(p?.cantidadPantallas),
-    toNum(p?.max_pantallas),
-    toNum(p?.pantallas_permitidas),
-    toNum(p?.perfiles),
-    toNum(p?.max_perfiles),
-    toNum(p?.pantallas),
-    toNum(p?.capacidad_pantallas),
-  ];
-
-  const val = candidates.find((n) => typeof n === "number" && n > 0);
-  return val ?? 1;
-}
-
-function capacityForPlatform(
-  pid: number | null | undefined,
-  plataformas: any[],
-): number | null {
-  if (!pid) return null;
-  const p = plataformas.find((x) => Number(x.id) === Number(pid));
-  if (!p) return null;
-  const raw =
-    (p as any).cantidad_pantallas ??
-    (p as any).cantidadPantallas ??
-    (p as any).max_pantallas ??
-    (p as any).pantallas ??
-    (p as any).perfiles ??
-    null;
-  if (raw === null || raw === undefined || raw === "") return null;
-  const cap = Number(raw);
-  return Number.isFinite(cap) && cap > 0 ? cap : null;
-}
-
 /**
  * Trae TODAS las pantallas de una plataforma directo de la API (sin
  * adivinar query-params como correo/q que el backend puede no soportar).
@@ -355,7 +329,9 @@ function getUserFromAllCache(norm: string): Usuario | null | undefined {
 async function ensureUsersAllLoaded() {
   const c = readUsersAll();
   if (usersAllFresh(c)) return;
-
+  await forceReloadUsersAll();
+}
+async function forceReloadUsersAll() {
   const arr: Usuario[] = (await fetchListSafe([
     "/api/usuarios?limit=100000",
     "/api/usuarios?limit=50000",
@@ -550,8 +526,8 @@ export default function FormPantallas() {
         .then((data) => {
           if (!data) return;
           const tp =
-            data?.total_pago != null && data.total_pago !== 0
-              ? String(data.total_pago)
+            data?.total_pagado != null && data.total_pagado !== 0
+              ? String(data.total_pagado)
               : "";
           const tpp =
             data?.total_pagado_proveedor != null &&
@@ -570,8 +546,8 @@ export default function FormPantallas() {
           setPlataformaTotales((s) => ({
             ...s,
             [newPid]: {
-              total_pago:
-                data?.total_pago != null ? Number(data.total_pago) : null,
+              total_pagado:
+                data?.total_pagado != null ? Number(data.total_pagado) : null,
               total_pagado_proveedor:
                 data?.total_pagado_proveedor != null
                   ? Number(data.total_pagado_proveedor)
@@ -593,13 +569,24 @@ export default function FormPantallas() {
 
   useEffect(() => {
     let alive = true;
-    refreshStampOnce();
+
+    // Único punto que reacciona a un cambio remoto/local: refresca el stamp
+    // del servidor y, si cambió de verdad, invalida el cache en memoria y
+    // dispara un "tick" para que los efectos de slots/correos recalculen.
+    const handleInvalidate = async () => {
+      if (!alive) return;
+      const before = getCurrentStamp();
+      const after = await refreshStampOnce();
+      if (!alive || after === before) return;
+      invalidatePantallasPidCache();
+      setRefreshTick((t) => t + 1);
+    };
+
+    handleInvalidate();
 
     const onStorage = (e: StorageEvent) => {
       if (!alive) return;
-      if (e.key === LS_STAMP_P || e.key === STAMP_KEY_ALL) {
-        // lectura de caches ya verifica stamp
-      }
+      if (e.key === LS_STAMP_P || e.key === STAMP_KEY_ALL) handleInvalidate();
     };
     window.addEventListener("storage", onStorage);
 
@@ -607,16 +594,13 @@ export default function FormPantallas() {
     try {
       bc = new BroadcastChannel(BC_NAME);
       bc.onmessage = (ev) => {
-        if (ev?.data?.type === "invalidate-pantallas") {
-          refreshStampOnce();
-        }
+        if (ev?.data?.type === "invalidate-pantallas") handleInvalidate();
       };
     } catch {}
 
-    const onFocus = () => refreshStampOnce();
+    const onFocus = () => handleInvalidate();
     window.addEventListener("focus", onFocus);
-
-    const id = window.setInterval(() => refreshStampOnce(), STAMP_POLL_MS);
+    const id = window.setInterval(handleInvalidate, STAMP_POLL_MS);
 
     return () => {
       alive = false;
@@ -632,7 +616,7 @@ export default function FormPantallas() {
   /* ===== Nombre autocompletar (user) ===== */
   const [nombreDirty, setNombreDirty] = useState(false);
   const lastContactoRef = useRef<string>("");
-
+  const [refreshTick, setRefreshTick] = useState(0);
   useEffect(() => {
     const raw = user.contacto.trim();
     const norm = normalizeContacto(raw);
@@ -698,7 +682,28 @@ export default function FormPantallas() {
     };
   }, [user.contacto, nombreDirty]);
 
-  /* ===== Ensure usuario ===== */
+  /* ===== Ensure usuario =====
+   * Mismo patrón de bug que teníamos en cuentascompartidas: la caché local
+   * puede decir "no existe" aunque el contacto YA esté en la base de datos
+   * (creado por otra sesión/dispositivo que esta pestaña nunca vio, o
+   * simplemente porque pasaron los 30 min del TTL). Eso generaba el
+   * "Unique constraint failed on the constraint: `PRIMARY`" en `usuarios`.
+   *
+   * A diferencia de cuentascompartidas, aquí NO conviene forzar una
+   * recarga completa del catálogo (puede ser una lista grande) cada vez
+   * que se registra un contacto nuevo, porque eso SÍ es un caso muy común
+   * (cliente nuevo) y volveríamos a introducir lentitud. Además, crear
+   * el `usuario` no es indispensable para guardar la `pantalla` (son
+   * independientes -> por eso antes el guardado seguía funcionando pese
+   * al error).
+   *
+   * Entonces: si el POST falla (choque de PK), no lo reintentamos ni
+   * dejamos el error suelto -> guardamos un valor optimista en caché
+   * (para no repetir el mismo POST fallido con este contacto en lo que
+   * dure la sesión) y refrescamos el catálogo completo en SEGUNDO PLANO
+   * (sin bloquear el guardado actual), para que la próxima vez ya
+   * tengamos el dato real.
+   */
   async function ensureUsuario(contactoRaw: string, nombre: string | null) {
     const raw = contactoRaw.trim();
     const norm = normalizeContacto(raw);
@@ -722,11 +727,44 @@ export default function FormPantallas() {
         map[norm] = created;
         writeUsersAll(map);
         await refreshStampOnce();
+        return;
       }
+
+      // No reventamos ni reintentamos: probablemente ya existía.
+      const next = readUsersAll();
+      const map = next?.map ?? {};
+      map[norm] = { contacto: raw, nombre: nombre || null } as Usuario;
+      writeUsersAll(map);
+
+      // Autocorrección en segundo plano, no bloquea este guardado.
+      forceReloadUsersAll().catch(() => {});
     } catch {}
   }
 
-  /* ===== Ensure cuenta compartida ===== */
+  /* ===== Ensure cuenta compartida =====
+   * Antes, esta función SOLO miraba la caché local (`getAcctMap`) para
+   * decidir si el correo ya existía; si la caché estaba vacía, vieja, o
+   * simplemente no cargada en ese navegador (otra pestaña, otra persona
+   * abriendo el formulario), creaba una fila nueva en `cuentascompartidas`
+   * aunque el correo ya existiera -> eso fue lo que generó los duplicados
+   * que limpiamos (Crunchyroll, Netflix, Paramount).
+   *
+   * Fix con 2 caminos, para no perder el rendimiento del caso común:
+   *
+   * 1) CAMINO RÁPIDO (sin request extra): si el correo ya aparece en
+   *    `perPid[pid].acctIdMap`, que es el dataset que se cargó momentos
+   *    antes con `cache:no-store` al abrir/usar esta plataforma (NO es la
+   *    caché vieja de localStorage), lo reutilizamos directo. Este es el
+   *    caso normal: el usuario elige un correo ya existente del dropdown.
+   *
+   * 2) CAMINO SEGURO (1 request extra, solo cuando hace falta): si el
+   *    correo NO está en ese dataset -> es un correo genuinamente nuevo
+   *    (o el dataset no alcanzó a cargar). Ahí sí delegamos en
+   *    `upsertCuentaCompartida` (compartido con PantallasViewer), que
+   *    confirma con el servidor antes de crear. Este es justo el caso que
+   *    antes generaba duplicados, así que aquí no se puede recortar el
+   *    chequeo.
+   */
   async function ensureCuentaCompartida(
     correo: string,
     plataformaId: number,
@@ -736,31 +774,41 @@ export default function FormPantallas() {
     const key = normalizeEmail(correo);
     const pid = plataformaId;
 
-    const cached = getAcctMap(pid)?.[key];
-    if (cached?.id) return { id: cached.id };
-
-    const res = await fetch("/api/cuentascompartidas", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        plataforma_id: pid,
-        correo,
-        contrasena: pass || null,
-        proveedor: proveedor || null,
-      }),
-    });
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      throw new Error(j?.error ?? "No se pudo crear la cuenta compartida");
+    const knownId = perPid[pid]?.acctIdMap?.[key];
+    if (knownId) {
+      const base = getAcctMap(pid) || {};
+      base[key] = { id: knownId, pass: pass || null };
+      writeAcctCache(pid, base);
+      return { id: knownId };
     }
-    const saved: Cuenta = await res.json();
+
+    const { id } = await upsertCuentaCompartida(pid, correo, {
+      contrasena: pass,
+      proveedor,
+    });
 
     const base = getAcctMap(pid) || {};
-    base[key] = { id: saved.id, pass: pass || null };
+    base[key] = { id, pass: pass || null };
     writeAcctCache(pid, base);
 
+    // 🚀 Actualiza también el mapa en memoria (no solo localStorage), para
+    // que si OTRO bloque del mismo envío usa este mismo correo nuevo, ya
+    // lo encuentre por el camino rápido en vez de volver a pagar el
+    // request de verificación.
+    setPerPid((s) => {
+      const cur = s[pid];
+      if (!cur) return s;
+      return {
+        ...s,
+        [pid]: {
+          ...cur,
+          acctIdMap: { ...cur.acctIdMap, [key]: id },
+        },
+      };
+    });
+
     await refreshStampOnce();
-    return { id: saved.id };
+    return { id };
   }
 
   /* ===== Slots por bloque ===== */
@@ -850,26 +898,14 @@ export default function FormPantallas() {
         }
 
         try {
-          const plat = plataformas.find((p) => Number(p.id) === pid);
-          const maxAllowed = plat ? resolveMaxPantallas(plat as any) : 0;
-
           const allRows = rowsByPid[pid] ?? [];
-          const rows = filtrarPantallasPorEmailOCuenta(
-            allRows,
-            email,
-            o.cuenta_id ?? undefined,
-          );
-
-          const taken = new Set<number>();
-          for (const r of rows) {
-            const raw = (r?.nro_pantalla ?? "").toString().trim();
-            const n = Number(raw);
-            if (Number.isInteger(n) && n >= 1) taken.add(n);
-          }
-
-          const free: number[] = [];
-          for (let i = 1; i <= maxAllowed; i++) if (!taken.has(i)) free.push(i);
-
+          const { free } = buildNumerosPantallaDisponibles({
+            plataformaId: pid,
+            plataformas,
+            pantallas: allRows,
+            correo: email,
+            cuentaId: o.cuenta_id ?? undefined,
+          });
           if (cancelled) return;
 
           setAvailableSlotsByIdx((p) => {
@@ -915,6 +951,7 @@ export default function FormPantallas() {
       .map((o) => `${o.plataforma_id}:${o.correo}:${o.cuenta_id}`)
       .join("|"),
     plataformas,
+    refreshTick,
   ]);
 
   /* ===== Fecha vencimiento por bloque ===== */
@@ -954,12 +991,12 @@ export default function FormPantallas() {
       .join("|"),
   ]);
 
-  /* ===== Totales de plataforma: cache de total_pago y total_pagado_proveedor ===== */
+  /* ===== Totales de plataforma: cache de total_pagado y total_pagado_proveedor ===== */
   const [plataformaTotales, setPlataformaTotales] = useState<
     Record<
       number,
       {
-        total_pago: number | null;
+        total_pagado: number | null;
         total_pagado_proveedor: number | null;
         loading: boolean;
       }
@@ -973,7 +1010,11 @@ export default function FormPantallas() {
 
     setPlataformaTotales((s) => ({
       ...s,
-      [pid]: { total_pago: null, total_pagado_proveedor: null, loading: true },
+      [pid]: {
+        total_pagado: null,
+        total_pagado_proveedor: null,
+        loading: true,
+      },
     }));
 
     try {
@@ -983,7 +1024,8 @@ export default function FormPantallas() {
       setPlataformaTotales((s) => ({
         ...s,
         [pid]: {
-          total_pago: data?.total_pago != null ? Number(data.total_pago) : null,
+          total_pagado:
+            data?.total_pagado != null ? Number(data.total_pagado) : null,
           total_pagado_proveedor:
             data?.total_pagado_proveedor != null
               ? Number(data.total_pagado_proveedor)
@@ -995,7 +1037,7 @@ export default function FormPantallas() {
       setPlataformaTotales((s) => ({
         ...s,
         [pid]: {
-          total_pago: null,
+          total_pagado: null,
           total_pagado_proveedor: null,
           loading: false,
         },
@@ -1069,138 +1111,55 @@ export default function FormPantallas() {
       const acctRows: Cuenta[] = await acctRes.json();
       const invRows: InventarioItem[] = await invRes.json();
 
-      const acctMap: Record<string, AcctEntry> = {};
+      // Seguimos escribiendo el cache LS de cuentas/inventario porque otras
+      // partes del componente lo siguen leyendo (líneas ~739, 758, 1239:
+      // autocompletar contraseña al escribir, eliminar cuenta por correo).
+      // Esto es cache de UI, no lógica de negocio, así que se queda tal cual.
+      const acctMapForCache: Record<string, AcctEntry> = {};
       for (const r of acctRows) {
         const c = normalizeEmail((r as any)?.correo ?? "");
         if (!c) continue;
-        acctMap[c] = {
-          id: Math.max(acctMap[c]?.id ?? 0, (r as any).id),
+        acctMapForCache[c] = {
+          id: Math.max(acctMapForCache[c]?.id ?? 0, (r as any).id),
           pass: (r as any).contrasena ?? null,
         };
       }
-      writeAcctCache(pid, acctMap);
+      writeAcctCache(pid, acctMapForCache);
 
-      const invMap: Record<string, InvEntry> = {};
+      const invMapForCache: Record<string, InvEntry> = {};
       for (const it of invRows) {
         const c = normalizeEmail((it as any)?.correo ?? "");
         if (!c) continue;
-        invMap[c] = { id: (it as any).id, pass: (it as any).clave ?? null };
+        invMapForCache[c] = {
+          id: (it as any).id,
+          pass: (it as any).clave ?? null,
+        };
       }
-      writeInvCache(pid, invMap);
+      writeInvCache(pid, invMapForCache);
 
-      const nextAcctId: Record<string, number> = {};
-      const nextAcctPass: Record<string, string | null> = {};
-      for (const [email, entry] of Object.entries(acctMap)) {
-        nextAcctId[email] = entry.id!;
-        nextAcctPass[email] = entry.pass ?? null;
-      }
-
-      const nextInvPass: Record<string, string | null> = {};
-      const nextInvId: Record<string, number> = {};
-      for (const [email, entry] of Object.entries(invMap)) {
-        nextInvPass[email] = entry.pass ?? null;
-        if (entry?.id != null) nextInvId[email] = entry.id!;
-      }
-
-      const cap = capacityForPlatform(pid, plataformas) ?? 0;
-      if (!cap || cap <= 0) {
-        setPerPid((s) => ({
-          ...s,
-          [pid]: {
-            ...(s[pid] ?? ({} as any)),
-            acctIdMap: nextAcctId,
-            acctPassMap: nextAcctPass,
-            invPassMap: nextInvPass,
-            invIdMap: nextInvId,
-            options: [],
-            freeByEmail: {},
-            emailCounts: {},
-            loading: false,
-            error: null,
-          },
-        }));
-        return;
-      }
-
-      // ✅ Pantallas usadas: dataset completo y fresco de la plataforma
-      // (mismo enfoque del viewer), no una suma cacheada que puede quedar vieja.
+      // ✅ Pantallas usadas: dataset fresco de la plataforma.
       const pantallasRows = await getPantallasPorPlataformaCached(pid, force);
 
-      const byEmail: Record<string, number> = {};
-      const byCuenta: Record<number, number> = {};
-      for (const r of pantallasRows) {
-        const email = normalizeEmail(r?.correo ?? "");
-        if (email) byEmail[email] = (byEmail[email] ?? 0) + 1;
-        const cid = Number(r?.cuenta_id);
-        if (Number.isFinite(cid) && cid > 0) {
-          byCuenta[cid] = (byCuenta[cid] ?? 0) + 1;
-        }
-      }
-
-      type Cand = {
-        email: string;
-        source: "acct" | "inv";
-        cuentaId?: number | null;
-      };
-      // ✅ Sin límites artificiales: se consideran TODOS los correos de
-      // cuentas compartidas e inventario de la plataforma.
-      const seen = new Set<string>();
-      const candidates: Cand[] = [];
-
-      for (const [email, entry] of Object.entries(acctMap)) {
-        const e = email.toLowerCase();
-        if (seen.has(e)) continue;
-        seen.add(e);
-        candidates.push({ email: e, source: "acct", cuentaId: entry.id ?? null });
-      }
-      for (const email of Object.keys(invMap)) {
-        const e = email.toLowerCase();
-        if (seen.has(e)) continue;
-        seen.add(e);
-        candidates.push({ email: e, source: "inv", cuentaId: null });
-      }
-
-      const freeMap: Record<string, number | null> = {};
-      const emailCountsLocal: Record<string, number> = {};
-
-      for (const c of candidates) {
-        const used =
-          c.source === "acct" && c.cuentaId
-            ? (byCuenta[c.cuentaId] ?? 0)
-            : (byEmail[c.email] ?? 0);
-
-        const free = Math.max(0, cap - used);
-        const key = `${pid}::${c.source}::${c.email}`;
-        freeMap[key] = free;
-
-        if (emailCountsLocal[c.email] == null) {
-          emailCountsLocal[c.email] = byEmail[c.email] ?? 0;
-        }
-      }
-
-      const withFree = candidates.filter(({ email, source }) => {
-        const key = `${pid}::${source}::${email}`;
-        const f = freeMap[key];
-        return typeof f === "number" && f > 0;
-      });
-
-      const ordered = withFree.sort((a, b) => {
-        if (a.source !== b.source) return a.source === "acct" ? -1 : 1;
-        return a.email.localeCompare(b.email);
+      // ✅ Única fuente de verdad para disponibilidad de correos.
+      const disponibilidad = buildDisponibilidadCorreos({
+        plataformaId: pid,
+        plataformas,
+        cuentasCompartidas: acctRows as any,
+        inventario: invRows as any,
+        pantallas: pantallasRows,
       });
 
       setPerPid((s) => ({
         ...s,
         [pid]: {
           ...(s[pid] ?? ({} as any)),
-          acctIdMap: nextAcctId,
-          acctPassMap: nextAcctPass,
-          invPassMap: nextInvPass,
-          invIdMap: nextInvId,
-          // ✅ Ya no se recorta a 20: se muestran todos los correos con cupo.
-          options: ordered,
-          freeByEmail: freeMap,
-          emailCounts: emailCountsLocal,
+          acctIdMap: disponibilidad.acctIdMap,
+          acctPassMap: disponibilidad.acctPassMap,
+          invPassMap: disponibilidad.invPassMap,
+          invIdMap: disponibilidad.invIdMap,
+          options: disponibilidad.options,
+          freeByEmail: disponibilidad.freeByEmail,
+          emailCounts: disponibilidad.emailCounts,
           loading: false,
           error: null,
         },
@@ -1217,6 +1176,21 @@ export default function FormPantallas() {
       }));
     }
   }
+
+  useEffect(() => {
+    if (refreshTick === 0) return; // no dupliques la carga inicial
+    const pidsActivos = Array.from(
+      new Set(
+        orders
+          .map((o) => Number(o.plataforma_id))
+          .filter((n) => Number.isFinite(n) && n > 0),
+      ),
+    );
+    pidsActivos.forEach((pid) => {
+      loadEmailsForPid(pid, true).catch(() => {});
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTick]);
 
   async function deleteCuentaCompartidaByEmail(pid: number, email: string) {
     const cache = perPid[pid];
@@ -1306,11 +1280,14 @@ export default function FormPantallas() {
 
       const totalOk =
         o.total_pagado === "" ||
-        (!Number.isNaN(Number(o.total_pagado)) && Number(o.total_pagado) >= 0);
+        (!Number.isNaN(Number(o.total_pagado)) &&
+          Number(o.total_pagado) >= 0 &&
+          Number(o.total_pagado) <= MAX_MONTO_COP);
       const totalProvOk =
         !o.total_pagado_proveedor ||
         (!Number.isNaN(Number(o.total_pagado_proveedor)) &&
-          Number(o.total_pagado_proveedor) >= 0);
+          Number(o.total_pagado_proveedor) >= 0 &&
+          Number(o.total_pagado_proveedor) <= MAX_MONTO_COP);
 
       if (
         !(
@@ -1534,12 +1511,15 @@ export default function FormPantallas() {
       // refleja lo que se acaba de guardar.
       const pidsAfectados = new Set<number>();
       for (const f of ok) {
-        const pid = Number(f.value?.saved?.plataforma_id ?? f.value?.sent?.plataforma_id);
+        const pid = Number(
+          f.value?.saved?.plataforma_id ?? f.value?.sent?.plataforma_id,
+        );
         if (Number.isFinite(pid) && pid > 0) pidsAfectados.add(pid);
       }
       pidsAfectados.forEach((pid) => invalidatePantallasPidCache(pid));
 
       await refreshStampOnce();
+      setRefreshTick((t) => t + 1);
 
       if (bad.length) {
         setErrMsg(
@@ -1629,8 +1609,11 @@ export default function FormPantallas() {
               placeholder="+57 3xxxxxxxxx"
               value={user.contacto}
               onChange={(v: string) => {
-                if (/^\+?\d*(?:\s?\d*)*$/.test(v))
-                  setUser((s) => ({ ...s, contacto: v }));
+                const soloDigitos = v
+                  .replace(/[^\d\s]/g, "")
+                  .replace(/^\s+/, "");
+                const next = soloDigitos ? `+${soloDigitos}` : "";
+                setUser((s) => ({ ...s, contacto: next }));
               }}
               required
               inputMode="tel"
@@ -1688,13 +1671,7 @@ export default function FormPantallas() {
 
               // ✅ FIX: NO useMemo dentro de map (esto rompía el orden de hooks)
               const visibleOptions =
-                !pid || !pidCache
-                  ? []
-                  : (pidCache.options ?? []).filter(({ email, source }) => {
-                      const key = `${pid}::${source}::${email}`;
-                      const free = pidCache.freeByEmail?.[key];
-                      return typeof free === "number" && free > 0;
-                    });
+                !pid || !pidCache ? [] : (pidCache.options ?? []);
 
               return (
                 <div
@@ -1756,9 +1733,9 @@ export default function FormPantallas() {
                               .then((data) => {
                                 if (!data) return;
                                 const tp =
-                                  data?.total_pago != null &&
-                                  data.total_pago !== 0
-                                    ? String(data.total_pago)
+                                  data?.total_pagado != null &&
+                                  data.total_pagado !== 0
+                                    ? String(data.total_pagado)
                                     : "";
                                 const tpp =
                                   data?.total_pagado_proveedor != null &&
@@ -1773,9 +1750,9 @@ export default function FormPantallas() {
                                 setPlataformaTotales((s) => ({
                                   ...s,
                                   [newPid]: {
-                                    total_pago:
-                                      data?.total_pago != null
-                                        ? Number(data.total_pago)
+                                    total_pagado:
+                                      data?.total_pagado != null
+                                        ? Number(data.total_pagado)
                                         : null,
                                     total_pagado_proveedor:
                                       data?.total_pagado_proveedor != null
@@ -2097,6 +2074,7 @@ export default function FormPantallas() {
                         inputMode="decimal"
                         step="0.01"
                         min="0"
+                        max={MAX_MONTO_COP}
                         placeholder="0.00"
                         value={o.total_pagado}
                         onChange={(e) =>
@@ -2104,6 +2082,15 @@ export default function FormPantallas() {
                         }
                         className="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
                       />
+                      {o.total_pagado !== "" &&
+                        !Number.isNaN(Number(o.total_pagado)) &&
+                        Number(o.total_pagado) > MAX_MONTO_COP && (
+                          <p className="mt-1 text-xs text-red-500">
+                            El monto máximo permitido es $
+                            {fmtMoneyClient(MAX_MONTO_COP)}. Revisa si
+                            escribiste un dígito de más.
+                          </p>
+                        )}
                     </div>
 
                     {/* Total pagado proveedor — se autorellena desde la plataforma pero es editable */}
@@ -2119,6 +2106,7 @@ export default function FormPantallas() {
                         inputMode="decimal"
                         step="0.01"
                         min="0"
+                        max={MAX_MONTO_COP}
                         placeholder="0.00"
                         value={o.total_pagado_proveedor ?? ""}
                         onChange={(e) =>
@@ -2128,6 +2116,15 @@ export default function FormPantallas() {
                         }
                         className="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
                       />
+                      {o.total_pagado_proveedor &&
+                        !Number.isNaN(Number(o.total_pagado_proveedor)) &&
+                        Number(o.total_pagado_proveedor) > MAX_MONTO_COP && (
+                          <p className="mt-1 text-xs text-red-500">
+                            El monto máximo permitido es $
+                            {fmtMoneyClient(MAX_MONTO_COP)}. Revisa si
+                            escribiste un dígito de más.
+                          </p>
+                        )}
                     </div>
 
                     <FieldPantallas

@@ -18,28 +18,31 @@ export type Pantalla = {
   estado?: string | null;
   proveedor?: string | null;
   comentario?: string | null;
+  cuenta_caida?: boolean; // ✅ nuevo — antes se perdía al mergear
 };
 
 type CacheShape = { rows: Pantalla[]; ts: number };
 
-export const LS_CACHE_KEY = '__pantallas_cache_v3';
-export const LS_STAMP_P = '__stamp_pantallas';
-export const LS_STAMP_C = '__stamp_cuentascompartidas';
-export const LS_STAMP_U = '__stamp_usuarios';
-export const BC_NAME = 'pantallas_mutations_bc';
+export const LS_CACHE_KEY = "__pantallas_cache_v3";
+export const LS_STAMP_P = "__stamp_pantallas";
+export const LS_STAMP_C = "__stamp_cuentascompartidas";
+export const LS_STAMP_U = "__stamp_usuarios";
+export const BC_NAME = "pantallas_mutations_bc";
 
-const hasWindow = () => typeof window !== 'undefined';
+const hasWindow = () => typeof window !== "undefined";
 
-const normEmail = (s?: string | null) => (s ?? '').trim().toLowerCase();
+const normEmail = (s?: string | null) => (s ?? "").trim().toLowerCase();
 
 // Igual que en el viewer
 const normalizeRow = (r: any): Pantalla => {
-  const n = (x: any) => (x == null || x === '' || Number.isNaN(Number(x)) ? null : Number(x));
+  const n = (x: any) =>
+    x == null || x === "" || Number.isNaN(Number(x)) ? null : Number(x);
   return {
     id: Number(r.id),
     cuenta_id: n(r.cuenta_id),
     plataforma_id: n(r.plataforma_id),
-    contacto: String(r.contacto ?? ''),
+    contacto: String(r.contacto ?? ""),
+    cuenta_caida: r.cuenta_caida === true || r.cuenta_caida === 1,
     nombre: r.nombre ?? null,
     correo: r.correo ?? null,
     contrasena: r.contrasena ?? null,
@@ -48,7 +51,10 @@ const normalizeRow = (r: any): Pantalla => {
     fecha_vencimiento: r.fecha_vencimiento ?? null,
     meses_pagados: n(r.meses_pagados),
     total_pagado: r.total_pagado == null ? null : Number(r.total_pagado),
-    total_pagado_proveedor: r.total_pagado_proveedor == null ? null : Number(r.total_pagado_proveedor),
+    total_pagado_proveedor:
+      r.total_pagado_proveedor == null
+        ? null
+        : Number(r.total_pagado_proveedor),
     total_ganado: r.total_ganado == null ? null : Number(r.total_ganado),
     estado: r.estado ?? null,
     proveedor: r.proveedor ?? null,
@@ -69,7 +75,9 @@ function readCache(): CacheShape | null {
 function writeCache(rows: Pantalla[]) {
   if (!hasWindow()) return;
   const cache: CacheShape = { rows, ts: Date.now() };
-  try { localStorage.setItem(LS_CACHE_KEY, JSON.stringify(cache)); } catch {}
+  try {
+    localStorage.setItem(LS_CACHE_KEY, JSON.stringify(cache));
+  } catch {}
 }
 
 /** Mezcla (insert/update) una pantalla al cache local y devuelve la lista resultante. */
@@ -86,8 +94,11 @@ export function mergePantallaIntoCache(input: any): Pantalla[] {
   } else {
     // merge conservador: no pisa correo con vacío
     const merged: Pantalla = { ...list[idx], ...row };
-    if (normEmail(row.correo) === '' && normEmail(list[idx].correo) !== '') {
+    if (normEmail(row.correo) === "" && normEmail(list[idx].correo) !== "") {
       merged.correo = list[idx].correo; // conserva el correo existente
+    }
+    if (row.cuenta_caida === undefined) {
+      merged.cuenta_caida = list[idx].cuenta_caida;
     }
     next = [...list];
     next[idx] = merged;
@@ -96,22 +107,24 @@ export function mergePantallaIntoCache(input: any): Pantalla[] {
   return next;
 }
 
-/** Elimina una pantalla por id del cache local. */
-export function removePantallaFromCache(id: number) {
-  if (!hasWindow()) return;
+export function removePantallaFromCache(id: number): Pantalla[] {
+  if (!hasWindow()) return [];
   const current = readCache();
   const list = current?.rows ?? [];
   const next = list.filter((r) => r.id !== id);
   writeCache(next);
+  return next;
 }
 
 /** Sube un "sello" y emite broadcast para que otras pestañas refresquen. */
 export function notifyPantallasChanged() {
   if (!hasWindow()) return;
-  try { localStorage.setItem(LS_STAMP_P, String(Date.now())); } catch {}
+  try {
+    localStorage.setItem(LS_STAMP_P, String(Date.now()));
+  } catch {}
   try {
     const bc = new BroadcastChannel(BC_NAME);
-    bc.postMessage({ type: 'invalidate-pantallas' });
+    bc.postMessage({ type: "invalidate-pantallas" });
     bc.close();
   } catch {}
 }

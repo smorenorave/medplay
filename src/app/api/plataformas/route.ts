@@ -24,7 +24,7 @@ export async function GET(req: Request) {
         id: true,
         nombre: true,
         cantidad_pantallas: true,
-        total_pago: true,
+        total_pagado: true,
         total_pagado_proveedor: true,
       },
       orderBy: { nombre: "asc" },
@@ -80,19 +80,19 @@ export async function POST(req: Request) {
       cantidad_pantallas = n;
     }
 
-    let total_pago: number | undefined = undefined;
+    let total_pagado: number | undefined = undefined;
 
-    if (body?.total_pago !== undefined && body?.total_pago !== null) {
-      const n = Number(body.total_pago);
+    if (body?.total_pagado !== undefined && body?.total_pagado !== null) {
+      const n = Number(body.total_pagado);
 
       if (Number.isNaN(n) || n < 0) {
         return NextResponse.json(
-          { error: '"total_pago" debe ser mayor o igual a 0.' },
+          { error: '"total_pagado" debe ser mayor o igual a 0.' },
           { status: 400 },
         );
       }
 
-      total_pago = n;
+      total_pagado = n;
     }
 
     let total_pagado_proveedor: number | undefined = undefined;
@@ -119,7 +119,7 @@ export async function POST(req: Request) {
 
         ...(cantidad_pantallas !== undefined ? { cantidad_pantallas } : {}),
 
-        ...(total_pago !== undefined ? { total_pago } : {}),
+        ...(total_pagado !== undefined ? { total_pagado } : {}),
 
         ...(total_pagado_proveedor !== undefined
           ? { total_pagado_proveedor }
@@ -129,7 +129,7 @@ export async function POST(req: Request) {
         id: true,
         nombre: true,
         cantidad_pantallas: true,
-        total_pago: true,
+        total_pagado: true,
         total_pagado_proveedor: true,
       },
     });

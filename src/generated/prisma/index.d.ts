@@ -4929,14 +4929,14 @@ export namespace Prisma {
   export type PlataformasAvgAggregateOutputType = {
     id: number | null
     cantidad_pantallas: number | null
-    total_pago: Decimal | null
+    total_pagado: Decimal | null
     total_pagado_proveedor: Decimal | null
   }
 
   export type PlataformasSumAggregateOutputType = {
     id: number | null
     cantidad_pantallas: number | null
-    total_pago: Decimal | null
+    total_pagado: Decimal | null
     total_pagado_proveedor: Decimal | null
   }
 
@@ -4944,7 +4944,7 @@ export namespace Prisma {
     id: number | null
     nombre: string | null
     cantidad_pantallas: number | null
-    total_pago: Decimal | null
+    total_pagado: Decimal | null
     total_pagado_proveedor: Decimal | null
   }
 
@@ -4952,7 +4952,7 @@ export namespace Prisma {
     id: number | null
     nombre: string | null
     cantidad_pantallas: number | null
-    total_pago: Decimal | null
+    total_pagado: Decimal | null
     total_pagado_proveedor: Decimal | null
   }
 
@@ -4960,7 +4960,7 @@ export namespace Prisma {
     id: number
     nombre: number
     cantidad_pantallas: number
-    total_pago: number
+    total_pagado: number
     total_pagado_proveedor: number
     _all: number
   }
@@ -4969,14 +4969,14 @@ export namespace Prisma {
   export type PlataformasAvgAggregateInputType = {
     id?: true
     cantidad_pantallas?: true
-    total_pago?: true
+    total_pagado?: true
     total_pagado_proveedor?: true
   }
 
   export type PlataformasSumAggregateInputType = {
     id?: true
     cantidad_pantallas?: true
-    total_pago?: true
+    total_pagado?: true
     total_pagado_proveedor?: true
   }
 
@@ -4984,7 +4984,7 @@ export namespace Prisma {
     id?: true
     nombre?: true
     cantidad_pantallas?: true
-    total_pago?: true
+    total_pagado?: true
     total_pagado_proveedor?: true
   }
 
@@ -4992,7 +4992,7 @@ export namespace Prisma {
     id?: true
     nombre?: true
     cantidad_pantallas?: true
-    total_pago?: true
+    total_pagado?: true
     total_pagado_proveedor?: true
   }
 
@@ -5000,7 +5000,7 @@ export namespace Prisma {
     id?: true
     nombre?: true
     cantidad_pantallas?: true
-    total_pago?: true
+    total_pagado?: true
     total_pagado_proveedor?: true
     _all?: true
   }
@@ -5095,8 +5095,8 @@ export namespace Prisma {
     id: number
     nombre: string
     cantidad_pantallas: number
-    total_pago: Decimal
-    total_pagado_proveedor: Decimal
+    total_pagado: Decimal | null
+    total_pagado_proveedor: Decimal | null
     _count: PlataformasCountAggregateOutputType | null
     _avg: PlataformasAvgAggregateOutputType | null
     _sum: PlataformasSumAggregateOutputType | null
@@ -5122,7 +5122,7 @@ export namespace Prisma {
     id?: boolean
     nombre?: boolean
     cantidad_pantallas?: boolean
-    total_pago?: boolean
+    total_pagado?: boolean
     total_pagado_proveedor?: boolean
     cuentascompartidas?: boolean | plataformas$cuentascompartidasArgs<ExtArgs>
     cuentascompletas?: boolean | plataformas$cuentascompletasArgs<ExtArgs>
@@ -5136,11 +5136,11 @@ export namespace Prisma {
     id?: boolean
     nombre?: boolean
     cantidad_pantallas?: boolean
-    total_pago?: boolean
+    total_pagado?: boolean
     total_pagado_proveedor?: boolean
   }
 
-  export type plataformasOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "nombre" | "cantidad_pantallas" | "total_pago" | "total_pagado_proveedor", ExtArgs["result"]["plataformas"]>
+  export type plataformasOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "nombre" | "cantidad_pantallas" | "total_pagado" | "total_pagado_proveedor", ExtArgs["result"]["plataformas"]>
   export type plataformasInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     cuentascompartidas?: boolean | plataformas$cuentascompartidasArgs<ExtArgs>
     cuentascompletas?: boolean | plataformas$cuentascompletasArgs<ExtArgs>
@@ -5159,8 +5159,8 @@ export namespace Prisma {
       id: number
       nombre: string
       cantidad_pantallas: number
-      total_pago: Prisma.Decimal
-      total_pagado_proveedor: Prisma.Decimal
+      total_pagado: Prisma.Decimal | null
+      total_pagado_proveedor: Prisma.Decimal | null
     }, ExtArgs["result"]["plataformas"]>
     composites: {}
   }
@@ -5536,7 +5536,7 @@ export namespace Prisma {
     readonly id: FieldRef<"plataformas", 'Int'>
     readonly nombre: FieldRef<"plataformas", 'String'>
     readonly cantidad_pantallas: FieldRef<"plataformas", 'Int'>
-    readonly total_pago: FieldRef<"plataformas", 'Decimal'>
+    readonly total_pagado: FieldRef<"plataformas", 'Decimal'>
     readonly total_pagado_proveedor: FieldRef<"plataformas", 'Decimal'>
   }
     
@@ -11702,7 +11702,7 @@ export namespace Prisma {
     id: 'id',
     nombre: 'nombre',
     cantidad_pantallas: 'cantidad_pantallas',
-    total_pago: 'total_pago',
+    total_pagado: 'total_pagado',
     total_pagado_proveedor: 'total_pagado_proveedor'
   };
 
@@ -12263,8 +12263,8 @@ export namespace Prisma {
     id?: IntFilter<"plataformas"> | number
     nombre?: StringFilter<"plataformas"> | string
     cantidad_pantallas?: IntFilter<"plataformas"> | number
-    total_pago?: DecimalFilter<"plataformas"> | Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: DecimalFilter<"plataformas"> | Decimal | DecimalJsLike | number | string
+    total_pagado?: DecimalNullableFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: DecimalNullableFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: CuentascompartidasListRelationFilter
     cuentascompletas?: CuentascompletasListRelationFilter
     inventario?: InventarioListRelationFilter
@@ -12274,8 +12274,8 @@ export namespace Prisma {
     id?: SortOrder
     nombre?: SortOrder
     cantidad_pantallas?: SortOrder
-    total_pago?: SortOrder
-    total_pagado_proveedor?: SortOrder
+    total_pagado?: SortOrderInput | SortOrder
+    total_pagado_proveedor?: SortOrderInput | SortOrder
     cuentascompartidas?: cuentascompartidasOrderByRelationAggregateInput
     cuentascompletas?: cuentascompletasOrderByRelationAggregateInput
     inventario?: inventarioOrderByRelationAggregateInput
@@ -12289,8 +12289,8 @@ export namespace Prisma {
     OR?: plataformasWhereInput[]
     NOT?: plataformasWhereInput | plataformasWhereInput[]
     cantidad_pantallas?: IntFilter<"plataformas"> | number
-    total_pago?: DecimalFilter<"plataformas"> | Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: DecimalFilter<"plataformas"> | Decimal | DecimalJsLike | number | string
+    total_pagado?: DecimalNullableFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: DecimalNullableFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: CuentascompartidasListRelationFilter
     cuentascompletas?: CuentascompletasListRelationFilter
     inventario?: InventarioListRelationFilter
@@ -12300,8 +12300,8 @@ export namespace Prisma {
     id?: SortOrder
     nombre?: SortOrder
     cantidad_pantallas?: SortOrder
-    total_pago?: SortOrder
-    total_pagado_proveedor?: SortOrder
+    total_pagado?: SortOrderInput | SortOrder
+    total_pagado_proveedor?: SortOrderInput | SortOrder
     _count?: plataformasCountOrderByAggregateInput
     _avg?: plataformasAvgOrderByAggregateInput
     _max?: plataformasMaxOrderByAggregateInput
@@ -12316,8 +12316,8 @@ export namespace Prisma {
     id?: IntWithAggregatesFilter<"plataformas"> | number
     nombre?: StringWithAggregatesFilter<"plataformas"> | string
     cantidad_pantallas?: IntWithAggregatesFilter<"plataformas"> | number
-    total_pago?: DecimalWithAggregatesFilter<"plataformas"> | Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: DecimalWithAggregatesFilter<"plataformas"> | Decimal | DecimalJsLike | number | string
+    total_pagado?: DecimalNullableWithAggregatesFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: DecimalNullableWithAggregatesFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
   }
 
   export type usuariosWhereInput = {
@@ -12958,8 +12958,8 @@ export namespace Prisma {
   export type plataformasCreateInput = {
     nombre: string
     cantidad_pantallas?: number
-    total_pago?: Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string
+    total_pagado?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasCreateNestedManyWithoutPlataformasInput
     cuentascompletas?: cuentascompletasCreateNestedManyWithoutPlataformasInput
     inventario?: inventarioCreateNestedManyWithoutPlataformasInput
@@ -12969,8 +12969,8 @@ export namespace Prisma {
     id?: number
     nombre: string
     cantidad_pantallas?: number
-    total_pago?: Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string
+    total_pagado?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasUncheckedCreateNestedManyWithoutPlataformasInput
     cuentascompletas?: cuentascompletasUncheckedCreateNestedManyWithoutPlataformasInput
     inventario?: inventarioUncheckedCreateNestedManyWithoutPlataformasInput
@@ -12979,8 +12979,8 @@ export namespace Prisma {
   export type plataformasUpdateInput = {
     nombre?: StringFieldUpdateOperationsInput | string
     cantidad_pantallas?: IntFieldUpdateOperationsInput | number
-    total_pago?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasUpdateManyWithoutPlataformasNestedInput
     cuentascompletas?: cuentascompletasUpdateManyWithoutPlataformasNestedInput
     inventario?: inventarioUpdateManyWithoutPlataformasNestedInput
@@ -12990,8 +12990,8 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     nombre?: StringFieldUpdateOperationsInput | string
     cantidad_pantallas?: IntFieldUpdateOperationsInput | number
-    total_pago?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasUncheckedUpdateManyWithoutPlataformasNestedInput
     cuentascompletas?: cuentascompletasUncheckedUpdateManyWithoutPlataformasNestedInput
     inventario?: inventarioUncheckedUpdateManyWithoutPlataformasNestedInput
@@ -13001,23 +13001,23 @@ export namespace Prisma {
     id?: number
     nombre: string
     cantidad_pantallas?: number
-    total_pago?: Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string
+    total_pagado?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
   }
 
   export type plataformasUpdateManyMutationInput = {
     nombre?: StringFieldUpdateOperationsInput | string
     cantidad_pantallas?: IntFieldUpdateOperationsInput | number
-    total_pago?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
   }
 
   export type plataformasUncheckedUpdateManyInput = {
     id?: IntFieldUpdateOperationsInput | number
     nombre?: StringFieldUpdateOperationsInput | string
     cantidad_pantallas?: IntFieldUpdateOperationsInput | number
-    total_pago?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
   }
 
   export type usuariosCreateInput = {
@@ -13834,17 +13834,6 @@ export namespace Prisma {
     _max?: NestedDateTimeFilter<$PrismaModel>
   }
 
-  export type DecimalFilter<$PrismaModel = never> = {
-    equals?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    in?: Decimal[] | DecimalJsLike[] | number[] | string[]
-    notIn?: Decimal[] | DecimalJsLike[] | number[] | string[]
-    lt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    lte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    gt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    gte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    not?: NestedDecimalFilter<$PrismaModel> | Decimal | DecimalJsLike | number | string
-  }
-
   export type CuentascompartidasListRelationFilter = {
     every?: cuentascompartidasWhereInput
     some?: cuentascompartidasWhereInput
@@ -13885,14 +13874,14 @@ export namespace Prisma {
     id?: SortOrder
     nombre?: SortOrder
     cantidad_pantallas?: SortOrder
-    total_pago?: SortOrder
+    total_pagado?: SortOrder
     total_pagado_proveedor?: SortOrder
   }
 
   export type plataformasAvgOrderByAggregateInput = {
     id?: SortOrder
     cantidad_pantallas?: SortOrder
-    total_pago?: SortOrder
+    total_pagado?: SortOrder
     total_pagado_proveedor?: SortOrder
   }
 
@@ -13900,7 +13889,7 @@ export namespace Prisma {
     id?: SortOrder
     nombre?: SortOrder
     cantidad_pantallas?: SortOrder
-    total_pago?: SortOrder
+    total_pagado?: SortOrder
     total_pagado_proveedor?: SortOrder
   }
 
@@ -13908,31 +13897,15 @@ export namespace Prisma {
     id?: SortOrder
     nombre?: SortOrder
     cantidad_pantallas?: SortOrder
-    total_pago?: SortOrder
+    total_pagado?: SortOrder
     total_pagado_proveedor?: SortOrder
   }
 
   export type plataformasSumOrderByAggregateInput = {
     id?: SortOrder
     cantidad_pantallas?: SortOrder
-    total_pago?: SortOrder
+    total_pagado?: SortOrder
     total_pagado_proveedor?: SortOrder
-  }
-
-  export type DecimalWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    in?: Decimal[] | DecimalJsLike[] | number[] | string[]
-    notIn?: Decimal[] | DecimalJsLike[] | number[] | string[]
-    lt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    lte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    gt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    gte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
-    not?: NestedDecimalWithAggregatesFilter<$PrismaModel> | Decimal | DecimalJsLike | number | string
-    _count?: NestedIntFilter<$PrismaModel>
-    _avg?: NestedDecimalFilter<$PrismaModel>
-    _sum?: NestedDecimalFilter<$PrismaModel>
-    _min?: NestedDecimalFilter<$PrismaModel>
-    _max?: NestedDecimalFilter<$PrismaModel>
   }
 
   export type usuariosOrderByRelevanceInput = {
@@ -14092,6 +14065,17 @@ export namespace Prisma {
     id?: SortOrder
     plataforma_id?: SortOrder
   }
+
+  export type DecimalFilter<$PrismaModel = never> = {
+    equals?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    in?: Decimal[] | DecimalJsLike[] | number[] | string[]
+    notIn?: Decimal[] | DecimalJsLike[] | number[] | string[]
+    lt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    lte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    gt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    gte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    not?: NestedDecimalFilter<$PrismaModel> | Decimal | DecimalJsLike | number | string
+  }
   export type JsonFilter<$PrismaModel = never> =
     | PatchUndefined<
         Either<Required<JsonFilterBase<$PrismaModel>>, Exclude<keyof Required<JsonFilterBase<$PrismaModel>>, 'path'>>,
@@ -14215,6 +14199,22 @@ export namespace Prisma {
     totalCuentas?: SortOrder
     ventasCantidad?: SortOrder
     clientesActivos?: SortOrder
+  }
+
+  export type DecimalWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    in?: Decimal[] | DecimalJsLike[] | number[] | string[]
+    notIn?: Decimal[] | DecimalJsLike[] | number[] | string[]
+    lt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    lte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    gt?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    gte?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
+    not?: NestedDecimalWithAggregatesFilter<$PrismaModel> | Decimal | DecimalJsLike | number | string
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedDecimalFilter<$PrismaModel>
+    _sum?: NestedDecimalFilter<$PrismaModel>
+    _min?: NestedDecimalFilter<$PrismaModel>
+    _max?: NestedDecimalFilter<$PrismaModel>
   }
   export type JsonWithAggregatesFilter<$PrismaModel = never> =
     | PatchUndefined<
@@ -14512,14 +14512,6 @@ export namespace Prisma {
     connect?: inventarioWhereUniqueInput | inventarioWhereUniqueInput[]
   }
 
-  export type DecimalFieldUpdateOperationsInput = {
-    set?: Decimal | DecimalJsLike | number | string
-    increment?: Decimal | DecimalJsLike | number | string
-    decrement?: Decimal | DecimalJsLike | number | string
-    multiply?: Decimal | DecimalJsLike | number | string
-    divide?: Decimal | DecimalJsLike | number | string
-  }
-
   export type cuentascompartidasUpdateManyWithoutPlataformasNestedInput = {
     create?: XOR<cuentascompartidasCreateWithoutPlataformasInput, cuentascompartidasUncheckedCreateWithoutPlataformasInput> | cuentascompartidasCreateWithoutPlataformasInput[] | cuentascompartidasUncheckedCreateWithoutPlataformasInput[]
     connectOrCreate?: cuentascompartidasCreateOrConnectWithoutPlataformasInput | cuentascompartidasCreateOrConnectWithoutPlataformasInput[]
@@ -14704,6 +14696,14 @@ export namespace Prisma {
     upsert?: plataformasUpsertWithoutInventarioInput
     connect?: plataformasWhereUniqueInput
     update?: XOR<XOR<plataformasUpdateToOneWithWhereWithoutInventarioInput, plataformasUpdateWithoutInventarioInput>, plataformasUncheckedUpdateWithoutInventarioInput>
+  }
+
+  export type DecimalFieldUpdateOperationsInput = {
+    set?: Decimal | DecimalJsLike | number | string
+    increment?: Decimal | DecimalJsLike | number | string
+    decrement?: Decimal | DecimalJsLike | number | string
+    multiply?: Decimal | DecimalJsLike | number | string
+    divide?: Decimal | DecimalJsLike | number | string
   }
 
   export type NestedIntFilter<$PrismaModel = never> = {
@@ -14965,6 +14965,23 @@ export namespace Prisma {
     _max?: NestedDateTimeFilter<$PrismaModel>
   }
 
+  export type NestedEnumLogStatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.LogStatus | EnumLogStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.LogStatus[]
+    notIn?: $Enums.LogStatus[]
+    not?: NestedEnumLogStatusFilter<$PrismaModel> | $Enums.LogStatus
+  }
+
+  export type NestedEnumLogStatusWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.LogStatus | EnumLogStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.LogStatus[]
+    notIn?: $Enums.LogStatus[]
+    not?: NestedEnumLogStatusWithAggregatesFilter<$PrismaModel> | $Enums.LogStatus
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumLogStatusFilter<$PrismaModel>
+    _max?: NestedEnumLogStatusFilter<$PrismaModel>
+  }
+
   export type NestedDecimalFilter<$PrismaModel = never> = {
     equals?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
     in?: Decimal[] | DecimalJsLike[] | number[] | string[]
@@ -14990,23 +15007,6 @@ export namespace Prisma {
     _sum?: NestedDecimalFilter<$PrismaModel>
     _min?: NestedDecimalFilter<$PrismaModel>
     _max?: NestedDecimalFilter<$PrismaModel>
-  }
-
-  export type NestedEnumLogStatusFilter<$PrismaModel = never> = {
-    equals?: $Enums.LogStatus | EnumLogStatusFieldRefInput<$PrismaModel>
-    in?: $Enums.LogStatus[]
-    notIn?: $Enums.LogStatus[]
-    not?: NestedEnumLogStatusFilter<$PrismaModel> | $Enums.LogStatus
-  }
-
-  export type NestedEnumLogStatusWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: $Enums.LogStatus | EnumLogStatusFieldRefInput<$PrismaModel>
-    in?: $Enums.LogStatus[]
-    notIn?: $Enums.LogStatus[]
-    not?: NestedEnumLogStatusWithAggregatesFilter<$PrismaModel> | $Enums.LogStatus
-    _count?: NestedIntFilter<$PrismaModel>
-    _min?: NestedEnumLogStatusFilter<$PrismaModel>
-    _max?: NestedEnumLogStatusFilter<$PrismaModel>
   }
   export type NestedJsonFilter<$PrismaModel = never> =
     | PatchUndefined<
@@ -15058,8 +15058,8 @@ export namespace Prisma {
   export type plataformasCreateWithoutCuentascompartidasInput = {
     nombre: string
     cantidad_pantallas?: number
-    total_pago?: Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string
+    total_pagado?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
     cuentascompletas?: cuentascompletasCreateNestedManyWithoutPlataformasInput
     inventario?: inventarioCreateNestedManyWithoutPlataformasInput
   }
@@ -15068,8 +15068,8 @@ export namespace Prisma {
     id?: number
     nombre: string
     cantidad_pantallas?: number
-    total_pago?: Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string
+    total_pagado?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
     cuentascompletas?: cuentascompletasUncheckedCreateNestedManyWithoutPlataformasInput
     inventario?: inventarioUncheckedCreateNestedManyWithoutPlataformasInput
   }
@@ -15130,8 +15130,8 @@ export namespace Prisma {
   export type plataformasUpdateWithoutCuentascompartidasInput = {
     nombre?: StringFieldUpdateOperationsInput | string
     cantidad_pantallas?: IntFieldUpdateOperationsInput | number
-    total_pago?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     cuentascompletas?: cuentascompletasUpdateManyWithoutPlataformasNestedInput
     inventario?: inventarioUpdateManyWithoutPlataformasNestedInput
   }
@@ -15140,8 +15140,8 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     nombre?: StringFieldUpdateOperationsInput | string
     cantidad_pantallas?: IntFieldUpdateOperationsInput | number
-    total_pago?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     cuentascompletas?: cuentascompletasUncheckedUpdateManyWithoutPlataformasNestedInput
     inventario?: inventarioUncheckedUpdateManyWithoutPlataformasNestedInput
   }
@@ -15183,8 +15183,8 @@ export namespace Prisma {
   export type plataformasCreateWithoutCuentascompletasInput = {
     nombre: string
     cantidad_pantallas?: number
-    total_pago?: Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string
+    total_pagado?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasCreateNestedManyWithoutPlataformasInput
     inventario?: inventarioCreateNestedManyWithoutPlataformasInput
   }
@@ -15193,8 +15193,8 @@ export namespace Prisma {
     id?: number
     nombre: string
     cantidad_pantallas?: number
-    total_pago?: Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string
+    total_pagado?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasUncheckedCreateNestedManyWithoutPlataformasInput
     inventario?: inventarioUncheckedCreateNestedManyWithoutPlataformasInput
   }
@@ -15235,8 +15235,8 @@ export namespace Prisma {
   export type plataformasUpdateWithoutCuentascompletasInput = {
     nombre?: StringFieldUpdateOperationsInput | string
     cantidad_pantallas?: IntFieldUpdateOperationsInput | number
-    total_pago?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasUpdateManyWithoutPlataformasNestedInput
     inventario?: inventarioUpdateManyWithoutPlataformasNestedInput
   }
@@ -15245,8 +15245,8 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     nombre?: StringFieldUpdateOperationsInput | string
     cantidad_pantallas?: IntFieldUpdateOperationsInput | number
-    total_pago?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasUncheckedUpdateManyWithoutPlataformasNestedInput
     inventario?: inventarioUncheckedUpdateManyWithoutPlataformasNestedInput
   }
@@ -15658,8 +15658,8 @@ export namespace Prisma {
   export type plataformasCreateWithoutInventarioInput = {
     nombre: string
     cantidad_pantallas?: number
-    total_pago?: Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string
+    total_pagado?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasCreateNestedManyWithoutPlataformasInput
     cuentascompletas?: cuentascompletasCreateNestedManyWithoutPlataformasInput
   }
@@ -15668,8 +15668,8 @@ export namespace Prisma {
     id?: number
     nombre: string
     cantidad_pantallas?: number
-    total_pago?: Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string
+    total_pagado?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasUncheckedCreateNestedManyWithoutPlataformasInput
     cuentascompletas?: cuentascompletasUncheckedCreateNestedManyWithoutPlataformasInput
   }
@@ -15693,8 +15693,8 @@ export namespace Prisma {
   export type plataformasUpdateWithoutInventarioInput = {
     nombre?: StringFieldUpdateOperationsInput | string
     cantidad_pantallas?: IntFieldUpdateOperationsInput | number
-    total_pago?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasUpdateManyWithoutPlataformasNestedInput
     cuentascompletas?: cuentascompletasUpdateManyWithoutPlataformasNestedInput
   }
@@ -15703,8 +15703,8 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     nombre?: StringFieldUpdateOperationsInput | string
     cantidad_pantallas?: IntFieldUpdateOperationsInput | number
-    total_pago?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
-    total_pagado_proveedor?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasUncheckedUpdateManyWithoutPlataformasNestedInput
     cuentascompletas?: cuentascompletasUncheckedUpdateManyWithoutPlataformasNestedInput
   }

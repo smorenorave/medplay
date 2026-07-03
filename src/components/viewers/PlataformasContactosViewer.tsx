@@ -14,7 +14,7 @@ type Plataforma = {
   id: number;
   nombre: string;
   cantidad_pantallas: number;
-  total_pago: number;
+  total_pagado: number;
   total_pagado_proveedor: number;
 };
 type Contacto = { id: number; contacto: string; nombre?: string | null };
@@ -204,7 +204,7 @@ function PlataformasPane() {
     cantidad_pantallas: Number(
       p.cantidad_pantallas ?? p.cantidadPantallas ?? p.cant_pantallas ?? 0,
     ),
-    total_pago: Number(p.total_pago ?? 0),
+    total_pagado: Number(p.total_pagado ?? 0),
     total_pagado_proveedor: Number(p.total_pagado_proveedor ?? 0),
   });
 
@@ -250,7 +250,7 @@ function PlataformasPane() {
         body: JSON.stringify({
           nombre: nom,
           cantidad_pantallas: nCant,
-          total_pago: totalPago === "" ? 0 : Number(totalPago),
+          total_pagado: totalPago === "" ? 0 : Number(totalPago),
           total_pagado_proveedor:
             totalProveedor === "" ? 0 : Number(totalProveedor),
         }),
@@ -282,7 +282,7 @@ function PlataformasPane() {
     setEditingId(row.id);
     setDraftName(row.nombre);
     setDraftCant(row.cantidad_pantallas);
-    setDraftTotalPago(row.total_pago);
+    setDraftTotalPago(row.total_pagado);
     setDraftTotalProveedor(row.total_pagado_proveedor);
     setSaveErr(null);
   };
@@ -312,7 +312,7 @@ function PlataformasPane() {
         body: JSON.stringify({
           nombre: nom,
           cantidad_pantallas: nCant,
-          total_pago: draftTotalPago === "" ? 0 : Number(draftTotalPago),
+          total_pagado: draftTotalPago === "" ? 0 : Number(draftTotalPago),
           total_pagado_proveedor:
             draftTotalProveedor === "" ? 0 : Number(draftTotalProveedor),
         }),
@@ -332,7 +332,7 @@ function PlataformasPane() {
                   ...r,
                   nombre: upd.nombre,
                   cantidad_pantallas: upd.cantidad_pantallas,
-                  total_pago: upd.total_pago,
+                  total_pagado: upd.total_pagado,
                   total_pagado_proveedor: upd.total_pagado_proveedor,
                 }
               : r,
@@ -600,7 +600,7 @@ function PlataformasPane() {
                     {/* Total pago */}
                     <Td>
                       {!isEditing ? (
-                        row.total_pago
+                        row.total_pagado
                       ) : (
                         <input
                           type="number"
@@ -1152,7 +1152,7 @@ function InventarioPane() {
                 0,
             ),
             // 👇 Agrega estas dos líneas faltantes 👇
-            total_pago: Number(p.total_pago ?? 0),
+            total_pagado: Number(p.total_pagado ?? 0),
             total_pagado_proveedor: Number(p.total_pagado_proveedor ?? 0),
           }))
           .sort((a, b) =>

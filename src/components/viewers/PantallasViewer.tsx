@@ -3,6 +3,25 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePlataformas } from "@/hooks/usePlataformas";
+import { buildDisponibilidadCorreos } from "@/lib/cuentasDisponibles";
+import {
+  resolveCapacidadPantallas,
+  computeUsedByEmailPlatform,
+  computeUsedCounts,
+  buildPidEmailKey,
+  buildNumerosPantallaDisponibles,
+} from "@/lib/cantidadPantallasDisponibles";
+import {
+  upsertCuentaCompartida,
+} from "@/lib/cuentasCompartidasUpsert";
+
+import {
+  mergePantallaIntoCache,
+  removePantallaFromCache,
+  notifyPantallasChanged,
+  LS_CACHE_KEY,
+  BC_NAME,
+} from "@/lib/pantallasMutationBus";
 
 /* =========================================================
  * Tipos
@@ -42,9 +61,8 @@ const STAMP_TTL_MS = 5 * 30_000;
 /* =========================================================
  * Cache y sync
  * ======================================================= */
-const LS_CACHE_KEY = "__pantallas_cache_v3";
+
 const LS_REMOTE_STAMP = "__pantallas_remote_stamp";
-const BC_NAME = "pantallas_mutations_bc";
 
 const todayYMDLocal = () => {
   const d = new Date();
@@ -100,39 +118,11 @@ function writeCache(rows: Pantalla[], remoteStamp?: number) {
   try {
     localStorage.setItem(
       LS_CACHE_KEY,
-      JSON.stringify({ rows, ts: Date.now() })
+      JSON.stringify({ rows, ts: Date.now() }),
     );
     if (typeof remoteStamp === "number") {
       localStorage.setItem(LS_REMOTE_STAMP, String(remoteStamp));
     }
-  } catch {}
-}
-function mergeIntoCache(p: any): Pantalla[] {
-  const row = normalizeRow(p);
-  const current = readCache();
-  const list = current?.rows ?? [];
-  const idx = list.findIndex((x) => x.id === row.id);
-  let next: Pantalla[];
-  if (idx === -1) next = [row, ...list];
-  else {
-    next = [...list];
-    next[idx] = { ...next[idx], ...row };
-  }
-  writeCache(next);
-  return next;
-}
-function removeFromCache(id: number) {
-  const current = readCache();
-  const list = current?.rows ?? [];
-  const next = list.filter((x) => x.id !== id);
-  writeCache(next);
-  return next;
-}
-function broadcastInvalidate() {
-  try {
-    const bc = new BroadcastChannel(BC_NAME);
-    bc.postMessage({ type: "invalidate-pantallas" });
-    bc.close();
   } catch {}
 }
 
@@ -175,6 +165,13 @@ async function fetchAllPantallas(): Promise<Pantalla[]> {
 
 const money = (v: number | null) =>
   v == null || Number.isNaN(v) ? "—" : "$ " + new Intl.NumberFormat().format(v);
+
+// Límite superior para "total_pagado" / "total_pagado_proveedor". Evita el
+// error de Prisma "Value out of range for the type" cuando alguien escribe
+// un número con dígitos de más por error. Ajustado a DECIMAL(10,2): hasta
+// 8 dígitos enteros + 2 decimales. Debe mantenerse igual que en
+// FormPantallas.tsx (mismo tipo de columna en la BD).
+const MAX_MONTO_COP = 99_999_999.99;
 
 const clamp = (val: unknown, min: number) => {
   const num = Number(val);
@@ -227,7 +224,7 @@ const normEmail = (s?: string | null) => (s ?? "").trim().toLowerCase();
 
 async function existsInInventario(
   plataforma_id: number | null | undefined,
-  correo: string
+  correo: string,
 ): Promise<boolean> {
   const email = normEmail(correo);
   try {
@@ -235,7 +232,7 @@ async function existsInInventario(
     const url =
       plataforma_id != null
         ? `${base}?q=${encodeURIComponent(
-            email
+            email,
           )}&plataforma_id=${plataforma_id}`
         : `${base}?q=${encodeURIComponent(email)}`;
     const res = await fetch(url, { cache: "no-store" });
@@ -244,8 +241,8 @@ async function existsInInventario(
     const arr: any[] = Array.isArray(data)
       ? data
       : Array.isArray(data?.items)
-      ? data.items
-      : [];
+        ? data.items
+        : [];
     return arr.some((r) => String(r?.correo ?? "").toLowerCase() === email);
   } catch {
     return false;
@@ -254,7 +251,7 @@ async function existsInInventario(
 async function ensureInInventario(
   plataforma_id?: number | null,
   correo?: string | null,
-  clave?: string | null
+  clave?: string | null,
 ) {
   if (!correo) return;
   const email = normEmail(correo);
@@ -283,49 +280,18 @@ async function fetchListSafe(urls: string[]): Promise<any[]> {
       return Array.isArray(data)
         ? data
         : Array.isArray(data?.items)
-        ? data.items
-        : [];
+          ? data.items
+          : [];
     } catch {}
   }
   return [];
-}
-
-/** Conteo por (correo + plataforma) vía API (queda por si lo necesitas en el futuro) */
-async function countPantallasByEmailAndPlatform(
-  correo: string,
-  plataforma_id: number | null
-): Promise<number> {
-  const email = normEmail(correo);
-  const base = `/api/pantallas`;
-  const urls: string[] = [];
-  if (plataforma_id != null) {
-    urls.push(
-      `${base}?correo=${encodeURIComponent(
-        email
-      )}&plataforma_id=${plataforma_id}`
-    );
-    urls.push(
-      `${base}?q=${encodeURIComponent(email)}&plataforma_id=${plataforma_id}`
-    );
-  }
-  urls.push(`${base}?correo=${encodeURIComponent(email)}`);
-  urls.push(`${base}?q=${encodeURIComponent(email)}`);
-  urls.push(`${base}?limit=5000`);
-
-  const arr = await fetchListSafe(urls);
-  return arr.filter(
-    (r) =>
-      String(r?.correo ?? "").toLowerCase() === email &&
-      (plataforma_id == null ||
-        Number(r?.plataforma_id) === Number(plataforma_id))
-  ).length;
 }
 
 /** ================= NUEVO: Conteo LOCAL por (correo + plataforma) ================= */
 function countLocalByEmailAndPlatform(
   all: Pantalla[],
   correo: string | null | undefined,
-  plataforma_id: number | null | undefined
+  plataforma_id: number | null | undefined,
 ): number {
   if (!correo || plataforma_id == null) return 0;
   const email = (correo ?? "").trim().toLowerCase();
@@ -337,87 +303,13 @@ function countLocalByEmailAndPlatform(
   }, 0);
 }
 
-/** === cuentascompartidas helpers (para editar correo) === */
-
-async function findCuentaCompartidaByCorreo(
-  plataforma_id: number | null | undefined,
-  correo: string
-) {
-  const email = normEmail(correo);
-  if (!email) return null;
-  const urls: string[] = [];
-  if (plataforma_id != null) {
-    urls.push(
-      `/api/cuentascompartidas?correo=${encodeURIComponent(
-        email
-      )}&plataforma_id=${plataforma_id}`
-    );
-  }
-  urls.push(`/api/cuentascompartidas?correo=${encodeURIComponent(email)}`);
-  for (const u of urls) {
-    try {
-      const r = await fetch(u, { cache: "no-store" });
-      if (!r.ok) continue;
-      const j = await r.json();
-      const arr: any[] = Array.isArray(j)
-        ? j
-        : Array.isArray(j?.items)
-        ? j.items
-        : [];
-      const hit = arr.find(
-        (x) =>
-          normEmail(x?.correo) === email &&
-          (plataforma_id == null ||
-            Number(x?.plataforma_id) === Number(plataforma_id))
-      );
-      if (hit) return hit;
-    } catch {}
-  }
-  return null;
-}
-async function upsertCuentaCompartida(
-  plataforma_id: number | null | undefined,
-  correo: string,
-  contrasena?: string | null
-): Promise<number> {
-  const email = normEmail(correo);
-  if (!email) throw new Error("Correo vacío al crear/buscar cuenta compartida");
-
-  const existing = await findCuentaCompartidaByCorreo(
-    plataforma_id ?? null,
-    email
-  );
-  if (existing?.id) {
-    if (contrasena && contrasena.trim() !== "") {
-      try {
-        await fetch(`/api/cuentascompartidas/${existing.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contrasena }),
-        });
-      } catch {}
-    }
-    return Number(existing.id);
-  }
-
-  const body: any = { correo: email };
-  if (plataforma_id != null) body.plataforma_id = plataforma_id;
-  if (contrasena && contrasena.trim() !== "") body.contrasena = contrasena;
-
-  const rNew = await fetch("/api/cuentascompartidas", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!rNew.ok) {
-    const j = await rNew.json().catch(() => ({}));
-    throw new Error(j?.error ?? "No se pudo crear la cuenta compartida");
-  }
-  const created = await rNew.json();
-  if (!created?.id)
-    throw new Error("La API no devolvió id al crear cuentascompartidas");
-  return Number(created.id);
-}
+/** === cuentascompartidas helpers (para editar correo) ===
+ * NOTA: `findCuentaCompartidaByCorreo` y `upsertCuentaCompartida` ahora
+ * viven en `@/lib/cuentasCompartidasUpsert` (importadas arriba) para que
+ * FormPantallas y PantallasViewer compartan exactamente la misma lógica de
+ * "buscar antes de crear" y no vuelvan a divergir (eso fue justamente lo
+ * que causó los duplicados en `cuentascompartidas`).
+ */
 
 /* =========================================================
  * Componente principal
@@ -439,40 +331,20 @@ export default function PantallasViewer() {
   const [platFilter, setPlatFilter] = useState<number | "all">("all");
 
   // Capacidad por plataforma (desde usePlataformas)
-  // ⚠️ Debe declararse ANTES de cualquier efecto/memo que la use en su
-  // arreglo de dependencias, ya que ese arreglo se evalúa en cada render.
   const capacityByPlatform = useMemo(() => {
     const m = new Map<number, number | null>();
     for (const p of plataformas) {
-      // soporta snake y camel, y castea string/number
-      const raw =
-        (p as any).cantidad_pantallas ?? (p as any).cantidadPantallas ?? null;
-
-      if (raw === null || raw === undefined || raw === "") {
-        m.set(Number(p.id), null); // capacidad desconocida (AÚN no pintamos rojo)
-        continue;
-      }
-
-      const cap = Number(raw);
-      m.set(Number(p.id), Number.isFinite(cap) ? cap : null);
+      m.set(Number(p.id), resolveCapacidadPantallas(p.id, plataformas));
     }
     return m;
   }, [plataformas]);
 
   // Pantallas usadas por (correo + plataforma) sobre TODO el dataset
   // key: `${pid}__${email}` -> value: usadas
-  const usedByEmailPlat = useMemo(() => {
-    const m = new Map<string, number>(); // key: `${pid}__${email}`
-    const norm = (s?: string | null) => (s ?? "").trim().toLowerCase();
-    for (const r of rows) {
-      const pid = Number(r.plataforma_id);
-      const em = norm(r.correo);
-      if (!Number.isFinite(pid) || !em) continue;
-      const k = `${pid}__${em}`;
-      m.set(k, (m.get(k) ?? 0) + 1);
-    }
-    return m;
-  }, [rows]);
+  const usedByEmailPlat = useMemo(
+    () => computeUsedByEmailPlatform(rows),
+    [rows],
+  );
 
   // edición
   const [edit, setEdit] = useState<EditState | null>(null);
@@ -519,25 +391,62 @@ export default function PantallasViewer() {
   // 👇 NUEVO: lista filtrada según lo escrito + excluyendo cuentas caídas + solo con cupos disponibles
   const visibleAvailableEmails = useMemo(() => {
     const term = (edit?.correo ?? "").trim().toLowerCase();
-    return availableEmails
-      .filter((em) => !caidaEmailSet.has(em))
-      .filter((em) => {
-        const free =
-          (emailFreeMap[em] ?? 0) + (em === originalCorreoForEdit ? 1 : 0);
-        return free > 0;
-      })
-      .filter((em) => !term || em.includes(term));
+    return availableEmails.filter((em) => !term || em.includes(term));
+  }, [availableEmails, edit?.correo]);
+  // 👇 NUEVO: cupos efectivos a mostrar junto a cada correo en el dropdown
+  const effectiveFreeForEmail = (email: string) => emailFreeMap[email] ?? 0;
+
+  // 👇 NUEVO: números de pantalla (1..capacidad) disponibles para el correo/
+  // cuenta que se está editando. Misma fuente de verdad que el Generador
+  // (FormPantallas): `buildNumerosPantallaDisponibles`. Como `rows` ya vive
+  // en memoria (dataset completo del viewer), el cálculo es síncrono y se
+  // recalcula solo cuando cambia algo relevante — sin fetch adicional — así
+  // que reacciona en tiempo real a cualquier cambio de disponibilidad.
+  const numerosPantallaInfo = useMemo(() => {
+    if (!edit?.plataforma_id) {
+      return {
+        plataformaId: 0,
+        capacidad: null as number | null,
+        taken: [] as number[],
+        free: [] as number[],
+      };
+    }
+    return buildNumerosPantallaDisponibles({
+      plataformaId: edit.plataforma_id,
+      plataformas,
+      pantallas: rows,
+      correo: edit.correo,
+      cuentaId: edit.cuenta_id ?? undefined,
+      // Excluye la propia fila para que su número actual siga contando
+      // como libre (no se descuenta a sí mismo).
+      excludeRowId: edit.id,
+    });
   }, [
-    availableEmails,
-    caidaEmailSet,
+    edit?.plataforma_id,
     edit?.correo,
-    emailFreeMap,
-    originalCorreoForEdit,
+    edit?.cuenta_id,
+    edit?.id,
+    plataformas,
+    rows,
   ]);
 
-  // 👇 NUEVO: cupos efectivos a mostrar junto a cada correo en el dropdown
-  const effectiveFreeForEmail = (email: string) =>
-    (emailFreeMap[email] ?? 0) + (email === originalCorreoForEdit ? 1 : 0);
+  const availablePantallaSlots = numerosPantallaInfo.free;
+
+  // 👇 NUEVO: si la plataforma o el correo cambian y el número seleccionado
+  // deja de estar disponible, se limpia (igual que hace FormPantallas).
+  useEffect(() => {
+    if (!edit) return;
+    const current = edit.nro_pantalla ? Number(edit.nro_pantalla) : null;
+    if (current && !availablePantallaSlots.includes(current)) {
+      setEdit((s) => ({ ...(s as EditState), nro_pantalla: "" }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    availablePantallaSlots.join(","),
+    edit?.plataforma_id,
+    edit?.correo,
+    edit?.cuenta_id,
+  ]);
 
   useEffect(() => {
     const pid = edit?.plataforma_id;
@@ -560,27 +469,25 @@ export default function PantallasViewer() {
         ]);
         const acctRows = acctRes.ok ? await acctRes.json() : [];
         const invRows = invRes.ok ? await invRes.json() : [];
-        const set = new Set<string>();
-        for (const r of acctRows) {
-          const c = String((r as any)?.correo ?? "").trim().toLowerCase();
-          if (c) set.add(c);
-        }
-        for (const r of invRows) {
-          const c = String((r as any)?.correo ?? "").trim().toLowerCase();
-          if (c) set.add(c);
-        }
 
-        // ✅ Igual que en el form: cupos = capacidad de la plataforma - pantallas ya usadas con ese correo
-        const cap = capacityByPlatform.get(Number(pid));
-        const free: Record<string, number> = {};
-        if (cap != null && cap > 0) {
-          for (const email of set) {
-            const used = usedByEmailPlat.get(`${Number(pid)}__${email}`) ?? 0;
-            free[email] = Math.max(0, cap - used);
-          }
-        }
+        // ✅ Única fuente de verdad, misma lógica que FormPantallas.
+        const disponibilidad = buildDisponibilidadCorreos({
+          plataformaId: pid,
+          plataformas,
+          cuentasCompartidas: acctRows,
+          inventario: invRows,
+          pantallas: rows,
+          excludeRowId: edit.id,
+        });
+
         if (!cancelled) {
-          setAvailableEmails(Array.from(set).sort());
+          setAvailableEmails(disponibilidad.emails);
+          const free: Record<string, number> = {};
+          for (const o of disponibilidad.options) {
+            free[o.email] =
+              disponibilidad.freeByEmail[`${pid}::${o.source}::${o.email}`] ??
+              0;
+          }
           setEmailFreeMap(free);
         }
       } catch {
@@ -595,7 +502,8 @@ export default function PantallasViewer() {
     return () => {
       cancelled = true;
     };
-  }, [edit?.plataforma_id, capacityByPlatform, usedByEmailPlat]);
+  }, [edit?.plataforma_id, edit?.id, plataformas, rows]);
+
   const [saving, setSaving] = useState(false);
 
   // selección múltiple
@@ -611,7 +519,7 @@ export default function PantallasViewer() {
   const [deleting, setDeleting] = useState(false);
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
   const [deleteAction, setDeleteAction] = useState<"archive" | "purge" | null>(
-    null
+    null,
   );
   const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
 
@@ -795,7 +703,7 @@ export default function PantallasViewer() {
 
     // Filas visibles con ese correo
     const sameEmailRows = rows.filter(
-      (x) => (x.correo ?? "").trim().toLowerCase() === email
+      (x) => (x.correo ?? "").trim().toLowerCase() === email,
     );
 
     if (sameEmailRows.length === 0) return;
@@ -808,11 +716,11 @@ export default function PantallasViewer() {
       prev.map((x) =>
         (x.correo ?? "").trim().toLowerCase() === email
           ? { ...x, cuenta_caida: nextValue }
-          : x
-      )
+          : x,
+      ),
     );
     for (const x of sameEmailRows)
-      mergeIntoCache({ ...x, cuenta_caida: nextValue });
+      mergePantallaIntoCache({ ...x, cuenta_caida: nextValue });
 
     try {
       // 👉 Persistimos en cuentascompartidas (UNA sola llamada si hay cuenta_id)
@@ -823,7 +731,7 @@ export default function PantallasViewer() {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ cuenta_caida: nextValue }),
-          }
+          },
         );
       } else {
         // Fallback (si por alguna razón no hay cuenta_id), no debería ocurrir normalmente
@@ -833,8 +741,8 @@ export default function PantallasViewer() {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ cuenta_caida: nextValue }),
-            })
-          )
+            }),
+          ),
         );
       }
 
@@ -916,7 +824,7 @@ export default function PantallasViewer() {
 
     const items: Item[] = [];
     for (const pid of seen) {
-      const used = usedByEmailPlat.get(`${pid}__${em}`) ?? 0;
+      const used = usedByEmailPlat.get(buildPidEmailKey(pid, em)) ?? 0;
 
       // nombre y capacidad: primero hook, si no existe usa lo traído por /api/plataformas/:id
       const hookCap = capacityByPlatform.get(pid); // number | null
@@ -925,8 +833,8 @@ export default function PantallasViewer() {
         hookCap != null
           ? hookCap
           : fetched?.capacidad != null
-          ? Number(fetched.capacidad)
-          : null;
+            ? Number(fetched.capacidad)
+            : null;
 
       const name =
         plataformas.find((p) => Number(p.id) === pid)?.nombre ??
@@ -958,7 +866,7 @@ export default function PantallasViewer() {
 
     const groups = Array.from(map.entries()).map(([email, arr]) => {
       const rowsSorted = [...arr].sort(
-        (a, b) => toNum(a.fecha_vencimiento) - toNum(b.fecha_vencimiento)
+        (a, b) => toNum(a.fecha_vencimiento) - toNum(b.fecha_vencimiento),
       );
       return { email, rows: rowsSorted };
     });
@@ -992,13 +900,13 @@ export default function PantallasViewer() {
     ) {
       const venc = addMonthsYYYYMMDD(
         seeded.fecha_compra as string,
-        Number(seeded.meses_pagados)
+        Number(seeded.meses_pagados),
       );
       if (venc) seeded.fecha_vencimiento = venc;
     }
     seeded.total_ganado = calcGanado(
       seeded.total_pagado,
-      seeded.total_pagado_proveedor
+      seeded.total_pagado_proveedor,
     );
 
     setEdit(seeded);
@@ -1028,6 +936,19 @@ export default function PantallasViewer() {
       const row = rows.find((r) => r.id === edit.id);
       if (!row) throw new Error("Fila no encontrada");
 
+      if (
+        (edit.total_pagado != null &&
+          Number(edit.total_pagado) > MAX_MONTO_COP) ||
+        (edit.total_pagado_proveedor != null &&
+          Number(edit.total_pagado_proveedor) > MAX_MONTO_COP)
+      ) {
+        throw new Error(
+          `El monto máximo permitido es $${new Intl.NumberFormat().format(
+            MAX_MONTO_COP,
+          )}. Revisa si escribiste un dígito de más.`,
+        );
+      }
+
       const applyCorreoCuenta = (edit as any).applyCorreoCuenta === true;
 
       const oldCorreo = normEmail(row.correo);
@@ -1045,13 +966,13 @@ export default function PantallasViewer() {
       }
       const totalGanadoCalc = calcGanado(
         edit.total_pagado,
-        edit.total_pagado_proveedor
+        edit.total_pagado_proveedor,
       );
 
       // ===== Payload base para PANTALLAS (sin correo/plataforma si se aplica a todas) =====
       const payloadPant: Record<string, unknown> = {
         contacto: edit.contacto ?? "",
-        nombre: (edit.nombre ?? "") === "" ? null : edit.nombre ?? "",
+        nombre: (edit.nombre ?? "") === "" ? null : (edit.nombre ?? ""),
         nro_pantalla: edit.nro_pantalla ?? "",
         fecha_compra: edit.fecha_compra ?? null,
         fecha_vencimiento: finalVence,
@@ -1075,7 +996,7 @@ export default function PantallasViewer() {
       if (applyCorreoCuenta) {
         if (!row.cuenta_id) {
           throw new Error(
-            "No hay cuenta asociada (cuenta_id) para aplicar el correo a todas."
+            "No hay cuenta asociada (cuenta_id) para aplicar el correo a todas.",
           );
         }
 
@@ -1100,7 +1021,7 @@ export default function PantallasViewer() {
             const j = await resC.json().catch(() => ({}));
             throw new Error(
               j?.error ??
-                "No se pudo actualizar la cuenta compartida (correo/plataforma)."
+                "No se pudo actualizar la cuenta compartida (correo/plataforma).",
             );
           }
         }
@@ -1133,14 +1054,14 @@ export default function PantallasViewer() {
                       ? edit.contrasena
                       : r.contrasena,
                 }
-              : r
+              : r,
           );
           writeCache(next);
           return next;
         });
 
         // 4) Mezcla la fila editada con lo devuelto por la API
-        mergeIntoCache({
+        mergePantallaIntoCache({
           id: Number(flat?.row?.id ?? edit.id),
           cuenta_id: cuentaIdToUpdate,
           contacto: flat?.row?.contacto ?? edit.contacto,
@@ -1173,11 +1094,11 @@ export default function PantallasViewer() {
           contrasena:
             hasNewPass && typeof edit.contrasena === "string"
               ? edit.contrasena
-              : row.contrasena ?? null,
+              : (row.contrasena ?? null),
           proveedor: edit.proveedor ?? null,
         });
 
-        broadcastInvalidate();
+        notifyPantallasChanged();
         setEdit(null);
         setSaving(false);
         return; // ← Detén aquí; no entres a la rama normal
@@ -1185,56 +1106,23 @@ export default function PantallasViewer() {
 
       // ===== B) Checkbox NO marcado → flujo original (puede crear/reasignar cuentas)
       if (newCorreo && newCorreo !== oldCorreo) {
-        const existing = await findCuentaCompartidaByCorreo(null, newCorreo);
+        // Antes esto buscaba con `findCuentaCompartidaByCorreo(null, newCorreo)`
+        // -> sin filtrar por plataforma, podía reutilizar por error el
+        // cuenta_id de OTRA plataforma que casualmente comparte el correo.
+        // Ahora usa el helper compartido, con la plataforma correcta.
+        const hasNewPass =
+          typeof edit.contrasena === "string" &&
+          edit.contrasena.trim() !== "";
 
-        if (existing?.id) {
-          (payloadPant as any).cuenta_id = Number(existing.id);
-          (payloadPant as any).correo = newCorreo;
-          cuentaIdToUpdate = Number(existing.id);
+        const { id: cuentaId } = await upsertCuentaCompartida(
+          newPid ?? oldPid ?? null,
+          newCorreo,
+          { contrasena: hasNewPass ? edit.contrasena : null },
+        );
 
-          const hasNewPass =
-            typeof edit.contrasena === "string" &&
-            edit.contrasena.trim() !== "";
-          if (hasNewPass) {
-            try {
-              await fetch(`/api/cuentascompartidas/${existing.id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ contrasena: edit.contrasena }),
-              });
-            } catch {}
-          }
-        } else {
-          const bodyCreate: any = { correo: newCorreo };
-          if (oldPid != null) bodyCreate.plataforma_id = oldPid;
-          if (
-            typeof edit.contrasena === "string" &&
-            edit.contrasena.trim() !== ""
-          ) {
-            bodyCreate.contrasena = edit.contrasena;
-          }
-
-          const rNew = await fetch("/api/cuentascompartidas", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(bodyCreate),
-          });
-          if (!rNew.ok) {
-            const j = await rNew.json().catch(() => ({}));
-            throw new Error(
-              j?.error ?? "No se pudo crear la cuenta compartida"
-            );
-          }
-          const created = await rNew.json();
-          if (!created?.id)
-            throw new Error(
-              "La API no devolvió id al crear cuentascompartidas"
-            );
-
-          (payloadPant as any).cuenta_id = Number(created.id);
-          (payloadPant as any).correo = newCorreo;
-          cuentaIdToUpdate = Number(created.id);
-        }
+        (payloadPant as any).cuenta_id = cuentaId;
+        (payloadPant as any).correo = newCorreo;
+        cuentaIdToUpdate = cuentaId;
       } else {
         const hasNewPass =
           typeof edit.contrasena === "string" &&
@@ -1304,9 +1192,9 @@ export default function PantallasViewer() {
         proveedor: edit.proveedor ?? null,
       } satisfies Partial<Pantalla> & { id: number };
 
-      const nextCache = mergeIntoCache(updated);
-      setRows(nextCache);
-      broadcastInvalidate();
+      const nextCache = mergePantallaIntoCache(updated);
+      setRows(nextCache.map(normalizeRow));
+      notifyPantallasChanged();
       setEdit(null);
     } catch (e: any) {
       setErr(e?.message ?? "Error guardando");
@@ -1386,7 +1274,7 @@ export default function PantallasViewer() {
           label ??
           (correo
             ? `${correo} / ${victimLocal?.nro_pantalla ?? ""}`
-            : victimLocal?.nro_pantalla ?? `#${id}`),
+            : (victimLocal?.nro_pantalla ?? `#${id}`)),
       });
 
       if (!correo || plataforma_id == null) {
@@ -1395,11 +1283,12 @@ export default function PantallasViewer() {
       }
 
       // ======== usar SOLO las filas cargadas (lo que "miras") ========
-      const usesLocal = countLocalByEmailAndPlatform(
-        rows,
-        correo,
-        plataforma_id
-      );
+      const usesLocal =
+        plataforma_id == null
+          ? 0
+          : (computeUsedCounts(rows, plataforma_id).usedByEmail[
+              correo.trim().toLowerCase()
+            ] ?? 0);
       setCanArchive(usesLocal <= 1);
     } catch (e: any) {
       setDeleteErr(e?.message ?? "Error al verificar el estado del correo.");
@@ -1443,7 +1332,7 @@ export default function PantallasViewer() {
         await ensureInInventario(
           victimPlataforma as number | null,
           victimCorreo,
-          victimClave
+          victimClave,
         );
       }
 
@@ -1456,9 +1345,9 @@ export default function PantallasViewer() {
       }
       await res.json().catch(() => ({}));
 
-      const next = removeFromCache(deleteTarget.id);
-      setRows(next);
-      broadcastInvalidate();
+      const next = removePantallaFromCache(deleteTarget.id);
+      setRows(next.map(normalizeRow));
+      notifyPantallasChanged();
 
       setDeleteMsg("Pantalla eliminada correctamente.");
       setSelectedIds((prev) => {
@@ -1521,13 +1410,13 @@ export default function PantallasViewer() {
       const usesLocal = countLocalByEmailAndPlatform(
         rows,
         correo,
-        plataforma_id
+        plataforma_id,
       );
       can = usesLocal <= 1;
     }
     const label = correo
       ? `${correo} / ${local?.nro_pantalla ?? ""}`
-      : local?.nro_pantalla ?? `#${id}`;
+      : (local?.nro_pantalla ?? `#${id}`);
     return {
       id,
       label,
@@ -1586,7 +1475,7 @@ export default function PantallasViewer() {
           await ensureInInventario(
             it.plataforma_id,
             it.correo,
-            it.contrasena ?? null
+            it.contrasena ?? null,
           );
         }
         // eslint-disable-next-line no-await-in-loop
@@ -1610,7 +1499,7 @@ export default function PantallasViewer() {
             next.delete(it.id);
             return next;
           });
-          removeFromCache(it.id);
+          removePantallaFromCache(it.id);
         }
       } catch {
         failed++;
@@ -1619,7 +1508,7 @@ export default function PantallasViewer() {
       }
     }
 
-    broadcastInvalidate();
+    notifyPantallasChanged();
     setBulkSummary({ total, archived, purged, failed });
     setBulkProcessing(false);
   };
@@ -1733,7 +1622,7 @@ export default function PantallasViewer() {
               <th className="px-3 py-2 text-center w-28">Compra</th>
               <th className="px-3 py-2 text-center w-28">Vence</th>
               <th className="px-3 py-2 text-left w-28">Estado</th>
-               <th className="px-3 py-2 text-left w-36">Proveedor</th>
+              <th className="px-3 py-2 text-left w-36">Proveedor</th>
               <th className="px-3 py-2 text-left">Comentario</th>
             </tr>
           </thead>
@@ -1759,8 +1648,8 @@ export default function PantallasViewer() {
                             avail == null
                               ? "border-neutral-600 bg-neutral-800/40 text-neutral-200"
                               : avail > 0
-                              ? "border-emerald-700 bg-emerald-800/40 text-emerald-100"
-                              : "border-rose-700 bg-rose-900/40 text-rose-100";
+                                ? "border-emerald-700 bg-emerald-800/40 text-emerald-100"
+                                : "border-rose-700 bg-rose-900/40 text-rose-100";
                           // Antes de retornar el encabezado del grupo:
                           const allOn = g.rows.every((x) => !!x.cuenta_caida);
                           const someOn =
@@ -1798,8 +1687,8 @@ export default function PantallasViewer() {
                                 {cap == null
                                   ? "Capacidad desconocida"
                                   : avail! > 0
-                                  ? `${avail} disponibles`
-                                  : "Sin pantallas disponibles"}
+                                    ? `${avail} disponibles`
+                                    : "Sin pantallas disponibles"}
                               </span>
                             </span>
                           );
@@ -1851,7 +1740,7 @@ export default function PantallasViewer() {
                             onClick={() =>
                               openDelete(
                                 r.id,
-                                `${r.correo ?? ""} / ${r.nro_pantalla ?? ""}`
+                                `${r.correo ?? ""} / ${r.nro_pantalla ?? ""}`,
                               )
                             }
                             className="text-rose-300 hover:text-rose-200 inline-flex p-1 rounded-md hover:bg-rose-900/30"
@@ -1950,9 +1839,9 @@ export default function PantallasViewer() {
                       <td className="px-3 py-2 whitespace-nowrap">
                         {r.estado || "—"}
                       </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-    {r.proveedor || "—"}
-  </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {r.proveedor || "—"}
+                      </td>
                       <td className="px-3 py-2">
                         <span
                           className="inline-block max-w-[420px] truncate align-bottom"
@@ -2172,19 +2061,47 @@ export default function PantallasViewer() {
                   </label>
 
                   <label className="grid gap-1">
-                    <span className="text-sm text-neutral-300">
-                      Nro. pantalla
-                    </span>
-                    <input
-                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.nro_pantalla ?? ""}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm text-neutral-300">
+                        Nro. pantalla
+                      </span>
+                      {!!edit.plataforma_id && (
+                        <span className="text-xs text-neutral-400">
+                          {`Disponibles: ${availablePantallaSlots.length}`}
+                        </span>
+                      )}
+                    </div>
+                    <select
+                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600 [&>option]:bg-neutral-950 [&>option]:text-neutral-100"
+                      value={edit.nro_pantalla ? String(edit.nro_pantalla) : ""}
                       onChange={(e) =>
                         setEdit((s) => ({
                           ...(s as EditState),
                           nro_pantalla: e.target.value,
                         }))
                       }
-                    />
+                      disabled={
+                        !edit.plataforma_id ||
+                        !(edit.correo ?? "").trim() ||
+                        availablePantallaSlots.length === 0
+                      }
+                    >
+                      <option value="" disabled>
+                        {!edit.plataforma_id
+                          ? "Selecciona una plataforma"
+                          : !(edit.correo ?? "").trim()
+                            ? "Ingresa o selecciona un correo"
+                            : availablePantallaSlots.length === 0
+                              ? "Sin cupos disponibles"
+                              : "Selecciona una pantalla disponible"}
+                      </option>
+
+                      {availablePantallaSlots.map((num) => (
+                        <option key={num} value={num}>
+                          {num}
+                        </option>
+                      ))}
+                    </select>
                   </label>
 
                   <label className="grid gap-1">
@@ -2229,7 +2146,7 @@ export default function PantallasViewer() {
                         type="button"
                         onClick={() => {
                           const input = document.querySelector(
-                            'input[type="date"]'
+                            'input[type="date"]',
                           ) as HTMLInputElement;
                           input?.showPicker?.();
                         }}
@@ -2296,6 +2213,7 @@ export default function PantallasViewer() {
                       type="number"
                       step="0.01"
                       min="0"
+                      max={MAX_MONTO_COP}
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
                       value={edit.total_pagado ?? ""}
                       onChange={(e) =>
@@ -2308,6 +2226,14 @@ export default function PantallasViewer() {
                         }))
                       }
                     />
+                    {edit.total_pagado != null &&
+                      edit.total_pagado > MAX_MONTO_COP && (
+                        <p className="text-xs text-red-500">
+                          El monto máximo permitido es{" "}
+                          {money(MAX_MONTO_COP)}. Revisa si escribiste un
+                          dígito de más.
+                        </p>
+                      )}
                   </label>
                   <label className="grid gap-1">
                     <span className="text-sm text-neutral-300">
@@ -2317,6 +2243,7 @@ export default function PantallasViewer() {
                       type="number"
                       step="0.01"
                       min="0"
+                      max={MAX_MONTO_COP}
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
                       value={edit.total_pagado_proveedor ?? ""}
                       onChange={(e) =>
@@ -2329,6 +2256,14 @@ export default function PantallasViewer() {
                         }))
                       }
                     />
+                    {edit.total_pagado_proveedor != null &&
+                      edit.total_pagado_proveedor > MAX_MONTO_COP && (
+                        <p className="text-xs text-red-500">
+                          El monto máximo permitido es{" "}
+                          {money(MAX_MONTO_COP)}. Revisa si escribiste un
+                          dígito de más.
+                        </p>
+                      )}
                   </label>
                   <label className="grid gap-1">
                     <span className="text-sm text-neutral-300">
@@ -2411,8 +2346,8 @@ export default function PantallasViewer() {
                   {checkingArchive
                     ? "Verificando si es la última relación por correo y plataforma…"
                     : canArchive
-                    ? "Es la última pantalla con este correo en esta plataforma. Puedes enviarla al inventario antes de eliminar."
-                    : "Existen más pantallas con este correo en esta plataforma. Solo puedes eliminar definitivamente."}
+                      ? "Es la última pantalla con este correo en esta plataforma. Puedes enviarla al inventario antes de eliminar."
+                      : "Existen más pantallas con este correo en esta plataforma. Solo puedes eliminar definitivamente."}
                 </p>
 
                 {deleteErr && (

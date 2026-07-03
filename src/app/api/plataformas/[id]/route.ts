@@ -34,7 +34,7 @@ export async function GET(
         id: true, 
         nombre: true, 
         cantidad_pantallas: true,
-        total_pago: true,
+        total_pagado: true,
         total_pagado_proveedor: true
       },
     });
@@ -94,16 +94,16 @@ export async function PATCH(
       data.cantidad_pantallas = n;
     }
 
-    // ✅ SE AGREGÓ VALIDACIÓN Y ASIGNACIÓN PARA total_pago
-    if (body?.total_pago !== undefined && body?.total_pago !== null) {
-      const tp = Number(body.total_pago);
+    // ✅ SE AGREGÓ VALIDACIÓN Y ASIGNACIÓN PARA total_pagado
+    if (body?.total_pagado !== undefined && body?.total_pagado !== null) {
+      const tp = Number(body.total_pagado);
       if (Number.isNaN(tp) || tp < 0) {
         return NextResponse.json(
-          { error: '"total_pago" debe ser un número >= 0.' },
+          { error: '"total_pagado" debe ser un número >= 0.' },
           { status: 400 }
         );
       }
-      data.total_pago = tp;
+      data.total_pagado = tp;
     }
 
     // ✅ SE AGREGÓ VALIDACIÓN Y ASIGNACIÓN PARA total_pagado_proveedor
@@ -126,7 +126,7 @@ export async function PATCH(
         id: true, 
         nombre: true, 
         cantidad_pantallas: true,
-        total_pago: true,
+        total_pagado: true,
         total_pagado_proveedor: true
       },
     });

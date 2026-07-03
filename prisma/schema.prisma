@@ -68,8 +68,8 @@ model plataformas {
   id                     Int                  @id @default(autoincrement())
   nombre                 String               @unique(map: "nombre") @db.VarChar(100)
   cantidad_pantallas     Int                  @default(0)
-  total_pago             Decimal              @default(0.00) @db.Decimal(10, 2)
-  total_pagado_proveedor Decimal              @default(0.00) @db.Decimal(10, 2)
+  total_pagado           Decimal?             @default(0.00) @db.Decimal(10, 2)
+  total_pagado_proveedor Decimal?             @default(0.00) @db.Decimal(10, 2)
   cuentascompartidas     cuentascompartidas[]
   cuentascompletas       cuentascompletas[]
   inventario             inventario[]

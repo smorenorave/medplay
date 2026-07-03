@@ -464,8 +464,8 @@ export default function FormCuentaCompletas() {
         .then((data) => {
           if (!data) return;
           const tp =
-            data?.total_pago != null && data.total_pago !== 0
-              ? String(data.total_pago)
+            data?.total_pagado != null && data.total_pagado !== 0
+              ? String(data.total_pagado)
               : "";
           const tpp =
             data?.total_pagado_proveedor != null &&
@@ -484,8 +484,8 @@ export default function FormCuentaCompletas() {
           setPlataformaTotales((s) => ({
             ...s,
             [pid]: {
-              total_pago:
-                data?.total_pago != null ? Number(data.total_pago) : null,
+              total_pagado:
+                data?.total_pagado != null ? Number(data.total_pagado) : null,
               total_pagado_proveedor:
                 data?.total_pagado_proveedor != null
                   ? Number(data.total_pagado_proveedor)
@@ -620,12 +620,12 @@ export default function FormCuentaCompletas() {
     };
   }, [user.contacto, nombreDirty]);
 
-  /* ===== Totales de plataforma: cache de total_pago y total_pagado_proveedor ===== */
+  /* ===== Totales de plataforma: cache de total_pagado y total_pagado_proveedor ===== */
   const [plataformaTotales, setPlataformaTotales] = useState<
     Record<
       number,
       {
-        total_pago: number | null;
+        total_pagado: number | null;
         total_pagado_proveedor: number | null;
         loading: boolean;
       }
@@ -1186,9 +1186,12 @@ export default function FormCuentaCompletas() {
               type="tel"
               placeholder="+57 3xxxxxxxxx"
               value={user.contacto}
-              onChange={(v) => {
-                if (/^\+?\d*(?:\s?\d*)*$/.test(v))
-                  setUser((s) => ({ ...s, contacto: v }));
+              onChange={(v: string) => {
+                const soloDigitos = v
+                  .replace(/[^\d\s]/g, "")
+                  .replace(/^\s+/, "");
+                const next = soloDigitos ? `+${soloDigitos}` : "";
+                setUser((s) => ({ ...s, contacto: next }));
               }}
               required
               inputMode="tel"
@@ -1315,9 +1318,9 @@ export default function FormCuentaCompletas() {
                             .then((data) => {
                               if (!data) return;
                               const tp =
-                                data?.total_pago != null &&
-                                data.total_pago !== 0
-                                  ? String(data.total_pago)
+                                data?.total_pagado != null &&
+                                data.total_pagado !== 0
+                                  ? String(data.total_pagado)
                                   : "";
                               const tpp =
                                 data?.total_pagado_proveedor != null &&
@@ -1331,9 +1334,9 @@ export default function FormCuentaCompletas() {
                               setPlataformaTotales((s) => ({
                                 ...s,
                                 [newId]: {
-                                  total_pago:
-                                    data?.total_pago != null
-                                      ? Number(data.total_pago)
+                                  total_pagado:
+                                    data?.total_pagado != null
+                                      ? Number(data.total_pagado)
                                       : null,
                                   total_pagado_proveedor:
                                     data?.total_pagado_proveedor != null
