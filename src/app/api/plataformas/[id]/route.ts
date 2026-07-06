@@ -14,6 +14,23 @@ async function getId(
   return n;
 }
 
+const DECIMAL_FIELDS = [
+  "total_pagado",
+  "total_pagado_proveedor",
+  "total_pagado_completa",
+  "total_pagado_proveedor_completa",
+] as const;
+
+const SELECT_ALL = {
+  id: true,
+  nombre: true,
+  cantidad_pantallas: true,
+  total_pagado: true,
+  total_pagado_proveedor: true,
+  total_pagado_completa: true,
+  total_pagado_proveedor_completa: true,
+} as const;
+
 /* =========================================================
  * GET /api/plataformas/:id
  * ======================================================= */
@@ -29,14 +46,7 @@ export async function GET(
   try {
     const row = await prisma.plataformas.findUnique({
       where: { id },
-      // ✅ SE AGREGARON LOS CAMPOS DE TOTALES AQUÍ
-      select: { 
-        id: true, 
-        nombre: true, 
-        cantidad_pantallas: true,
-        total_pagado: true,
-        total_pagado_proveedor: true
-      },
+      select: SELECT_ALL,
     });
 
     if (!row) {
@@ -94,41 +104,24 @@ export async function PATCH(
       data.cantidad_pantallas = n;
     }
 
-    // ✅ SE AGREGÓ VALIDACIÓN Y ASIGNACIÓN PARA total_pagado
-    if (body?.total_pagado !== undefined && body?.total_pagado !== null) {
-      const tp = Number(body.total_pagado);
-      if (Number.isNaN(tp) || tp < 0) {
-        return NextResponse.json(
-          { error: '"total_pagado" debe ser un número >= 0.' },
-          { status: 400 }
-        );
+    // Valida y asigna los 4 campos decimales de la misma forma
+    for (const field of DECIMAL_FIELDS) {
+      if (body?.[field] !== undefined && body?.[field] !== null) {
+        const n = Number(body[field]);
+        if (Number.isNaN(n) || n < 0) {
+          return NextResponse.json(
+            { error: `"${field}" debe ser un número >= 0.` },
+            { status: 400 }
+          );
+        }
+        data[field] = n;
       }
-      data.total_pagado = tp;
-    }
-
-    // ✅ SE AGREGÓ VALIDACIÓN Y ASIGNACIÓN PARA total_pagado_proveedor
-    if (body?.total_pagado_proveedor !== undefined && body?.total_pagado_proveedor !== null) {
-      const tpp = Number(body.total_pagado_proveedor);
-      if (Number.isNaN(tpp) || tpp < 0) {
-        return NextResponse.json(
-          { error: '"total_pagado_proveedor" debe ser un número >= 0.' },
-          { status: 400 }
-        );
-      }
-      data.total_pagado_proveedor = tpp;
     }
 
     const updated = await prisma.plataformas.update({
       where: { id },
       data,
-      // ✅ SE AGREGARON LOS CAMPOS DE TOTALES AL SELECT
-      select: { 
-        id: true, 
-        nombre: true, 
-        cantidad_pantallas: true,
-        total_pagado: true,
-        total_pagado_proveedor: true
-      },
+      select: SELECT_ALL,
     });
 
     return NextResponse.json(updated, { status: 200 });

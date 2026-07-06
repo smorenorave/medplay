@@ -70,8 +70,8 @@ type FormState = {
   fecha_compra: string | "";
   fecha_vencimiento: string | "";
   meses_pagados: number;
-  total_pagado: string;
-  total_pagado_proveedor: string;
+  total_pagado_completa: string;
+  total_pagado_proveedor_completa: string;
   estado: string | "";
   comentario: string | "";
 };
@@ -199,7 +199,7 @@ function buildHandoffTextCC(
     `Fecha de compra: ${fmtDateHumanCC(order?.fecha_compra)}`,
     `Fecha de vencimiento: ${fmtDateHumanCC(order?.fecha_vencimiento)}`,
     `Meses pagados: ${order?.meses_pagados ?? "—"}`,
-    `Total pagado: ${fmtMoneyClientCC(payload?.total_pagado)}`,
+    `Total pagado: ${fmtMoneyClientCC(payload?.total_pagado_completa)}`,
   ].join("\n");
 }
 
@@ -241,8 +241,8 @@ function buildPedidoResumenTextCC(
     const platName =
       plataformaMap.get(p?.plataforma_id) ?? `#${p?.plataforma_id ?? "—"}`;
 
-    const tp = Number(p?.total_pagado) || 0;
-    const tpp = Number(p?.total_pagado_proveedor) || 0;
+    const tp = Number(p?.total_pagado_completa) || 0;
+    const tpp = Number(p?.total_pagado_proveedor_completa) || 0;
     const tg = Number(p?.total_ganado) || 0;
 
     totalPagado += tp;
@@ -423,8 +423,8 @@ export default function FormCuentaCompletas() {
       fecha_compra: compraHoy,
       fecha_vencimiento: addMonthsLocal(compraHoy, 1),
       meses_pagados: 1,
-      total_pagado: "",
-      total_pagado_proveedor: "",
+      total_pagado_completa: "",
+      total_pagado_proveedor_completa: "",
       estado: "ACTIVA",
       comentario: "",
     };
@@ -464,31 +464,31 @@ export default function FormCuentaCompletas() {
         .then((data) => {
           if (!data) return;
           const tp =
-            data?.total_pagado != null && data.total_pagado !== 0
-              ? String(data.total_pagado)
+            data?.total_pagado_completa != null && data.total_pagado_completa !== 0
+              ? String(data.total_pagado_completa)
               : "";
           const tpp =
-            data?.total_pagado_proveedor != null &&
-            data.total_pagado_proveedor !== 0
-              ? String(data.total_pagado_proveedor)
+            data?.total_pagado_proveedor_completa != null &&
+            data.total_pagado_proveedor_completa !== 0
+              ? String(data.total_pagado_proveedor_completa)
               : "";
           setOrders((cur) =>
             cur.map((o, i) =>
               i === 0 &&
-              o.total_pagado === "" &&
-              o.total_pagado_proveedor === ""
-                ? { ...o, total_pagado: tp, total_pagado_proveedor: tpp }
+              o.total_pagado_completa === "" &&
+              o.total_pagado_proveedor_completa === ""
+                ? { ...o, total_pagado_completa: tp, total_pagado_proveedor_completa: tpp }
                 : o,
             ),
           );
           setPlataformaTotales((s) => ({
             ...s,
             [pid]: {
-              total_pagado:
-                data?.total_pagado != null ? Number(data.total_pagado) : null,
-              total_pagado_proveedor:
-                data?.total_pagado_proveedor != null
-                  ? Number(data.total_pagado_proveedor)
+              total_pagado_completa:
+                data?.total_pagado_completa != null ? Number(data.total_pagado_completa) : null,
+              total_pagado_proveedor_completa:
+                data?.total_pagado_proveedor_completa != null
+                  ? Number(data.total_pagado_proveedor_completa)
                   : null,
               loading: false,
             },
@@ -620,13 +620,13 @@ export default function FormCuentaCompletas() {
     };
   }, [user.contacto, nombreDirty]);
 
-  /* ===== Totales de plataforma: cache de total_pagado y total_pagado_proveedor ===== */
+  /* ===== Totales de plataforma: cache de total_pagado_completa y total_pagado_proveedor_completa ===== */
   const [plataformaTotales, setPlataformaTotales] = useState<
     Record<
       number,
       {
-        total_pagado: number | null;
-        total_pagado_proveedor: number | null;
+        total_pagado_completa: number | null;
+        total_pagado_proveedor_completa: number | null;
         loading: boolean;
       }
     >
@@ -902,10 +902,10 @@ export default function FormCuentaCompletas() {
   /* ===================== Totales preview por bloque ===================== */
   const totalGanadoPreviewByIdx = useMemo(() => {
     return orders.map((o) => {
-      const tpStr = o.total_pagado.trim();
+      const tpStr = o.total_pagado_completa.trim();
       if (tpStr === "" || Number.isNaN(Number(tpStr))) return "";
       const tp = Number(tpStr);
-      const tppStr = o.total_pagado_proveedor.trim();
+      const tppStr = o.total_pagado_proveedor_completa.trim();
       if (tppStr === "") return String(tp);
       if (Number.isNaN(Number(tppStr))) return "";
       const tpp = Number(tppStr);
@@ -933,13 +933,13 @@ export default function FormCuentaCompletas() {
       if (!requiredOk) return false;
 
       const totalOk =
-        o.total_pagado === "" ||
-        (!Number.isNaN(Number(o.total_pagado)) && Number(o.total_pagado) >= 0);
+        o.total_pagado_completa === "" ||
+        (!Number.isNaN(Number(o.total_pagado_completa)) && Number(o.total_pagado_completa) >= 0);
 
       const totalProvOk =
-        o.total_pagado_proveedor === "" ||
-        (!Number.isNaN(Number(o.total_pagado_proveedor)) &&
-          Number(o.total_pagado_proveedor) >= 0);
+        o.total_pagado_proveedor_completa === "" ||
+        (!Number.isNaN(Number(o.total_pagado_proveedor_completa)) &&
+          Number(o.total_pagado_proveedor_completa) >= 0);
 
       if (!totalOk || !totalProvOk) return false;
     }
@@ -949,9 +949,9 @@ export default function FormCuentaCompletas() {
   /* ===================== Payload por bloque ===================== */
   const buildPayloadFor = (o: OrderState) => {
     const totalPagadoNum =
-      o.total_pagado !== "" ? Number(o.total_pagado) : null;
+      o.total_pagado_completa !== "" ? Number(o.total_pagado_completa) : null;
     const totalProvNum =
-      o.total_pagado_proveedor !== "" ? Number(o.total_pagado_proveedor) : null;
+      o.total_pagado_proveedor_completa !== "" ? Number(o.total_pagado_proveedor_completa) : null;
     const total_ganado =
       totalPagadoNum !== null
         ? totalProvNum !== null
@@ -969,8 +969,8 @@ export default function FormCuentaCompletas() {
       fecha_compra: o.fecha_compra || null,
       fecha_vencimiento: o.fecha_vencimiento || null,
       meses_pagados: o.meses_pagados,
-      total_pagado: totalPagadoNum,
-      total_pagado_proveedor: totalProvNum,
+      total_pagado_completa: totalPagadoNum,
+      total_pagado_proveedor_completa: totalProvNum,
       total_ganado,
       estado: o.estado.trim() || null,
       comentario: o.comentario.trim() || null,
@@ -1098,11 +1098,11 @@ export default function FormCuentaCompletas() {
             meses_pagados: (saved?.meses_pagados ??
               sent.meses_pagados ??
               null) as number | null,
-            total_pagado: (saved?.total_pagado ?? sent.total_pagado ?? null) as
+            total_pagado_completa: (saved?.total_pagado_completa ?? sent.total_pagado_completa ?? null) as
               | number
               | null,
-            total_pagado_proveedor: (saved?.total_pagado_proveedor ??
-              sent.total_pagado_proveedor ??
+            total_pagado_proveedor_completa: (saved?.total_pagado_proveedor_completa ??
+              sent.total_pagado_proveedor_completa ??
               null) as number | null,
             total_ganado: (saved?.total_ganado ?? sent.total_ganado ?? null) as
               | number
@@ -1318,29 +1318,29 @@ export default function FormCuentaCompletas() {
                             .then((data) => {
                               if (!data) return;
                               const tp =
-                                data?.total_pagado != null &&
-                                data.total_pagado !== 0
-                                  ? String(data.total_pagado)
+                                data?.total_pagado_completa != null &&
+                                data.total_pagado_completa !== 0
+                                  ? String(data.total_pagado_completa)
                                   : "";
                               const tpp =
-                                data?.total_pagado_proveedor != null &&
-                                data.total_pagado_proveedor !== 0
-                                  ? String(data.total_pagado_proveedor)
+                                data?.total_pagado_proveedor_completa != null &&
+                                data.total_pagado_proveedor_completa !== 0
+                                  ? String(data.total_pagado_proveedor_completa)
                                   : "";
                               setOrder(idx, {
-                                total_pagado: tp,
-                                total_pagado_proveedor: tpp,
+                                total_pagado_completa: tp,
+                                total_pagado_proveedor_completa: tpp,
                               });
                               setPlataformaTotales((s) => ({
                                 ...s,
                                 [newId]: {
-                                  total_pagado:
-                                    data?.total_pagado != null
-                                      ? Number(data.total_pagado)
+                                  total_pagado_completa:
+                                    data?.total_pagado_completa != null
+                                      ? Number(data.total_pagado_completa)
                                       : null,
-                                  total_pagado_proveedor:
-                                    data?.total_pagado_proveedor != null
-                                      ? Number(data.total_pagado_proveedor)
+                                  total_pagado_proveedor_completa:
+                                    data?.total_pagado_proveedor_completa != null
+                                      ? Number(data.total_pagado_proveedor_completa)
                                       : null,
                                   loading: false,
                                 },
@@ -1513,9 +1513,9 @@ export default function FormCuentaCompletas() {
                       step="0.01"
                       min="0"
                       placeholder="0.00"
-                      value={o.total_pagado}
+                      value={o.total_pagado_completa}
                       onChange={(e) =>
-                        setOrder(idx, { total_pagado: e.target.value })
+                        setOrder(idx, { total_pagado_completa: e.target.value })
                       }
                       className="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
                     />
@@ -1534,10 +1534,10 @@ export default function FormCuentaCompletas() {
                       step="0.01"
                       min="0"
                       placeholder="0.00"
-                      value={o.total_pagado_proveedor}
+                      value={o.total_pagado_proveedor_completa}
                       onChange={(e) =>
                         setOrder(idx, {
-                          total_pagado_proveedor: e.target.value,
+                          total_pagado_proveedor_completa: e.target.value,
                         })
                       }
                       className="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"

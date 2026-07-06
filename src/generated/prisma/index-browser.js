@@ -167,7 +167,9 @@ exports.Prisma.PlataformasScalarFieldEnum = {
   nombre: 'nombre',
   cantidad_pantallas: 'cantidad_pantallas',
   total_pagado: 'total_pagado',
-  total_pagado_proveedor: 'total_pagado_proveedor'
+  total_pagado_proveedor: 'total_pagado_proveedor',
+  total_pagado_completa: 'total_pagado_completa',
+  total_pagado_proveedor_completa: 'total_pagado_proveedor_completa'
 };
 
 exports.Prisma.UsuariosScalarFieldEnum = {

@@ -16,6 +16,8 @@ type Plataforma = {
   cantidad_pantallas: number;
   total_pagado: number;
   total_pagado_proveedor: number;
+  total_pagado_completa: number;
+  total_pagado_proveedor_completa: number;
 };
 type Contacto = { id: number; contacto: string; nombre?: string | null };
 type Inventario = {
@@ -180,6 +182,8 @@ function PlataformasPane() {
   const [q, setQ] = useState("");
   const [nombre, setNombre] = useState("");
   const [cant, setCant] = useState<number | "">(""); // alta
+  const [totalPagado, setTotalPagado] = useState<number | "">("");
+  const [totalPagadoProveedor, setTotalPagadoProveedor] = useState<number | "">("");
   const [totalPago, setTotalPago] = useState<number | "">("");
   const [totalProveedor, setTotalProveedor] = useState<number | "">("");
   const [creating, setCreating] = useState(false);
@@ -188,6 +192,10 @@ function PlataformasPane() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftCant, setDraftCant] = useState<number | "">(""); // edición
+  const [draftTotalPagado, setDraftTotalPagado] = useState<number | "">("");
+  const [draftTotalPagadoProveedor, setDraftTotalPagadoProveedor] = useState<
+    number | ""
+  >("");
   const [draftTotalPago, setDraftTotalPago] = useState<number | "">("");
   const [draftTotalProveedor, setDraftTotalProveedor] = useState<number | "">(
     "",
@@ -206,6 +214,8 @@ function PlataformasPane() {
     ),
     total_pagado: Number(p.total_pagado ?? 0),
     total_pagado_proveedor: Number(p.total_pagado_proveedor ?? 0),
+    total_pagado_completa: Number(p.total_pagado_completa ?? 0),
+    total_pagado_proveedor_completa: Number(p.total_pagado_proveedor_completa ?? 0),
   });
 
   const load = useCallback(async () => {
@@ -250,8 +260,11 @@ function PlataformasPane() {
         body: JSON.stringify({
           nombre: nom,
           cantidad_pantallas: nCant,
-          total_pagado: totalPago === "" ? 0 : Number(totalPago),
+          total_pagado: totalPagado === "" ? 0 : Number(totalPagado),
           total_pagado_proveedor:
+            totalPagadoProveedor === "" ? 0 : Number(totalPagadoProveedor),
+          total_pagado_completa: totalPago === "" ? 0 : Number(totalPago),
+          total_pagado_proveedor_completa:
             totalProveedor === "" ? 0 : Number(totalProveedor),
         }),
       });
@@ -269,6 +282,8 @@ function PlataformasPane() {
       );
       setNombre("");
       setCant("");
+      setTotalPagado("");
+      setTotalPagadoProveedor("");
       setTotalPago("");
       setTotalProveedor("");
     } catch (e: any) {
@@ -282,14 +297,18 @@ function PlataformasPane() {
     setEditingId(row.id);
     setDraftName(row.nombre);
     setDraftCant(row.cantidad_pantallas);
-    setDraftTotalPago(row.total_pagado);
-    setDraftTotalProveedor(row.total_pagado_proveedor);
+    setDraftTotalPagado(row.total_pagado);
+    setDraftTotalPagadoProveedor(row.total_pagado_proveedor);
+    setDraftTotalPago(row.total_pagado_completa);
+    setDraftTotalProveedor(row.total_pagado_proveedor_completa);
     setSaveErr(null);
   };
   const cancelEdit = () => {
     setEditingId(null);
     setDraftName("");
     setDraftCant("");
+    setDraftTotalPagado("");
+    setDraftTotalPagadoProveedor("");
     setDraftTotalPago("");
     setDraftTotalProveedor("");
     setSaveErr(null);
@@ -312,8 +331,11 @@ function PlataformasPane() {
         body: JSON.stringify({
           nombre: nom,
           cantidad_pantallas: nCant,
-          total_pagado: draftTotalPago === "" ? 0 : Number(draftTotalPago),
+          total_pagado: draftTotalPagado === "" ? 0 : Number(draftTotalPagado),
           total_pagado_proveedor:
+            draftTotalPagadoProveedor === "" ? 0 : Number(draftTotalPagadoProveedor),
+          total_pagado_completa: draftTotalPago === "" ? 0 : Number(draftTotalPago),
+          total_pagado_proveedor_completa:
             draftTotalProveedor === "" ? 0 : Number(draftTotalProveedor),
         }),
       });
@@ -334,6 +356,8 @@ function PlataformasPane() {
                   cantidad_pantallas: upd.cantidad_pantallas,
                   total_pagado: upd.total_pagado,
                   total_pagado_proveedor: upd.total_pagado_proveedor,
+                  total_pagado_completa: upd.total_pagado_completa,
+                  total_pagado_proveedor_completa: upd.total_pagado_proveedor_completa,
                 }
               : r,
           )
@@ -439,7 +463,41 @@ function PlataformasPane() {
             </button>
             <div>
               <label className="mb-1 block text-xs text-neutral-400">
-                Total pago
+                Total pagado
+              </label>
+
+              <input
+                type="number"
+                className="h-10 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-neutral-100"
+                value={totalPagado}
+                onChange={(e) =>
+                  setTotalPagado(
+                    e.target.value === "" ? "" : Number(e.target.value),
+                  )
+                }
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs text-neutral-400">
+                Total pagado proveedor
+              </label>
+
+              <input
+                type="number"
+                className="h-10 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-neutral-100"
+                value={totalPagadoProveedor}
+                onChange={(e) =>
+                  setTotalPagadoProveedor(
+                    e.target.value === "" ? "" : Number(e.target.value),
+                  )
+                }
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs text-neutral-400">
+                Total pagado completa
               </label>
 
               <input
@@ -456,7 +514,7 @@ function PlataformasPane() {
 
             <div>
               <label className="mb-1 block text-xs text-neutral-400">
-                Total proveedor
+                Total pagado proveedor completa
               </label>
 
               <input
@@ -498,8 +556,10 @@ function PlataformasPane() {
                 <Th className="w-24 text-center">Acciones</Th>
                 <Th>Nombre</Th>
                 <Th className="w-40 text-right">Cant. pantallas</Th>
-                <Th>Total pago</Th>
-                <Th>Total proveedor</Th>
+                <Th>Total pagado</Th>
+                <Th>Total pagado proveedor</Th>
+                <Th>Total pagado completa</Th>
+                <Th>Total pagado proveedor completa</Th>
               </tr>
             </thead>
             <tbody>
@@ -597,10 +657,50 @@ function PlataformasPane() {
                       )}
                     </Td>
 
-                    {/* Total pago */}
+                    {/* Total pagado */}
                     <Td>
                       {!isEditing ? (
                         row.total_pagado
+                      ) : (
+                        <input
+                          type="number"
+                          className={tblInput}
+                          value={draftTotalPagado}
+                          onChange={(e) =>
+                            setDraftTotalPagado(
+                              e.target.value === ""
+                                ? ""
+                                : Number(e.target.value),
+                            )
+                          }
+                        />
+                      )}
+                    </Td>
+
+                    {/* Total pagado proveedor */}
+                    <Td>
+                      {!isEditing ? (
+                        row.total_pagado_proveedor
+                      ) : (
+                        <input
+                          type="number"
+                          className={tblInput}
+                          value={draftTotalPagadoProveedor}
+                          onChange={(e) =>
+                            setDraftTotalPagadoProveedor(
+                              e.target.value === ""
+                                ? ""
+                                : Number(e.target.value),
+                            )
+                          }
+                        />
+                      )}
+                    </Td>
+
+                    {/* Total pago completa */}
+                    <Td>
+                      {!isEditing ? (
+                        row.total_pagado_completa
                       ) : (
                         <input
                           type="number"
@@ -617,10 +717,10 @@ function PlataformasPane() {
                       )}
                     </Td>
 
-                    {/* Total proveedor */}
+                    {/* Total proveedor completa */}
                     <Td>
                       {!isEditing ? (
-                        row.total_pagado_proveedor
+                        row.total_pagado_proveedor_completa
                       ) : (
                         <input
                           type="number"
@@ -641,7 +741,7 @@ function PlataformasPane() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <Td colSpan={5} className="text-neutral-300 text-sm py-4">
+                  <Td colSpan={7} className="text-neutral-300 text-sm py-4">
                     No hay resultados.
                   </Td>
                 </tr>
@@ -1154,6 +1254,8 @@ function InventarioPane() {
             // 👇 Agrega estas dos líneas faltantes 👇
             total_pagado: Number(p.total_pagado ?? 0),
             total_pagado_proveedor: Number(p.total_pagado_proveedor ?? 0),
+            total_pagado_completa: Number(p.total_pagado_completa ?? 0),
+            total_pagado_proveedor_completa: Number(p.total_pagado_proveedor_completa ?? 0),
           }))
           .sort((a, b) =>
             a.nombre.localeCompare(b.nombre, undefined, {

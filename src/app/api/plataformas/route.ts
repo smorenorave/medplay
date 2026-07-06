@@ -7,7 +7,7 @@ import { prisma } from "@/lib/db";
 /**
  * GET /api/plataformas
  * ?q=texto   (opcional, filtra por nombre)
- * Devuelve: Array<{ id, nombre, cantidad_pantallas }>
+ * Devuelve: Array<{ id, nombre, cantidad_pantallas, total_pagado, total_pagado_proveedor, total_pagado_completa, total_pagado_proveedor_completa }>
  */
 export async function GET(req: Request) {
   try {
@@ -26,6 +26,8 @@ export async function GET(req: Request) {
         cantidad_pantallas: true,
         total_pagado: true,
         total_pagado_proveedor: true,
+        total_pagado_completa: true,
+        total_pagado_proveedor_completa: true,
       },
       orderBy: { nombre: "asc" },
     });
@@ -42,8 +44,8 @@ export async function GET(req: Request) {
 
 /**
  * POST /api/plataformas
- * Body: { nombre: string, cantidad_pantallas?: number }
- * Devuelve: { id, nombre, cantidad_pantallas }
+ * Body: { nombre: string, cantidad_pantallas?: number, total_pagado?: number, total_pagado_proveedor?: number, total_pagado_completa?: number, total_pagado_proveedor_completa?: number }
+ * Devuelve: { id, nombre, cantidad_pantallas, total_pagado, total_pagado_proveedor, total_pagado_completa, total_pagado_proveedor_completa }
  */
 export async function POST(req: Request) {
   try {
@@ -80,50 +82,33 @@ export async function POST(req: Request) {
       cantidad_pantallas = n;
     }
 
-    let total_pagado: number | undefined = undefined;
+    // Helper para parsear los 4 campos decimales de la misma forma
+    const decimalFields = [
+      "total_pagado",
+      "total_pagado_proveedor",
+      "total_pagado_completa",
+      "total_pagado_proveedor_completa",
+    ] as const;
 
-    if (body?.total_pagado !== undefined && body?.total_pagado !== null) {
-      const n = Number(body.total_pagado);
-
-      if (Number.isNaN(n) || n < 0) {
-        return NextResponse.json(
-          { error: '"total_pagado" debe ser mayor o igual a 0.' },
-          { status: 400 },
-        );
+    const decimals: Record<string, number> = {};
+    for (const field of decimalFields) {
+      if (body?.[field] !== undefined && body?.[field] !== null) {
+        const n = Number(body[field]);
+        if (Number.isNaN(n) || n < 0) {
+          return NextResponse.json(
+            { error: `"${field}" debe ser mayor o igual a 0.` },
+            { status: 400 },
+          );
+        }
+        decimals[field] = n;
       }
-
-      total_pagado = n;
-    }
-
-    let total_pagado_proveedor: number | undefined = undefined;
-
-    if (
-      body?.total_pagado_proveedor !== undefined &&
-      body?.total_pagado_proveedor !== null
-    ) {
-      const n = Number(body.total_pagado_proveedor);
-
-      if (Number.isNaN(n) || n < 0) {
-        return NextResponse.json(
-          { error: '"total_pagado_proveedor" debe ser mayor o igual a 0.' },
-          { status: 400 },
-        );
-      }
-
-      total_pagado_proveedor = n;
     }
 
     const created = await prisma.plataformas.create({
       data: {
         nombre,
-
         ...(cantidad_pantallas !== undefined ? { cantidad_pantallas } : {}),
-
-        ...(total_pagado !== undefined ? { total_pagado } : {}),
-
-        ...(total_pagado_proveedor !== undefined
-          ? { total_pagado_proveedor }
-          : {}),
+        ...decimals,
       },
       select: {
         id: true,
@@ -131,6 +116,8 @@ export async function POST(req: Request) {
         cantidad_pantallas: true,
         total_pagado: true,
         total_pagado_proveedor: true,
+        total_pagado_completa: true,
+        total_pagado_proveedor_completa: true,
       },
     });
 
