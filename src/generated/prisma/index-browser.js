@@ -138,13 +138,13 @@ exports.Prisma.CuentascompletasScalarFieldEnum = {
   fecha_compra: 'fecha_compra',
   fecha_vencimiento: 'fecha_vencimiento',
   meses_pagados: 'meses_pagados',
-  total_pagado: 'total_pagado',
+  total_pagado_completa: 'total_pagado_completa',
   estado: 'estado',
   comentario: 'comentario',
   contrasena: 'contrasena',
   correo: 'correo',
   total_ganado: 'total_ganado',
-  total_pagado_proveedor: 'total_pagado_proveedor'
+  total_pagado_proveedor_completa: 'total_pagado_proveedor_completa'
 };
 
 exports.Prisma.PantallasScalarFieldEnum = {

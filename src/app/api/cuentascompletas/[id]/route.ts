@@ -47,13 +47,13 @@ const numOrNull = (v: any): number | null =>
 
 /**
  * Normaliza alias desde el cliente al esquema canónico antes de validar con Zod.
- * Acepta: total_pagado_proveedor | pago_total_proveedor | pagado_proveedor | total_pagado_proovedor (typo)
+ * Acepta: total_pagado_proveedor_completa | pago_total_proveedor | pagado_proveedor | total_pagado_proovedor (typo)
  * y total_ganado | ganado. Contraseña '' => null.
  * Correo '' => undefined (no modificar). Correo null => null (borrar).
  */
 function normalizeUpdateBody(raw: any) {
   const provAlias =
-    raw?.total_pagado_proveedor ??
+    raw?.total_pagado_proveedor_completa ??
     raw?.pago_total_proveedor ??
     raw?.pagado_proveedor ??
     raw?.total_pagado_proovedor; // typo común
@@ -81,8 +81,8 @@ function normalizeUpdateBody(raw: any) {
     fecha_vencimiento: raw?.fecha_vencimiento ?? null,
     meses_pagados: raw?.meses_pagados === '' ? null : raw?.meses_pagados,
 
-    total_pagado: numOrNull(raw?.total_pagado),
-    total_pagado_proveedor: numOrNull(provAlias),
+    total_pagado_completa: numOrNull(raw?.total_pagado_completa),
+    total_pagado_proveedor_completa: numOrNull(provAlias),
     total_ganado: numOrNull(ganadoAlias), // el servidor puede ignorarlo si recomputa
 
     estado: raw?.estado ?? null,
@@ -104,8 +104,8 @@ const CCUpdatePartial = z.object({
   fecha_vencimiento: DateLike,
   meses_pagados: z.coerce.number().int().nullable().optional(),
 
-  total_pagado: z.coerce.number().nullable().optional(),
-  total_pagado_proveedor: z.coerce.number().nullable().optional(),
+  total_pagado_completa: z.coerce.number().nullable().optional(),
+  total_pagado_proveedor_completa: z.coerce.number().nullable().optional(),
 
   // Nota: el servidor recomputa total_ganado si cambian totales; si no cambian, no modifica.
   total_ganado: z.coerce.number().nullable().optional(),
@@ -117,15 +117,15 @@ const CCUpdatePartial = z.object({
 /* ============ Helpers de respuesta ============ */
 function shapeRow(r: any) {
   const totalProv =
-    r.total_pagado_proveedor ?? (r as any).total_pagado_proveedor ?? null;
+    r.total_pagado_proveedor_completa ?? (r as any).total_pagado_proveedor_completa ?? null;
 
   return {
     ...r,
     id: typeof r.id === 'bigint' ? Number(r.id) : r.id,
     plataforma_id: typeof r.plataforma_id === 'bigint' ? Number(r.plataforma_id) : r.plataforma_id,
     meses_pagados: r.meses_pagados == null ? null : Number(r.meses_pagados),
-    total_pagado: r.total_pagado == null ? null : Number(r.total_pagado),
-    total_pagado_proveedor: totalProv == null ? null : Number(totalProv),
+    total_pagado_completa: r.total_pagado_completa == null ? null : Number(r.total_pagado_completa),
+    total_pagado_proveedor_completa: totalProv == null ? null : Number(totalProv),
     total_ganado: r.total_ganado == null ? null : Number(r.total_ganado),
     // ⬇⬇⬇ Serializamos en LOCAL YMD para que el front muestre el mismo día que en BD
     fecha_compra: toYMDUTC(r.fecha_compra),
@@ -188,19 +188,19 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
     }
 
     // Valores actuales para cálculo de total_ganado si no se envían
-    const curTotalPagado = current.total_pagado == null ? null : Number(current.total_pagado as any);
+    const curTotalPagado = current.total_pagado_completa == null ? null : Number(current.total_pagado_completa as any);
     const curTotalProv =
-      (current as any).total_pagado_proveedor == null
+      (current as any).total_pagado_proveedor_completa == null
         ? null
-        : Number((current as any).total_pagado_proveedor);
+        : Number((current as any).total_pagado_proveedor_completa);
 
-    const nextTotalPagado = c.total_pagado !== undefined ? c.total_pagado : curTotalPagado;
-    const nextTotalProv = c.total_pagado_proveedor !== undefined ? c.total_pagado_proveedor : curTotalProv;
+    const nextTotalPagado = c.total_pagado_completa !== undefined ? c.total_pagado_completa : curTotalPagado;
+    const nextTotalProv = c.total_pagado_proveedor_completa !== undefined ? c.total_pagado_proveedor_completa : curTotalProv;
 
     // Recalcular total_ganado si se envió alguno de los totales
     const shouldRecomputeGain =
-      Object.prototype.hasOwnProperty.call(c, 'total_pagado') ||
-      Object.prototype.hasOwnProperty.call(c, 'total_pagado_proveedor');
+      Object.prototype.hasOwnProperty.call(c, 'total_pagado_completa') ||
+      Object.prototype.hasOwnProperty.call(c, 'total_pagado_proveedor_completa');
 
     const computedTotalGanado =
       shouldRecomputeGain
@@ -229,8 +229,8 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
         : {}),
       ...(c.meses_pagados !== undefined ? { meses_pagados: c.meses_pagados } : {}),
 
-      ...(c.total_pagado !== undefined ? { total_pagado: c.total_pagado } : {}),
-      ...(c.total_pagado_proveedor !== undefined ? { total_pagado_proveedor: c.total_pagado_proveedor } : {}),
+      ...(c.total_pagado_completa !== undefined ? { total_pagado_completa: c.total_pagado_completa } : {}),
+      ...(c.total_pagado_proveedor_completa !== undefined ? { total_pagado_proveedor_completa: c.total_pagado_proveedor_completa } : {}),
       ...(computedTotalGanado !== undefined ? { total_ganado: computedTotalGanado } : {}),
 
       ...(c.estado !== undefined ? { estado: c.estado } : {}),

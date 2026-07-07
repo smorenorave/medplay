@@ -129,8 +129,8 @@ export async function GET(req: Request) {
         fecha_compra: true,
         fecha_vencimiento: true,
         meses_pagados: true,
-        total_pagado: true,
-        total_pagado_proveedor: true,
+        total_pagado_completa: true,
+        total_pagado_proveedor_completa: true,
         total_ganado: true,
         estado: true,
         comentario: true,
@@ -161,9 +161,9 @@ export async function GET(req: Request) {
       fecha_compra: toYMDUTC(r.fecha_compra),
       fecha_vencimiento: toYMDUTC(r.fecha_vencimiento),
       meses_pagados: r.meses_pagados == null ? null : Number(r.meses_pagados),
-      total_pagado: r.total_pagado == null ? null : Number(r.total_pagado),
-      total_pagado_proveedor:
-        r.total_pagado_proveedor == null ? null : Number(r.total_pagado_proveedor),
+      total_pagado_completa: r.total_pagado_completa == null ? null : Number(r.total_pagado_completa),
+      total_pagado_proveedor_completa:
+        r.total_pagado_proveedor_completa == null ? null : Number(r.total_pagado_proveedor_completa),
       total_ganado: r.total_ganado == null ? null : Number(r.total_ganado),
       estado: r.estado ?? null,
       comentario: r.comentario ?? null,
@@ -219,16 +219,16 @@ export async function POST(req: Request) {
         ? null
         : Number((flat as any).meses_pagados);
 
-    const total_pagado =
-      (flat as any)?.total_pagado == null || Number.isNaN(Number((flat as any).total_pagado))
+    const total_pagado_completa =
+      (flat as any)?.total_pagado_completa == null || Number.isNaN(Number((flat as any).total_pagado_completa))
         ? null
-        : Number((flat as any).total_pagado);
+        : Number((flat as any).total_pagado_completa);
 
-    const total_pagado_proveedor =
-      (flat as any)?.total_pagado_proveedor == null ||
-      Number.isNaN(Number((flat as any).total_pagado_proveedor))
+    const total_pagado_proveedor_completa =
+      (flat as any)?.total_pagado_proveedor_completa == null ||
+      Number.isNaN(Number((flat as any).total_pagado_proveedor_completa))
         ? null
-        : Number((flat as any).total_pagado_proveedor);
+        : Number((flat as any).total_pagado_proveedor_completa);
 
     const estado =
       ((flat as any)?.estado ?? null) == null ? null : String((flat as any).estado).trim() || null;
@@ -259,11 +259,11 @@ export async function POST(req: Request) {
 
     // total_ganado según regla
     const total_ganado =
-      total_pagado == null
+      total_pagado_completa == null
         ? null
-        : total_pagado_proveedor == null
-          ? total_pagado
-          : total_pagado - total_pagado_proveedor;
+        : total_pagado_proveedor_completa == null
+          ? total_pagado_completa
+          : total_pagado_completa - total_pagado_proveedor_completa;
 
     // Transacción: asegurar usuario + crear cuenta + limpiar inventario
     const created = await withTxRetry(() =>
@@ -287,8 +287,8 @@ export async function POST(req: Request) {
           fecha_compra,
           fecha_vencimiento,
           meses_pagados,
-          total_pagado,
-          total_pagado_proveedor,
+          total_pagado_completa,
+          total_pagado_proveedor_completa,
           total_ganado,
           estado,
           comentario,
@@ -303,8 +303,8 @@ export async function POST(req: Request) {
           fecha_compra: true,
           fecha_vencimiento: true,
           meses_pagados: true,
-          total_pagado: true,
-          total_pagado_proveedor: true,
+          total_pagado_completa: true,
+          total_pagado_proveedor_completa: true,
           total_ganado: true,
           estado: true,
           comentario: true,
@@ -344,9 +344,9 @@ export async function POST(req: Request) {
       fecha_compra: toYMDUTC(created.fecha_compra as any),
       fecha_vencimiento: toYMDUTC(created.fecha_vencimiento as any),
       meses_pagados: created.meses_pagados == null ? null : Number(created.meses_pagados),
-      total_pagado: created.total_pagado == null ? null : Number(created.total_pagado),
-      total_pagado_proveedor:
-        created.total_pagado_proveedor == null ? null : Number(created.total_pagado_proveedor),
+      total_pagado_completa: created.total_pagado_completa == null ? null : Number(created.total_pagado_completa),
+      total_pagado_proveedor_completa:
+        created.total_pagado_proveedor_completa == null ? null : Number(created.total_pagado_proveedor_completa),
       total_ganado: created.total_ganado == null ? null : Number(created.total_ganado),
     };
 

@@ -2780,18 +2780,18 @@ export namespace Prisma {
     id: number | null
     plataforma_id: number | null
     meses_pagados: number | null
-    total_pagado: Decimal | null
+    total_pagado_completa: Decimal | null
     total_ganado: Decimal | null
-    total_pagado_proveedor: Decimal | null
+    total_pagado_proveedor_completa: Decimal | null
   }
 
   export type CuentascompletasSumAggregateOutputType = {
     id: bigint | null
     plataforma_id: number | null
     meses_pagados: number | null
-    total_pagado: Decimal | null
+    total_pagado_completa: Decimal | null
     total_ganado: Decimal | null
-    total_pagado_proveedor: Decimal | null
+    total_pagado_proveedor_completa: Decimal | null
   }
 
   export type CuentascompletasMinAggregateOutputType = {
@@ -2802,13 +2802,13 @@ export namespace Prisma {
     fecha_compra: Date | null
     fecha_vencimiento: Date | null
     meses_pagados: number | null
-    total_pagado: Decimal | null
+    total_pagado_completa: Decimal | null
     estado: string | null
     comentario: string | null
     contrasena: string | null
     correo: string | null
     total_ganado: Decimal | null
-    total_pagado_proveedor: Decimal | null
+    total_pagado_proveedor_completa: Decimal | null
   }
 
   export type CuentascompletasMaxAggregateOutputType = {
@@ -2819,13 +2819,13 @@ export namespace Prisma {
     fecha_compra: Date | null
     fecha_vencimiento: Date | null
     meses_pagados: number | null
-    total_pagado: Decimal | null
+    total_pagado_completa: Decimal | null
     estado: string | null
     comentario: string | null
     contrasena: string | null
     correo: string | null
     total_ganado: Decimal | null
-    total_pagado_proveedor: Decimal | null
+    total_pagado_proveedor_completa: Decimal | null
   }
 
   export type CuentascompletasCountAggregateOutputType = {
@@ -2836,13 +2836,13 @@ export namespace Prisma {
     fecha_compra: number
     fecha_vencimiento: number
     meses_pagados: number
-    total_pagado: number
+    total_pagado_completa: number
     estado: number
     comentario: number
     contrasena: number
     correo: number
     total_ganado: number
-    total_pagado_proveedor: number
+    total_pagado_proveedor_completa: number
     _all: number
   }
 
@@ -2851,18 +2851,18 @@ export namespace Prisma {
     id?: true
     plataforma_id?: true
     meses_pagados?: true
-    total_pagado?: true
+    total_pagado_completa?: true
     total_ganado?: true
-    total_pagado_proveedor?: true
+    total_pagado_proveedor_completa?: true
   }
 
   export type CuentascompletasSumAggregateInputType = {
     id?: true
     plataforma_id?: true
     meses_pagados?: true
-    total_pagado?: true
+    total_pagado_completa?: true
     total_ganado?: true
-    total_pagado_proveedor?: true
+    total_pagado_proveedor_completa?: true
   }
 
   export type CuentascompletasMinAggregateInputType = {
@@ -2873,13 +2873,13 @@ export namespace Prisma {
     fecha_compra?: true
     fecha_vencimiento?: true
     meses_pagados?: true
-    total_pagado?: true
+    total_pagado_completa?: true
     estado?: true
     comentario?: true
     contrasena?: true
     correo?: true
     total_ganado?: true
-    total_pagado_proveedor?: true
+    total_pagado_proveedor_completa?: true
   }
 
   export type CuentascompletasMaxAggregateInputType = {
@@ -2890,13 +2890,13 @@ export namespace Prisma {
     fecha_compra?: true
     fecha_vencimiento?: true
     meses_pagados?: true
-    total_pagado?: true
+    total_pagado_completa?: true
     estado?: true
     comentario?: true
     contrasena?: true
     correo?: true
     total_ganado?: true
-    total_pagado_proveedor?: true
+    total_pagado_proveedor_completa?: true
   }
 
   export type CuentascompletasCountAggregateInputType = {
@@ -2907,13 +2907,13 @@ export namespace Prisma {
     fecha_compra?: true
     fecha_vencimiento?: true
     meses_pagados?: true
-    total_pagado?: true
+    total_pagado_completa?: true
     estado?: true
     comentario?: true
     contrasena?: true
     correo?: true
     total_ganado?: true
-    total_pagado_proveedor?: true
+    total_pagado_proveedor_completa?: true
     _all?: true
   }
 
@@ -3011,13 +3011,13 @@ export namespace Prisma {
     fecha_compra: Date | null
     fecha_vencimiento: Date | null
     meses_pagados: number | null
-    total_pagado: Decimal | null
+    total_pagado_completa: Decimal | null
     estado: string | null
     comentario: string | null
     contrasena: string
     correo: string
     total_ganado: Decimal | null
-    total_pagado_proveedor: Decimal | null
+    total_pagado_proveedor_completa: Decimal | null
     _count: CuentascompletasCountAggregateOutputType | null
     _avg: CuentascompletasAvgAggregateOutputType | null
     _sum: CuentascompletasSumAggregateOutputType | null
@@ -3047,13 +3047,13 @@ export namespace Prisma {
     fecha_compra?: boolean
     fecha_vencimiento?: boolean
     meses_pagados?: boolean
-    total_pagado?: boolean
+    total_pagado_completa?: boolean
     estado?: boolean
     comentario?: boolean
     contrasena?: boolean
     correo?: boolean
     total_ganado?: boolean
-    total_pagado_proveedor?: boolean
+    total_pagado_proveedor_completa?: boolean
     plataformas?: boolean | plataformasDefaultArgs<ExtArgs>
     usuarios?: boolean | usuariosDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["cuentascompletas"]>
@@ -3068,16 +3068,16 @@ export namespace Prisma {
     fecha_compra?: boolean
     fecha_vencimiento?: boolean
     meses_pagados?: boolean
-    total_pagado?: boolean
+    total_pagado_completa?: boolean
     estado?: boolean
     comentario?: boolean
     contrasena?: boolean
     correo?: boolean
     total_ganado?: boolean
-    total_pagado_proveedor?: boolean
+    total_pagado_proveedor_completa?: boolean
   }
 
-  export type cuentascompletasOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "contacto" | "plataforma_id" | "proveedor" | "fecha_compra" | "fecha_vencimiento" | "meses_pagados" | "total_pagado" | "estado" | "comentario" | "contrasena" | "correo" | "total_ganado" | "total_pagado_proveedor", ExtArgs["result"]["cuentascompletas"]>
+  export type cuentascompletasOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "contacto" | "plataforma_id" | "proveedor" | "fecha_compra" | "fecha_vencimiento" | "meses_pagados" | "total_pagado_completa" | "estado" | "comentario" | "contrasena" | "correo" | "total_ganado" | "total_pagado_proveedor_completa", ExtArgs["result"]["cuentascompletas"]>
   export type cuentascompletasInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     plataformas?: boolean | plataformasDefaultArgs<ExtArgs>
     usuarios?: boolean | usuariosDefaultArgs<ExtArgs>
@@ -3097,13 +3097,13 @@ export namespace Prisma {
       fecha_compra: Date | null
       fecha_vencimiento: Date | null
       meses_pagados: number | null
-      total_pagado: Prisma.Decimal | null
+      total_pagado_completa: Prisma.Decimal | null
       estado: string | null
       comentario: string | null
       contrasena: string
       correo: string
       total_ganado: Prisma.Decimal | null
-      total_pagado_proveedor: Prisma.Decimal | null
+      total_pagado_proveedor_completa: Prisma.Decimal | null
     }, ExtArgs["result"]["cuentascompletas"]>
     composites: {}
   }
@@ -3482,13 +3482,13 @@ export namespace Prisma {
     readonly fecha_compra: FieldRef<"cuentascompletas", 'DateTime'>
     readonly fecha_vencimiento: FieldRef<"cuentascompletas", 'DateTime'>
     readonly meses_pagados: FieldRef<"cuentascompletas", 'Int'>
-    readonly total_pagado: FieldRef<"cuentascompletas", 'Decimal'>
+    readonly total_pagado_completa: FieldRef<"cuentascompletas", 'Decimal'>
     readonly estado: FieldRef<"cuentascompletas", 'String'>
     readonly comentario: FieldRef<"cuentascompletas", 'String'>
     readonly contrasena: FieldRef<"cuentascompletas", 'String'>
     readonly correo: FieldRef<"cuentascompletas", 'String'>
     readonly total_ganado: FieldRef<"cuentascompletas", 'Decimal'>
-    readonly total_pagado_proveedor: FieldRef<"cuentascompletas", 'Decimal'>
+    readonly total_pagado_proveedor_completa: FieldRef<"cuentascompletas", 'Decimal'>
   }
     
 
@@ -11698,13 +11698,13 @@ export namespace Prisma {
     fecha_compra: 'fecha_compra',
     fecha_vencimiento: 'fecha_vencimiento',
     meses_pagados: 'meses_pagados',
-    total_pagado: 'total_pagado',
+    total_pagado_completa: 'total_pagado_completa',
     estado: 'estado',
     comentario: 'comentario',
     contrasena: 'contrasena',
     correo: 'correo',
     total_ganado: 'total_ganado',
-    total_pagado_proveedor: 'total_pagado_proveedor'
+    total_pagado_proveedor_completa: 'total_pagado_proveedor_completa'
   };
 
   export type CuentascompletasScalarFieldEnum = (typeof CuentascompletasScalarFieldEnum)[keyof typeof CuentascompletasScalarFieldEnum]
@@ -12097,13 +12097,13 @@ export namespace Prisma {
     fecha_compra?: DateTimeNullableFilter<"cuentascompletas"> | Date | string | null
     fecha_vencimiento?: DateTimeNullableFilter<"cuentascompletas"> | Date | string | null
     meses_pagados?: IntNullableFilter<"cuentascompletas"> | number | null
-    total_pagado?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
     estado?: StringNullableFilter<"cuentascompletas"> | string | null
     comentario?: StringNullableFilter<"cuentascompletas"> | string | null
     contrasena?: StringFilter<"cuentascompletas"> | string
     correo?: StringFilter<"cuentascompletas"> | string
     total_ganado?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
     plataformas?: XOR<PlataformasScalarRelationFilter, plataformasWhereInput>
     usuarios?: XOR<UsuariosScalarRelationFilter, usuariosWhereInput>
   }
@@ -12116,13 +12116,13 @@ export namespace Prisma {
     fecha_compra?: SortOrderInput | SortOrder
     fecha_vencimiento?: SortOrderInput | SortOrder
     meses_pagados?: SortOrderInput | SortOrder
-    total_pagado?: SortOrderInput | SortOrder
+    total_pagado_completa?: SortOrderInput | SortOrder
     estado?: SortOrderInput | SortOrder
     comentario?: SortOrderInput | SortOrder
     contrasena?: SortOrder
     correo?: SortOrder
     total_ganado?: SortOrderInput | SortOrder
-    total_pagado_proveedor?: SortOrderInput | SortOrder
+    total_pagado_proveedor_completa?: SortOrderInput | SortOrder
     plataformas?: plataformasOrderByWithRelationInput
     usuarios?: usuariosOrderByWithRelationInput
     _relevance?: cuentascompletasOrderByRelevanceInput
@@ -12139,13 +12139,13 @@ export namespace Prisma {
     fecha_compra?: DateTimeNullableFilter<"cuentascompletas"> | Date | string | null
     fecha_vencimiento?: DateTimeNullableFilter<"cuentascompletas"> | Date | string | null
     meses_pagados?: IntNullableFilter<"cuentascompletas"> | number | null
-    total_pagado?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
     estado?: StringNullableFilter<"cuentascompletas"> | string | null
     comentario?: StringNullableFilter<"cuentascompletas"> | string | null
     contrasena?: StringFilter<"cuentascompletas"> | string
     correo?: StringFilter<"cuentascompletas"> | string
     total_ganado?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
     plataformas?: XOR<PlataformasScalarRelationFilter, plataformasWhereInput>
     usuarios?: XOR<UsuariosScalarRelationFilter, usuariosWhereInput>
   }, "id">
@@ -12158,13 +12158,13 @@ export namespace Prisma {
     fecha_compra?: SortOrderInput | SortOrder
     fecha_vencimiento?: SortOrderInput | SortOrder
     meses_pagados?: SortOrderInput | SortOrder
-    total_pagado?: SortOrderInput | SortOrder
+    total_pagado_completa?: SortOrderInput | SortOrder
     estado?: SortOrderInput | SortOrder
     comentario?: SortOrderInput | SortOrder
     contrasena?: SortOrder
     correo?: SortOrder
     total_ganado?: SortOrderInput | SortOrder
-    total_pagado_proveedor?: SortOrderInput | SortOrder
+    total_pagado_proveedor_completa?: SortOrderInput | SortOrder
     _count?: cuentascompletasCountOrderByAggregateInput
     _avg?: cuentascompletasAvgOrderByAggregateInput
     _max?: cuentascompletasMaxOrderByAggregateInput
@@ -12183,13 +12183,13 @@ export namespace Prisma {
     fecha_compra?: DateTimeNullableWithAggregatesFilter<"cuentascompletas"> | Date | string | null
     fecha_vencimiento?: DateTimeNullableWithAggregatesFilter<"cuentascompletas"> | Date | string | null
     meses_pagados?: IntNullableWithAggregatesFilter<"cuentascompletas"> | number | null
-    total_pagado?: DecimalNullableWithAggregatesFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: DecimalNullableWithAggregatesFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
     estado?: StringNullableWithAggregatesFilter<"cuentascompletas"> | string | null
     comentario?: StringNullableWithAggregatesFilter<"cuentascompletas"> | string | null
     contrasena?: StringWithAggregatesFilter<"cuentascompletas"> | string
     correo?: StringWithAggregatesFilter<"cuentascompletas"> | string
     total_ganado?: DecimalNullableWithAggregatesFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: DecimalNullableWithAggregatesFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: DecimalNullableWithAggregatesFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
   }
 
   export type pantallasWhereInput = {
@@ -12786,13 +12786,13 @@ export namespace Prisma {
     fecha_compra?: Date | string | null
     fecha_vencimiento?: Date | string | null
     meses_pagados?: number | null
-    total_pagado?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     estado?: string | null
     comentario?: string | null
     contrasena: string
     correo: string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: Decimal | DecimalJsLike | number | string | null
     plataformas: plataformasCreateNestedOneWithoutCuentascompletasInput
     usuarios: usuariosCreateNestedOneWithoutCuentascompletasInput
   }
@@ -12805,13 +12805,13 @@ export namespace Prisma {
     fecha_compra?: Date | string | null
     fecha_vencimiento?: Date | string | null
     meses_pagados?: number | null
-    total_pagado?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     estado?: string | null
     comentario?: string | null
     contrasena: string
     correo: string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: Decimal | DecimalJsLike | number | string | null
   }
 
   export type cuentascompletasUpdateInput = {
@@ -12820,13 +12820,13 @@ export namespace Prisma {
     fecha_compra?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     fecha_vencimiento?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     meses_pagados?: NullableIntFieldUpdateOperationsInput | number | null
-    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: NullableStringFieldUpdateOperationsInput | string | null
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
     contrasena?: StringFieldUpdateOperationsInput | string
     correo?: StringFieldUpdateOperationsInput | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     plataformas?: plataformasUpdateOneRequiredWithoutCuentascompletasNestedInput
     usuarios?: usuariosUpdateOneRequiredWithoutCuentascompletasNestedInput
   }
@@ -12839,13 +12839,13 @@ export namespace Prisma {
     fecha_compra?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     fecha_vencimiento?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     meses_pagados?: NullableIntFieldUpdateOperationsInput | number | null
-    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: NullableStringFieldUpdateOperationsInput | string | null
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
     contrasena?: StringFieldUpdateOperationsInput | string
     correo?: StringFieldUpdateOperationsInput | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
   }
 
   export type cuentascompletasCreateManyInput = {
@@ -12856,13 +12856,13 @@ export namespace Prisma {
     fecha_compra?: Date | string | null
     fecha_vencimiento?: Date | string | null
     meses_pagados?: number | null
-    total_pagado?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     estado?: string | null
     comentario?: string | null
     contrasena: string
     correo: string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: Decimal | DecimalJsLike | number | string | null
   }
 
   export type cuentascompletasUpdateManyMutationInput = {
@@ -12871,13 +12871,13 @@ export namespace Prisma {
     fecha_compra?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     fecha_vencimiento?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     meses_pagados?: NullableIntFieldUpdateOperationsInput | number | null
-    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: NullableStringFieldUpdateOperationsInput | string | null
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
     contrasena?: StringFieldUpdateOperationsInput | string
     correo?: StringFieldUpdateOperationsInput | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
   }
 
   export type cuentascompletasUncheckedUpdateManyInput = {
@@ -12888,13 +12888,13 @@ export namespace Prisma {
     fecha_compra?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     fecha_vencimiento?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     meses_pagados?: NullableIntFieldUpdateOperationsInput | number | null
-    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: NullableStringFieldUpdateOperationsInput | string | null
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
     contrasena?: StringFieldUpdateOperationsInput | string
     correo?: StringFieldUpdateOperationsInput | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
   }
 
   export type pantallasCreateInput = {
@@ -13684,22 +13684,22 @@ export namespace Prisma {
     fecha_compra?: SortOrder
     fecha_vencimiento?: SortOrder
     meses_pagados?: SortOrder
-    total_pagado?: SortOrder
+    total_pagado_completa?: SortOrder
     estado?: SortOrder
     comentario?: SortOrder
     contrasena?: SortOrder
     correo?: SortOrder
     total_ganado?: SortOrder
-    total_pagado_proveedor?: SortOrder
+    total_pagado_proveedor_completa?: SortOrder
   }
 
   export type cuentascompletasAvgOrderByAggregateInput = {
     id?: SortOrder
     plataforma_id?: SortOrder
     meses_pagados?: SortOrder
-    total_pagado?: SortOrder
+    total_pagado_completa?: SortOrder
     total_ganado?: SortOrder
-    total_pagado_proveedor?: SortOrder
+    total_pagado_proveedor_completa?: SortOrder
   }
 
   export type cuentascompletasMaxOrderByAggregateInput = {
@@ -13710,13 +13710,13 @@ export namespace Prisma {
     fecha_compra?: SortOrder
     fecha_vencimiento?: SortOrder
     meses_pagados?: SortOrder
-    total_pagado?: SortOrder
+    total_pagado_completa?: SortOrder
     estado?: SortOrder
     comentario?: SortOrder
     contrasena?: SortOrder
     correo?: SortOrder
     total_ganado?: SortOrder
-    total_pagado_proveedor?: SortOrder
+    total_pagado_proveedor_completa?: SortOrder
   }
 
   export type cuentascompletasMinOrderByAggregateInput = {
@@ -13727,22 +13727,22 @@ export namespace Prisma {
     fecha_compra?: SortOrder
     fecha_vencimiento?: SortOrder
     meses_pagados?: SortOrder
-    total_pagado?: SortOrder
+    total_pagado_completa?: SortOrder
     estado?: SortOrder
     comentario?: SortOrder
     contrasena?: SortOrder
     correo?: SortOrder
     total_ganado?: SortOrder
-    total_pagado_proveedor?: SortOrder
+    total_pagado_proveedor_completa?: SortOrder
   }
 
   export type cuentascompletasSumOrderByAggregateInput = {
     id?: SortOrder
     plataforma_id?: SortOrder
     meses_pagados?: SortOrder
-    total_pagado?: SortOrder
+    total_pagado_completa?: SortOrder
     total_ganado?: SortOrder
-    total_pagado_proveedor?: SortOrder
+    total_pagado_proveedor_completa?: SortOrder
   }
 
   export type BigIntWithAggregatesFilter<$PrismaModel = never> = {
@@ -15479,13 +15479,13 @@ export namespace Prisma {
     fecha_compra?: Date | string | null
     fecha_vencimiento?: Date | string | null
     meses_pagados?: number | null
-    total_pagado?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     estado?: string | null
     comentario?: string | null
     contrasena: string
     correo: string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: Decimal | DecimalJsLike | number | string | null
     usuarios: usuariosCreateNestedOneWithoutCuentascompletasInput
   }
 
@@ -15496,13 +15496,13 @@ export namespace Prisma {
     fecha_compra?: Date | string | null
     fecha_vencimiento?: Date | string | null
     meses_pagados?: number | null
-    total_pagado?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     estado?: string | null
     comentario?: string | null
     contrasena: string
     correo: string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: Decimal | DecimalJsLike | number | string | null
   }
 
   export type cuentascompletasCreateOrConnectWithoutPlataformasInput = {
@@ -15591,13 +15591,13 @@ export namespace Prisma {
     fecha_compra?: DateTimeNullableFilter<"cuentascompletas"> | Date | string | null
     fecha_vencimiento?: DateTimeNullableFilter<"cuentascompletas"> | Date | string | null
     meses_pagados?: IntNullableFilter<"cuentascompletas"> | number | null
-    total_pagado?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
     estado?: StringNullableFilter<"cuentascompletas"> | string | null
     comentario?: StringNullableFilter<"cuentascompletas"> | string | null
     contrasena?: StringFilter<"cuentascompletas"> | string
     correo?: StringFilter<"cuentascompletas"> | string
     total_ganado?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
   }
 
   export type inventarioUpsertWithWhereUniqueWithoutPlataformasInput = {
@@ -15632,13 +15632,13 @@ export namespace Prisma {
     fecha_compra?: Date | string | null
     fecha_vencimiento?: Date | string | null
     meses_pagados?: number | null
-    total_pagado?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     estado?: string | null
     comentario?: string | null
     contrasena: string
     correo: string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: Decimal | DecimalJsLike | number | string | null
     plataformas: plataformasCreateNestedOneWithoutCuentascompletasInput
   }
 
@@ -15649,13 +15649,13 @@ export namespace Prisma {
     fecha_compra?: Date | string | null
     fecha_vencimiento?: Date | string | null
     meses_pagados?: number | null
-    total_pagado?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     estado?: string | null
     comentario?: string | null
     contrasena: string
     correo: string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: Decimal | DecimalJsLike | number | string | null
   }
 
   export type cuentascompletasCreateOrConnectWithoutUsuariosInput = {
@@ -15869,13 +15869,13 @@ export namespace Prisma {
     fecha_compra?: Date | string | null
     fecha_vencimiento?: Date | string | null
     meses_pagados?: number | null
-    total_pagado?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     estado?: string | null
     comentario?: string | null
     contrasena: string
     correo: string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: Decimal | DecimalJsLike | number | string | null
   }
 
   export type inventarioCreateManyPlataformasInput = {
@@ -15915,13 +15915,13 @@ export namespace Prisma {
     fecha_compra?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     fecha_vencimiento?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     meses_pagados?: NullableIntFieldUpdateOperationsInput | number | null
-    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: NullableStringFieldUpdateOperationsInput | string | null
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
     contrasena?: StringFieldUpdateOperationsInput | string
     correo?: StringFieldUpdateOperationsInput | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     usuarios?: usuariosUpdateOneRequiredWithoutCuentascompletasNestedInput
   }
 
@@ -15932,13 +15932,13 @@ export namespace Prisma {
     fecha_compra?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     fecha_vencimiento?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     meses_pagados?: NullableIntFieldUpdateOperationsInput | number | null
-    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: NullableStringFieldUpdateOperationsInput | string | null
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
     contrasena?: StringFieldUpdateOperationsInput | string
     correo?: StringFieldUpdateOperationsInput | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
   }
 
   export type cuentascompletasUncheckedUpdateManyWithoutPlataformasInput = {
@@ -15948,13 +15948,13 @@ export namespace Prisma {
     fecha_compra?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     fecha_vencimiento?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     meses_pagados?: NullableIntFieldUpdateOperationsInput | number | null
-    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: NullableStringFieldUpdateOperationsInput | string | null
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
     contrasena?: StringFieldUpdateOperationsInput | string
     correo?: StringFieldUpdateOperationsInput | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
   }
 
   export type inventarioUpdateWithoutPlataformasInput = {
@@ -15981,13 +15981,13 @@ export namespace Prisma {
     fecha_compra?: Date | string | null
     fecha_vencimiento?: Date | string | null
     meses_pagados?: number | null
-    total_pagado?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     estado?: string | null
     comentario?: string | null
     contrasena: string
     correo: string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: Decimal | DecimalJsLike | number | string | null
   }
 
   export type pantallasCreateManyUsuariosInput = {
@@ -16010,13 +16010,13 @@ export namespace Prisma {
     fecha_compra?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     fecha_vencimiento?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     meses_pagados?: NullableIntFieldUpdateOperationsInput | number | null
-    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: NullableStringFieldUpdateOperationsInput | string | null
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
     contrasena?: StringFieldUpdateOperationsInput | string
     correo?: StringFieldUpdateOperationsInput | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     plataformas?: plataformasUpdateOneRequiredWithoutCuentascompletasNestedInput
   }
 
@@ -16027,13 +16027,13 @@ export namespace Prisma {
     fecha_compra?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     fecha_vencimiento?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     meses_pagados?: NullableIntFieldUpdateOperationsInput | number | null
-    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: NullableStringFieldUpdateOperationsInput | string | null
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
     contrasena?: StringFieldUpdateOperationsInput | string
     correo?: StringFieldUpdateOperationsInput | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
   }
 
   export type cuentascompletasUncheckedUpdateManyWithoutUsuariosInput = {
@@ -16043,13 +16043,13 @@ export namespace Prisma {
     fecha_compra?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     fecha_vencimiento?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     meses_pagados?: NullableIntFieldUpdateOperationsInput | number | null
-    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: NullableStringFieldUpdateOperationsInput | string | null
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
     contrasena?: StringFieldUpdateOperationsInput | string
     correo?: StringFieldUpdateOperationsInput | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
-    total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado_proveedor_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
   }
 
   export type pantallasUpdateWithoutUsuariosInput = {
