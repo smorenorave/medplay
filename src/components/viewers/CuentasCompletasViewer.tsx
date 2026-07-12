@@ -18,8 +18,8 @@ type Cuenta = {
   fecha_compra: string | null; // YYYY-MM-DD
   fecha_vencimiento: string | null; // YYYY-MM-DD (auto)
   meses_pagados: number | null;
-  total_pagado: number | null;
-  total_pagado_proveedor: number | null;
+  total_pagado_completa: number | null;
+  total_pagado_proveedor_completa: number | null;
   total_ganado: number | null;
   estado: string | null;
   comentario: string | null;
@@ -66,11 +66,11 @@ function normalizeRow(r: any): Cuenta {
     fecha_compra: r.fecha_compra ?? null,
     fecha_vencimiento: r.fecha_vencimiento ?? null,
     meses_pagados: n(r.meses_pagados),
-    total_pagado: r.total_pagado == null ? null : Number(r.total_pagado),
-    total_pagado_proveedor:
-      r.total_pagado_proveedor == null
+    total_pagado_completa: r.total_pagado_completa == null ? null : Number(r.total_pagado_completa),
+    total_pagado_proveedor_completa:
+      r.total_pagado_proveedor_completa == null
         ? null
-        : Number(r.total_pagado_proveedor),
+        : Number(r.total_pagado_proveedor_completa),
     total_ganado: r.total_ganado == null ? null : Number(r.total_ganado),
     estado: r.estado ?? null,
     comentario: r.comentario ?? null,
@@ -425,13 +425,13 @@ export default function CuentasCompletasViewer() {
   useEffect(() => {
     if (!edit) return;
     const nuevo = calcularTotalGanado(
-      edit.total_pagado,
-      edit.total_pagado_proveedor
+      edit.total_pagado_completa,
+      edit.total_pagado_proveedor_completa
     );
     if (edit.total_ganado !== nuevo) {
       setEdit((s) => ({ ...(s as EditState), total_ganado: nuevo }));
     }
-  }, [edit?.total_pagado, edit?.total_pagado_proveedor]);
+  }, [edit?.total_pagado_completa, edit?.total_pagado_proveedor_completa]);
   /* ===== Boot ===== */
   useEffect(() => {
     mounted.current = true;
@@ -586,10 +586,57 @@ export default function CuentasCompletasViewer() {
       if (venc) seeded.fecha_vencimiento = venc;
     }
     seeded.total_ganado = calcularTotalGanado(
-      seeded.total_pagado,
-      seeded.total_pagado_proveedor
+      seeded.total_pagado_completa,
+      seeded.total_pagado_proveedor_completa
     );
     setEdit(seeded);
+
+    // ✅ Autorellenar total_pagado_completa / total_pagado_proveedor_completa
+    // con el valor por defecto de la plataforma cuando la cuenta no trae
+    // esos datos guardados (mismo comportamiento que en el formulario de
+    // registro).
+    if (
+      row.plataforma_id &&
+      (row.total_pagado_completa == null ||
+        Number(row.total_pagado_completa) === 0) &&
+      (row.total_pagado_proveedor_completa == null ||
+        Number(row.total_pagado_proveedor_completa) === 0)
+    ) {
+      fetch(`/api/plataformas/${row.plataforma_id}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (!data) return;
+          const tp =
+            data?.total_pagado_completa != null &&
+            data.total_pagado_completa !== 0
+              ? Number(data.total_pagado_completa)
+              : null;
+          const tpp =
+            data?.total_pagado_proveedor_completa != null &&
+            data.total_pagado_proveedor_completa !== 0
+              ? Number(data.total_pagado_proveedor_completa)
+              : null;
+          if (tp == null && tpp == null) return;
+          setEdit((s) => {
+            // el usuario cerró el modal o abrió otra fila mientras cargaba
+            if (!s || s.id !== row.id) return s;
+            // el usuario ya escribió algo mientras cargaba: no lo pisamos
+            if (
+              s.total_pagado_completa != null ||
+              s.total_pagado_proveedor_completa != null
+            )
+              return s;
+            const next = {
+              ...s,
+              total_pagado_completa: tp,
+              total_pagado_proveedor_completa: tpp,
+            };
+            next.total_ganado = calcularTotalGanado(tp, tpp);
+            return next;
+          });
+        })
+        .catch(() => {});
+    }
   }
 
   // recalcula vencimiento cuando cambia compra/meses
@@ -622,8 +669,8 @@ export default function CuentasCompletasViewer() {
       }
 
       const total_ganado_calc = calcularTotalGanado(
-        edit.total_pagado,
-        edit.total_pagado_proveedor
+        edit.total_pagado_completa,
+        edit.total_pagado_proveedor_completa
       );
 
       const payload: Record<string, unknown> = {
@@ -634,8 +681,8 @@ export default function CuentasCompletasViewer() {
         fecha_vencimiento: finalVence,
         meses_pagados:
           edit.meses_pagados == null ? null : clamp(edit.meses_pagados, 1),
-        total_pagado: edit.total_pagado,
-        total_pagado_proveedor: edit.total_pagado_proveedor,
+        total_pagado_completa: edit.total_pagado_completa,
+        total_pagado_proveedor_completa: edit.total_pagado_proveedor_completa,
         total_ganado: total_ganado_calc,
         estado: (edit.estado ?? "") || null,
         comentario: (edit.comentario ?? null) as string | null,
@@ -1192,10 +1239,10 @@ export default function CuentasCompletasViewer() {
                 </td>
 
                 <td className="px-3 py-2 text-right whitespace-nowrap">
-                  {money(r.total_pagado)}
+                  {money(r.total_pagado_completa)}
                 </td>
                 <td className="px-3 py-2 text-right whitespace-nowrap">
-                  {money(r.total_pagado_proveedor)}
+                  {money(r.total_pagado_proveedor_completa)}
                 </td>
                 <td className="px-3 py-2 text-right whitespace-nowrap">
                   {money(r.total_ganado)}
@@ -1279,14 +1326,63 @@ export default function CuentasCompletasViewer() {
                     <select
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
                       value={edit.plataforma_id ?? ""}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const newPid = e.target.value
+                          ? Number(e.target.value)
+                          : null;
                         setEdit((s) => ({
                           ...(s as EditState),
-                          plataforma_id: e.target.value
-                            ? Number(e.target.value)
-                            : null,
-                        }))
-                      }
+                          plataforma_id: newPid,
+                        }));
+
+                        // ✅ Autorellenar total_pagado_completa /
+                        // total_pagado_proveedor_completa con el valor por
+                        // defecto de la nueva plataforma, solo si esos
+                        // campos siguen vacíos (no pisamos lo que el
+                        // usuario ya haya escrito).
+                        if (newPid) {
+                          fetch(`/api/plataformas/${newPid}`, {
+                            cache: "no-store",
+                          })
+                            .then((r) => (r.ok ? r.json() : null))
+                            .then((data) => {
+                              if (!data) return;
+                              const tp =
+                                data?.total_pagado_completa != null &&
+                                data.total_pagado_completa !== 0
+                                  ? Number(data.total_pagado_completa)
+                                  : null;
+                              const tpp =
+                                data?.total_pagado_proveedor_completa !=
+                                  null &&
+                                data.total_pagado_proveedor_completa !== 0
+                                  ? Number(
+                                      data.total_pagado_proveedor_completa,
+                                    )
+                                  : null;
+                              if (tp == null && tpp == null) return;
+                              setEdit((s) => {
+                                if (!s || s.plataforma_id !== newPid) return s;
+                                if (
+                                  s.total_pagado_completa != null ||
+                                  s.total_pagado_proveedor_completa != null
+                                )
+                                  return s;
+                                const next = {
+                                  ...s,
+                                  total_pagado_completa: tp,
+                                  total_pagado_proveedor_completa: tpp,
+                                };
+                                next.total_ganado = calcularTotalGanado(
+                                  tp,
+                                  tpp,
+                                );
+                                return next;
+                              });
+                            })
+                            .catch(() => {});
+                        }
+                      }}
                     >
                       <option value="">— Selecciona —</option>
                       {plataformas.map((p) => (
@@ -1540,11 +1636,11 @@ export default function CuentasCompletasViewer() {
                       step="0.01"
                       min="0"
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.total_pagado ?? ""}
+                      value={edit.total_pagado_completa ?? ""}
                       onChange={(e) =>
                         setEdit((s) => ({
                           ...(s as EditState),
-                          total_pagado:
+                          total_pagado_completa:
                             e.target.value === ""
                               ? null
                               : Number(e.target.value),
@@ -1561,11 +1657,11 @@ export default function CuentasCompletasViewer() {
                       step="0.01"
                       min="0"
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.total_pagado_proveedor ?? ""}
+                      value={edit.total_pagado_proveedor_completa ?? ""}
                       onChange={(e) =>
                         setEdit((s) => ({
                           ...(s as EditState),
-                          total_pagado_proveedor:
+                          total_pagado_proveedor_completa:
                             e.target.value === ""
                               ? null
                               : Number(e.target.value),

@@ -1164,6 +1164,59 @@ export default function FormCuentaCompletas() {
       setSelectedInvIdByIdx([]);
       setNombreDirty(false);
       lastContactoRef.current = "";
+
+      // ✅ FIX: al resetear tras guardar, volvemos a precargar los totales
+      // por defecto de la plataforma (igual que al montar el formulario o
+      // al cambiar de plataforma). Antes este reset dejaba
+      // total_pagado_completa y total_pagado_proveedor_completa vacíos
+      // porque makeEmptyOrder() no dispara el fetch de autorelleno, dando
+      // la sensación de que el valor "se borraba" cada vez que se
+      // registraba una cuenta completa.
+      if (nextPlat) {
+        fetch(`/api/plataformas/${nextPlat}`, { cache: "no-store" })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (!data) return;
+            const tp =
+              data?.total_pagado_completa != null &&
+              data.total_pagado_completa !== 0
+                ? String(data.total_pagado_completa)
+                : "";
+            const tpp =
+              data?.total_pagado_proveedor_completa != null &&
+              data.total_pagado_proveedor_completa !== 0
+                ? String(data.total_pagado_proveedor_completa)
+                : "";
+            setOrders((cur) =>
+              cur.map((o, i) =>
+                i === 0 &&
+                o.total_pagado_completa === "" &&
+                o.total_pagado_proveedor_completa === ""
+                  ? {
+                      ...o,
+                      total_pagado_completa: tp,
+                      total_pagado_proveedor_completa: tpp,
+                    }
+                  : o,
+              ),
+            );
+            setPlataformaTotales((s) => ({
+              ...s,
+              [nextPlat]: {
+                total_pagado_completa:
+                  data?.total_pagado_completa != null
+                    ? Number(data.total_pagado_completa)
+                    : null,
+                total_pagado_proveedor_completa:
+                  data?.total_pagado_proveedor_completa != null
+                    ? Number(data.total_pagado_proveedor_completa)
+                    : null,
+                loading: false,
+              },
+            }));
+          })
+          .catch(() => {});
+      }
     } catch (err: any) {
       setErrMsg(err?.message ?? "Error desconocido");
     } finally {

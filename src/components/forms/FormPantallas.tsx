@@ -1566,6 +1566,51 @@ export default function FormPantallas() {
       setNombreDirty(false);
       lastContactoRef.current = "";
       setEmailOpenIdx(null);
+
+      // ✅ FIX: al resetear tras guardar, volvemos a precargar los totales
+      // por defecto de la plataforma (igual que al montar el formulario o
+      // al cambiar de plataforma). Antes este reset dejaba total_pagado y
+      // total_pagado_proveedor vacíos porque makeEmptyOrder() no dispara
+      // el fetch de autorelleno, dando la sensación de que el valor "se
+      // borraba" cada vez que se registraba una pantalla.
+      if (nextPlat) {
+        fetch(`/api/plataformas/${nextPlat}`, { cache: "no-store" })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (!data) return;
+            const tp =
+              data?.total_pagado != null && data.total_pagado !== 0
+                ? String(data.total_pagado)
+                : "";
+            const tpp =
+              data?.total_pagado_proveedor != null &&
+              data.total_pagado_proveedor !== 0
+                ? String(data.total_pagado_proveedor)
+                : "";
+            setOrders((cur) =>
+              cur.map((o, i) =>
+                i === 0 &&
+                o.total_pagado === "" &&
+                o.total_pagado_proveedor === ""
+                  ? { ...o, total_pagado: tp, total_pagado_proveedor: tpp }
+                  : o,
+              ),
+            );
+            setPlataformaTotales((s) => ({
+              ...s,
+              [nextPlat]: {
+                total_pagado:
+                  data?.total_pagado != null ? Number(data.total_pagado) : null,
+                total_pagado_proveedor:
+                  data?.total_pagado_proveedor != null
+                    ? Number(data.total_pagado_proveedor)
+                    : null,
+                loading: false,
+              },
+            }));
+          })
+          .catch(() => {});
+      }
     } catch (err: any) {
       setErrMsg(err?.message ?? "Error desconocido");
     } finally {

@@ -357,7 +357,7 @@ export namespace Prisma {
   export import Exact = $Public.Exact
 
   /**
-   * Prisma Client JS version: 6.19.2
+   * Prisma Client JS version: 6.19.3
    * Query Engine version: c2990dca591cba766e3b7ef5d9e8a84796e47ab7
    */
   export type PrismaVersion = {
@@ -4929,8 +4929,8 @@ export namespace Prisma {
   export type PlataformasAvgAggregateOutputType = {
     id: number | null
     cantidad_pantallas: number | null
-    total_pagado: Decimal | null
     total_pagado_proveedor: Decimal | null
+    total_pagado: Decimal | null
     total_pagado_completa: Decimal | null
     total_pagado_proveedor_completa: Decimal | null
   }
@@ -4938,8 +4938,8 @@ export namespace Prisma {
   export type PlataformasSumAggregateOutputType = {
     id: number | null
     cantidad_pantallas: number | null
-    total_pagado: Decimal | null
     total_pagado_proveedor: Decimal | null
+    total_pagado: Decimal | null
     total_pagado_completa: Decimal | null
     total_pagado_proveedor_completa: Decimal | null
   }
@@ -4948,8 +4948,8 @@ export namespace Prisma {
     id: number | null
     nombre: string | null
     cantidad_pantallas: number | null
-    total_pagado: Decimal | null
     total_pagado_proveedor: Decimal | null
+    total_pagado: Decimal | null
     total_pagado_completa: Decimal | null
     total_pagado_proveedor_completa: Decimal | null
   }
@@ -4958,8 +4958,8 @@ export namespace Prisma {
     id: number | null
     nombre: string | null
     cantidad_pantallas: number | null
-    total_pagado: Decimal | null
     total_pagado_proveedor: Decimal | null
+    total_pagado: Decimal | null
     total_pagado_completa: Decimal | null
     total_pagado_proveedor_completa: Decimal | null
   }
@@ -4968,8 +4968,8 @@ export namespace Prisma {
     id: number
     nombre: number
     cantidad_pantallas: number
-    total_pagado: number
     total_pagado_proveedor: number
+    total_pagado: number
     total_pagado_completa: number
     total_pagado_proveedor_completa: number
     _all: number
@@ -4979,8 +4979,8 @@ export namespace Prisma {
   export type PlataformasAvgAggregateInputType = {
     id?: true
     cantidad_pantallas?: true
-    total_pagado?: true
     total_pagado_proveedor?: true
+    total_pagado?: true
     total_pagado_completa?: true
     total_pagado_proveedor_completa?: true
   }
@@ -4988,8 +4988,8 @@ export namespace Prisma {
   export type PlataformasSumAggregateInputType = {
     id?: true
     cantidad_pantallas?: true
-    total_pagado?: true
     total_pagado_proveedor?: true
+    total_pagado?: true
     total_pagado_completa?: true
     total_pagado_proveedor_completa?: true
   }
@@ -4998,8 +4998,8 @@ export namespace Prisma {
     id?: true
     nombre?: true
     cantidad_pantallas?: true
-    total_pagado?: true
     total_pagado_proveedor?: true
+    total_pagado?: true
     total_pagado_completa?: true
     total_pagado_proveedor_completa?: true
   }
@@ -5008,8 +5008,8 @@ export namespace Prisma {
     id?: true
     nombre?: true
     cantidad_pantallas?: true
-    total_pagado?: true
     total_pagado_proveedor?: true
+    total_pagado?: true
     total_pagado_completa?: true
     total_pagado_proveedor_completa?: true
   }
@@ -5018,8 +5018,8 @@ export namespace Prisma {
     id?: true
     nombre?: true
     cantidad_pantallas?: true
-    total_pagado?: true
     total_pagado_proveedor?: true
+    total_pagado?: true
     total_pagado_completa?: true
     total_pagado_proveedor_completa?: true
     _all?: true
@@ -5115,8 +5115,8 @@ export namespace Prisma {
     id: number
     nombre: string
     cantidad_pantallas: number
-    total_pagado: Decimal | null
     total_pagado_proveedor: Decimal | null
+    total_pagado: Decimal | null
     total_pagado_completa: Decimal | null
     total_pagado_proveedor_completa: Decimal | null
     _count: PlataformasCountAggregateOutputType | null
@@ -5144,8 +5144,8 @@ export namespace Prisma {
     id?: boolean
     nombre?: boolean
     cantidad_pantallas?: boolean
-    total_pagado?: boolean
     total_pagado_proveedor?: boolean
+    total_pagado?: boolean
     total_pagado_completa?: boolean
     total_pagado_proveedor_completa?: boolean
     cuentascompartidas?: boolean | plataformas$cuentascompartidasArgs<ExtArgs>
@@ -5160,13 +5160,13 @@ export namespace Prisma {
     id?: boolean
     nombre?: boolean
     cantidad_pantallas?: boolean
-    total_pagado?: boolean
     total_pagado_proveedor?: boolean
+    total_pagado?: boolean
     total_pagado_completa?: boolean
     total_pagado_proveedor_completa?: boolean
   }
 
-  export type plataformasOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "nombre" | "cantidad_pantallas" | "total_pagado" | "total_pagado_proveedor" | "total_pagado_completa" | "total_pagado_proveedor_completa", ExtArgs["result"]["plataformas"]>
+  export type plataformasOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "nombre" | "cantidad_pantallas" | "total_pagado_proveedor" | "total_pagado" | "total_pagado_completa" | "total_pagado_proveedor_completa", ExtArgs["result"]["plataformas"]>
   export type plataformasInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     cuentascompartidas?: boolean | plataformas$cuentascompartidasArgs<ExtArgs>
     cuentascompletas?: boolean | plataformas$cuentascompletasArgs<ExtArgs>
@@ -5185,8 +5185,8 @@ export namespace Prisma {
       id: number
       nombre: string
       cantidad_pantallas: number
-      total_pagado: Prisma.Decimal | null
       total_pagado_proveedor: Prisma.Decimal | null
+      total_pagado: Prisma.Decimal | null
       total_pagado_completa: Prisma.Decimal | null
       total_pagado_proveedor_completa: Prisma.Decimal | null
     }, ExtArgs["result"]["plataformas"]>
@@ -5564,8 +5564,8 @@ export namespace Prisma {
     readonly id: FieldRef<"plataformas", 'Int'>
     readonly nombre: FieldRef<"plataformas", 'String'>
     readonly cantidad_pantallas: FieldRef<"plataformas", 'Int'>
-    readonly total_pagado: FieldRef<"plataformas", 'Decimal'>
     readonly total_pagado_proveedor: FieldRef<"plataformas", 'Decimal'>
+    readonly total_pagado: FieldRef<"plataformas", 'Decimal'>
     readonly total_pagado_completa: FieldRef<"plataformas", 'Decimal'>
     readonly total_pagado_proveedor_completa: FieldRef<"plataformas", 'Decimal'>
   }
@@ -11732,8 +11732,8 @@ export namespace Prisma {
     id: 'id',
     nombre: 'nombre',
     cantidad_pantallas: 'cantidad_pantallas',
-    total_pagado: 'total_pagado',
     total_pagado_proveedor: 'total_pagado_proveedor',
+    total_pagado: 'total_pagado',
     total_pagado_completa: 'total_pagado_completa',
     total_pagado_proveedor_completa: 'total_pagado_proveedor_completa'
   };
@@ -12295,8 +12295,8 @@ export namespace Prisma {
     id?: IntFilter<"plataformas"> | number
     nombre?: StringFilter<"plataformas"> | string
     cantidad_pantallas?: IntFilter<"plataformas"> | number
-    total_pagado?: DecimalNullableFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: DecimalNullableFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
+    total_pagado?: DecimalNullableFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: DecimalNullableFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: DecimalNullableFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: CuentascompartidasListRelationFilter
@@ -12308,8 +12308,8 @@ export namespace Prisma {
     id?: SortOrder
     nombre?: SortOrder
     cantidad_pantallas?: SortOrder
-    total_pagado?: SortOrderInput | SortOrder
     total_pagado_proveedor?: SortOrderInput | SortOrder
+    total_pagado?: SortOrderInput | SortOrder
     total_pagado_completa?: SortOrderInput | SortOrder
     total_pagado_proveedor_completa?: SortOrderInput | SortOrder
     cuentascompartidas?: cuentascompartidasOrderByRelationAggregateInput
@@ -12325,8 +12325,8 @@ export namespace Prisma {
     OR?: plataformasWhereInput[]
     NOT?: plataformasWhereInput | plataformasWhereInput[]
     cantidad_pantallas?: IntFilter<"plataformas"> | number
-    total_pagado?: DecimalNullableFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: DecimalNullableFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
+    total_pagado?: DecimalNullableFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: DecimalNullableFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: DecimalNullableFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: CuentascompartidasListRelationFilter
@@ -12338,8 +12338,8 @@ export namespace Prisma {
     id?: SortOrder
     nombre?: SortOrder
     cantidad_pantallas?: SortOrder
-    total_pagado?: SortOrderInput | SortOrder
     total_pagado_proveedor?: SortOrderInput | SortOrder
+    total_pagado?: SortOrderInput | SortOrder
     total_pagado_completa?: SortOrderInput | SortOrder
     total_pagado_proveedor_completa?: SortOrderInput | SortOrder
     _count?: plataformasCountOrderByAggregateInput
@@ -12356,8 +12356,8 @@ export namespace Prisma {
     id?: IntWithAggregatesFilter<"plataformas"> | number
     nombre?: StringWithAggregatesFilter<"plataformas"> | string
     cantidad_pantallas?: IntWithAggregatesFilter<"plataformas"> | number
-    total_pagado?: DecimalNullableWithAggregatesFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: DecimalNullableWithAggregatesFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
+    total_pagado?: DecimalNullableWithAggregatesFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: DecimalNullableWithAggregatesFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: DecimalNullableWithAggregatesFilter<"plataformas"> | Decimal | DecimalJsLike | number | string | null
   }
@@ -13000,8 +13000,8 @@ export namespace Prisma {
   export type plataformasCreateInput = {
     nombre: string
     cantidad_pantallas?: number
-    total_pagado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
+    total_pagado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasCreateNestedManyWithoutPlataformasInput
@@ -13013,8 +13013,8 @@ export namespace Prisma {
     id?: number
     nombre: string
     cantidad_pantallas?: number
-    total_pagado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
+    total_pagado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasUncheckedCreateNestedManyWithoutPlataformasInput
@@ -13025,8 +13025,8 @@ export namespace Prisma {
   export type plataformasUpdateInput = {
     nombre?: StringFieldUpdateOperationsInput | string
     cantidad_pantallas?: IntFieldUpdateOperationsInput | number
-    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasUpdateManyWithoutPlataformasNestedInput
@@ -13038,8 +13038,8 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     nombre?: StringFieldUpdateOperationsInput | string
     cantidad_pantallas?: IntFieldUpdateOperationsInput | number
-    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasUncheckedUpdateManyWithoutPlataformasNestedInput
@@ -13051,8 +13051,8 @@ export namespace Prisma {
     id?: number
     nombre: string
     cantidad_pantallas?: number
-    total_pagado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
+    total_pagado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: Decimal | DecimalJsLike | number | string | null
   }
@@ -13060,8 +13060,8 @@ export namespace Prisma {
   export type plataformasUpdateManyMutationInput = {
     nombre?: StringFieldUpdateOperationsInput | string
     cantidad_pantallas?: IntFieldUpdateOperationsInput | number
-    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
   }
@@ -13070,8 +13070,8 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     nombre?: StringFieldUpdateOperationsInput | string
     cantidad_pantallas?: IntFieldUpdateOperationsInput | number
-    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
   }
@@ -13930,8 +13930,8 @@ export namespace Prisma {
     id?: SortOrder
     nombre?: SortOrder
     cantidad_pantallas?: SortOrder
-    total_pagado?: SortOrder
     total_pagado_proveedor?: SortOrder
+    total_pagado?: SortOrder
     total_pagado_completa?: SortOrder
     total_pagado_proveedor_completa?: SortOrder
   }
@@ -13939,8 +13939,8 @@ export namespace Prisma {
   export type plataformasAvgOrderByAggregateInput = {
     id?: SortOrder
     cantidad_pantallas?: SortOrder
-    total_pagado?: SortOrder
     total_pagado_proveedor?: SortOrder
+    total_pagado?: SortOrder
     total_pagado_completa?: SortOrder
     total_pagado_proveedor_completa?: SortOrder
   }
@@ -13949,8 +13949,8 @@ export namespace Prisma {
     id?: SortOrder
     nombre?: SortOrder
     cantidad_pantallas?: SortOrder
-    total_pagado?: SortOrder
     total_pagado_proveedor?: SortOrder
+    total_pagado?: SortOrder
     total_pagado_completa?: SortOrder
     total_pagado_proveedor_completa?: SortOrder
   }
@@ -13959,8 +13959,8 @@ export namespace Prisma {
     id?: SortOrder
     nombre?: SortOrder
     cantidad_pantallas?: SortOrder
-    total_pagado?: SortOrder
     total_pagado_proveedor?: SortOrder
+    total_pagado?: SortOrder
     total_pagado_completa?: SortOrder
     total_pagado_proveedor_completa?: SortOrder
   }
@@ -13968,8 +13968,8 @@ export namespace Prisma {
   export type plataformasSumOrderByAggregateInput = {
     id?: SortOrder
     cantidad_pantallas?: SortOrder
-    total_pagado?: SortOrder
     total_pagado_proveedor?: SortOrder
+    total_pagado?: SortOrder
     total_pagado_completa?: SortOrder
     total_pagado_proveedor_completa?: SortOrder
   }
@@ -15124,8 +15124,8 @@ export namespace Prisma {
   export type plataformasCreateWithoutCuentascompartidasInput = {
     nombre: string
     cantidad_pantallas?: number
-    total_pagado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
+    total_pagado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: Decimal | DecimalJsLike | number | string | null
     cuentascompletas?: cuentascompletasCreateNestedManyWithoutPlataformasInput
@@ -15136,8 +15136,8 @@ export namespace Prisma {
     id?: number
     nombre: string
     cantidad_pantallas?: number
-    total_pagado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
+    total_pagado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: Decimal | DecimalJsLike | number | string | null
     cuentascompletas?: cuentascompletasUncheckedCreateNestedManyWithoutPlataformasInput
@@ -15200,8 +15200,8 @@ export namespace Prisma {
   export type plataformasUpdateWithoutCuentascompartidasInput = {
     nombre?: StringFieldUpdateOperationsInput | string
     cantidad_pantallas?: IntFieldUpdateOperationsInput | number
-    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     cuentascompletas?: cuentascompletasUpdateManyWithoutPlataformasNestedInput
@@ -15212,8 +15212,8 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     nombre?: StringFieldUpdateOperationsInput | string
     cantidad_pantallas?: IntFieldUpdateOperationsInput | number
-    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     cuentascompletas?: cuentascompletasUncheckedUpdateManyWithoutPlataformasNestedInput
@@ -15257,8 +15257,8 @@ export namespace Prisma {
   export type plataformasCreateWithoutCuentascompletasInput = {
     nombre: string
     cantidad_pantallas?: number
-    total_pagado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
+    total_pagado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasCreateNestedManyWithoutPlataformasInput
@@ -15269,8 +15269,8 @@ export namespace Prisma {
     id?: number
     nombre: string
     cantidad_pantallas?: number
-    total_pagado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
+    total_pagado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasUncheckedCreateNestedManyWithoutPlataformasInput
@@ -15313,8 +15313,8 @@ export namespace Prisma {
   export type plataformasUpdateWithoutCuentascompletasInput = {
     nombre?: StringFieldUpdateOperationsInput | string
     cantidad_pantallas?: IntFieldUpdateOperationsInput | number
-    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasUpdateManyWithoutPlataformasNestedInput
@@ -15325,8 +15325,8 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     nombre?: StringFieldUpdateOperationsInput | string
     cantidad_pantallas?: IntFieldUpdateOperationsInput | number
-    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasUncheckedUpdateManyWithoutPlataformasNestedInput
@@ -15740,8 +15740,8 @@ export namespace Prisma {
   export type plataformasCreateWithoutInventarioInput = {
     nombre: string
     cantidad_pantallas?: number
-    total_pagado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
+    total_pagado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasCreateNestedManyWithoutPlataformasInput
@@ -15752,8 +15752,8 @@ export namespace Prisma {
     id?: number
     nombre: string
     cantidad_pantallas?: number
-    total_pagado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
+    total_pagado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasUncheckedCreateNestedManyWithoutPlataformasInput
@@ -15779,8 +15779,8 @@ export namespace Prisma {
   export type plataformasUpdateWithoutInventarioInput = {
     nombre?: StringFieldUpdateOperationsInput | string
     cantidad_pantallas?: IntFieldUpdateOperationsInput | number
-    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasUpdateManyWithoutPlataformasNestedInput
@@ -15791,8 +15791,8 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     nombre?: StringFieldUpdateOperationsInput | string
     cantidad_pantallas?: IntFieldUpdateOperationsInput | number
-    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+    total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasUncheckedUpdateManyWithoutPlataformasNestedInput

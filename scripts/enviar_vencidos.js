@@ -442,7 +442,7 @@ async function fetchExpiringRows(conn) {
   const [cRows] = await conn.query(`
     SELECT 'Cuenta completa' AS servicio, c.contacto, u.nombre, NULL AS nro_pantalla,
            DATE(c.fecha_vencimiento) AS fecha_vencimiento,
-           c.total_pagado, c.estado,
+           c.total_pagado_completa, c.estado,
            c.correo, c.plataforma_id, pl.nombre AS plataforma_nombre
     FROM cuentascompletas c
     LEFT JOIN usuarios u ON u.contacto = c.contacto
@@ -491,12 +491,12 @@ function fmtMoney(v) {
   }
 }
 
-function lineForItem(it) {
+function lineForItemPantalla(it) {
   const plat = (it.plataforma_nombre || '').trim() || 'tu plataforma';
   const correo = (it.correo || '').trim();
   const vence = fmtDateDDMMYYYY(it.fecha_vencimiento);
   const costo = fmtMoney(it.total_pagado);
-  const pant = it.servicio === 'Pantalla' && it.nro_pantalla ? ` (pantalla ${it.nro_pantalla})` : '';
+  const pant = it.nro_pantalla ? ` (pantalla ${it.nro_pantalla})` : '';
 
   return [
     `• Tu ${plat}${pant}`,
@@ -504,6 +504,26 @@ function lineForItem(it) {
     `, vence el *${vence}*, quería saber si deseas *realizar la renovación*`,
     costo ? `, tiene un costo de *${costo}*.` : '.',
   ].join('');
+}
+
+function lineForItemCompleta(it) {
+  const plat = (it.plataforma_nombre || '').trim() || 'tu plataforma';
+  const correo = (it.correo || '').trim();
+  const vence = fmtDateDDMMYYYY(it.fecha_vencimiento);
+  const costo = fmtMoney(it.total_pagado_completa);
+
+  return [
+    `• Tu ${plat}`,
+    correo ? `, con el correo ${correo}` : '',
+    `, vence el *${vence}*, quería saber si deseas *realizar la renovación*`,
+    costo ? `, tiene un costo de *${costo}*.` : '.',
+  ].join('');
+}
+
+function lineForItem(it) {
+  return it.servicio === 'Cuenta completa'
+    ? lineForItemCompleta(it)
+    : lineForItemPantalla(it);
 }
 
 function groupByPhone(rows) {

@@ -910,6 +910,47 @@ export default function PantallasViewer() {
     );
 
     setEdit(seeded);
+
+    // ✅ Autorellenar total_pagado / total_pagado_proveedor con el valor
+    // por defecto de la plataforma cuando la pantalla no trae esos datos
+    // guardados (mismo comportamiento que en el formulario de registro).
+    if (
+      row.plataforma_id &&
+      (row.total_pagado == null || Number(row.total_pagado) === 0) &&
+      (row.total_pagado_proveedor == null ||
+        Number(row.total_pagado_proveedor) === 0)
+    ) {
+      fetch(`/api/plataformas/${row.plataforma_id}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (!data) return;
+          const tp =
+            data?.total_pagado != null && data.total_pagado !== 0
+              ? Number(data.total_pagado)
+              : null;
+          const tpp =
+            data?.total_pagado_proveedor != null &&
+            data.total_pagado_proveedor !== 0
+              ? Number(data.total_pagado_proveedor)
+              : null;
+          if (tp == null && tpp == null) return;
+          setEdit((s) => {
+            // el usuario cerró el modal o abrió otra fila mientras cargaba
+            if (!s || s.id !== row.id) return s;
+            // el usuario ya escribió algo mientras cargaba: no lo pisamos
+            if (s.total_pagado != null || s.total_pagado_proveedor != null)
+              return s;
+            const next = {
+              ...s,
+              total_pagado: tp,
+              total_pagado_proveedor: tpp,
+            };
+            next.total_ganado = calcGanado(tp, tpp);
+            return next;
+          });
+        })
+        .catch(() => {});
+    }
   }
 
   // recalcula vencimiento cuando cambia compra/meses
@@ -1912,14 +1953,56 @@ export default function PantallasViewer() {
                           ? ""
                           : String(edit.plataforma_id)
                       }
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const newPid = e.target.value
+                          ? Number(e.target.value)
+                          : null;
                         setEdit((s) => ({
                           ...(s as EditState),
-                          plataforma_id: e.target.value
-                            ? Number(e.target.value)
-                            : null,
-                        }))
-                      }
+                          plataforma_id: newPid,
+                        }));
+
+                        // ✅ Autorellenar total_pagado / total_pagado_proveedor
+                        // con el valor por defecto de la nueva plataforma,
+                        // solo si esos campos siguen vacíos (no pisamos lo
+                        // que el usuario ya haya escrito).
+                        if (newPid) {
+                          fetch(`/api/plataformas/${newPid}`, {
+                            cache: "no-store",
+                          })
+                            .then((r) => (r.ok ? r.json() : null))
+                            .then((data) => {
+                              if (!data) return;
+                              const tp =
+                                data?.total_pagado != null &&
+                                data.total_pagado !== 0
+                                  ? Number(data.total_pagado)
+                                  : null;
+                              const tpp =
+                                data?.total_pagado_proveedor != null &&
+                                data.total_pagado_proveedor !== 0
+                                  ? Number(data.total_pagado_proveedor)
+                                  : null;
+                              if (tp == null && tpp == null) return;
+                              setEdit((s) => {
+                                if (!s || s.plataforma_id !== newPid) return s;
+                                if (
+                                  s.total_pagado != null ||
+                                  s.total_pagado_proveedor != null
+                                )
+                                  return s;
+                                const next = {
+                                  ...s,
+                                  total_pagado: tp,
+                                  total_pagado_proveedor: tpp,
+                                };
+                                next.total_ganado = calcGanado(tp, tpp);
+                                return next;
+                              });
+                            })
+                            .catch(() => {});
+                        }
+                      }}
                     >
                       <option value="">—</option>
                       {plataformas.map((p) => (
