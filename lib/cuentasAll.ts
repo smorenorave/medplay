@@ -1,6 +1,6 @@
 // src/lib/cuentasAll.ts
 /**
- * Cache full de Cuentas Completas (memoria + localStorage) con helpers:
+ * Cache efímera de Cuentas Completas en memoria. Nunca persiste credenciales.
  * - loadAllCuentasCompletas(preferCacheFirst)
  * - mergeCuentaCompletaIntoCache(row)
  * - removeCuentaCompletaFromCache(id)
@@ -19,8 +19,6 @@ export type CuentaCompleta = {
   [k: string]: any;
 };
 
-const LS_KEY = 'cuentasAll:v1:data';
-const LS_TS  = 'cuentasAll:v1:ts';
 // TTL opcional (si quieres forzar red al pulsar "Refrescar")
 const TTL_MS = 5 * 60 * 1000;
 
@@ -29,42 +27,15 @@ let MEM_TS = 0;
 
 function now() { return Date.now(); }
 
-function readLS(): { data: any[]; ts: number } | null {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    const ts  = Number(localStorage.getItem(LS_TS) || '0');
-    if (!raw) return null;
-    const data = JSON.parse(raw);
-    if (!Array.isArray(data)) return null;
-    return { data, ts };
-  } catch {
-    return null;
-  }
-}
-
-function writeLS(data: any[]) {
-  try {
-    localStorage.setItem(LS_KEY, JSON.stringify(data));
-    localStorage.setItem(LS_TS, String(now()));
-  } catch {}
-}
-
 function saveToMem(data: any[]) {
   MEM = data.slice();
   MEM_TS = now();
 }
 
-function fromCacheValid(): { data: any[]; from: 'mem' | 'ls' } | null {
+function fromCacheValid(): { data: any[]; from: 'mem' } | null {
   // memoria reciente
   if (MEM.length > 0 && now() - MEM_TS <= TTL_MS) return { data: MEM, from: 'mem' };
 
-  // localStorage dentro de TTL
-  const ls = readLS();
-  if (ls && ls.data.length > 0 && now() - ls.ts <= TTL_MS) {
-    // rehidratar a memoria
-    saveToMem(ls.data);
-    return { data: ls.data, from: 'ls' };
-  }
   return null;
 }
 
@@ -112,11 +83,10 @@ export async function loadAllCuentasCompletas(preferCacheFirst: boolean): Promis
   try {
     const all = await fetchAllFromNetwork();
     saveToMem(all);
-    writeLS(all);
     return { items: all, fromCache: false };
   } catch (e) {
     // red falló: devuelve lo que haya (aunque esté viejo)
-    const fallback = MEM.length ? MEM : (readLS()?.data ?? []);
+    const fallback = MEM;
     return { items: fallback, fromCache: true };
   }
 }
@@ -132,13 +102,6 @@ export function mergeCuentaCompletaIntoCache(row: CuentaCompleta) {
   else MEM.push(row);
   MEM_TS = now();
 
-  // LS
-  const ls = readLS();
-  let data = ls?.data ?? [];
-  const i2 = data.findIndex((r: any) => Number(r?.id) === id);
-  if (i2 >= 0) data[i2] = { ...data[i2], ...row };
-  else data.push(row);
-  writeLS(data);
 }
 
 /** Elimina una fila por id de la caché (memoria + LS) */
@@ -152,12 +115,6 @@ export function removeCuentaCompletaFromCache(id: number) {
     MEM_TS = now();
   }
 
-  // LS
-  const ls = readLS();
-  if (ls?.data?.length) {
-    const filtered = ls.data.filter((r: any) => Number(r?.id) !== n);
-    writeLS(filtered);
-  }
 }
 
 /**
@@ -168,10 +125,6 @@ export function clearCuentasCache(plataformaId: number | ''): void {
   if (plataformaId === '') {
     MEM = [];
     MEM_TS = 0;
-    try {
-      localStorage.removeItem(LS_KEY);
-      localStorage.removeItem(LS_TS);
-    } catch {}
     return;
   }
 
@@ -180,14 +133,9 @@ export function clearCuentasCache(plataformaId: number | ''): void {
     MEM = MEM.filter((r) => Number(r?.plataforma_id) !== Number(plataformaId));
     MEM_TS = now();
   }
-  const ls = readLS();
-  if (ls?.data?.length) {
-    const filtered = ls.data.filter((r: any) => Number(r?.plataforma_id) !== Number(plataformaId));
-    writeLS(filtered);
-  }
 }
 
 /* (Opcional) snapshot para debug */
 export function __getCuentasCacheSnapshot() {
-  return { mem: MEM.slice(), ts: MEM_TS, ls: readLS() };
+  return { mem: MEM.slice(), ts: MEM_TS };
 }

@@ -26,7 +26,7 @@ export async function GET() {
       cLast, cCount,
       uTopByContacto, uCount,
     ] = await Promise.all([
-      prisma.pantallas.findFirst({ select: { id: true }, orderBy: { id: 'desc' } }),
+      prisma.pantallas.findFirst({ select: { id: true, updatedAt: true } as any, orderBy: { updatedAt: 'desc' } as any }),
       prisma.pantallas.count(),
 
       prisma.cuentascompartidas.findFirst({ select: { id: true }, orderBy: { id: 'desc' } }),
@@ -43,7 +43,7 @@ export async function GET() {
 
     // Armamos una firma y la hasheamos a 32 bits sin signo
     const signature = [
-      'P', pMaxId, pCount,
+      'P', pMaxId, (pLast as any)?.updatedAt?.getTime?.() ?? 0, pCount,
       'C', cMaxId, cCount,
       'U', uCount, uTopContacto,
     ].join('|');

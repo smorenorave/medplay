@@ -141,6 +141,7 @@ exports.Prisma.CuentascompletasScalarFieldEnum = {
   total_pagado_completa: 'total_pagado_completa',
   estado: 'estado',
   comentario: 'comentario',
+  updatedAt: 'updatedAt',
   contrasena: 'contrasena',
   correo: 'correo',
   total_ganado: 'total_ganado',
@@ -158,6 +159,7 @@ exports.Prisma.PantallasScalarFieldEnum = {
   total_pagado: 'total_pagado',
   estado: 'estado',
   comentario: 'comentario',
+  updatedAt: 'updatedAt',
   total_ganado: 'total_ganado',
   total_pagado_proveedor: 'total_pagado_proveedor'
 };
@@ -208,6 +210,8 @@ exports.Prisma.MetricasmensualesScalarFieldEnum = {
   totalPantallas: 'totalPantallas',
   totalCuentas: 'totalCuentas',
   ventasCantidad: 'ventasCantidad',
+  pantallasVendidas: 'pantallasVendidas',
+  cuentasVendidas: 'cuentasVendidas',
   clientesActivos: 'clientesActivos',
   ranking: 'ranking',
   ventasDias: 'ventasDias',
@@ -219,8 +223,47 @@ exports.Prisma.MetricasmensualesScalarFieldEnum = {
 exports.Prisma.AdminScalarFieldEnum = {
   id: 'id',
   usuario: 'usuario',
+  email: 'email',
   contrasena: 'contrasena',
   creado_en: 'creado_en'
+};
+
+exports.Prisma.DeletedAccountHistoryScalarFieldEnum = {
+  id: 'id',
+  dedupeKey: 'dedupeKey',
+  plataformaId: 'plataformaId',
+  plataforma: 'plataforma',
+  correo: 'correo',
+  clave: 'clave',
+  proveedor: 'proveedor',
+  tipoRegistro: 'tipoRegistro',
+  tipoEliminacion: 'tipoEliminacion',
+  identificadorOriginal: 'identificadorOriginal',
+  eliminadoPorAdminId: 'eliminadoPorAdminId',
+  datosRecuperacion: 'datosRecuperacion',
+  cantidadEliminaciones: 'cantidadEliminaciones',
+  primeraEliminacion: 'primeraEliminacion',
+  ultimaEliminacion: 'ultimaEliminacion'
+};
+
+exports.Prisma.AdminPasswordResetTokenScalarFieldEnum = {
+  id: 'id',
+  adminId: 'adminId',
+  tokenHash: 'tokenHash',
+  expiresAt: 'expiresAt',
+  usedAt: 'usedAt',
+  requestedIp: 'requestedIp',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.AdminSecurityEventScalarFieldEnum = {
+  id: 'id',
+  adminId: 'adminId',
+  eventType: 'eventType',
+  success: 'success',
+  ip: 'ip',
+  metadata: 'metadata',
+  createdAt: 'createdAt'
 };
 
 exports.Prisma.SortOrder = {
@@ -304,7 +347,29 @@ exports.Prisma.metricasmensualesOrderByRelevanceFieldEnum = {
 
 exports.Prisma.adminOrderByRelevanceFieldEnum = {
   usuario: 'usuario',
+  email: 'email',
   contrasena: 'contrasena'
+};
+
+exports.Prisma.deletedAccountHistoryOrderByRelevanceFieldEnum = {
+  dedupeKey: 'dedupeKey',
+  plataforma: 'plataforma',
+  correo: 'correo',
+  clave: 'clave',
+  proveedor: 'proveedor',
+  tipoRegistro: 'tipoRegistro',
+  tipoEliminacion: 'tipoEliminacion',
+  identificadorOriginal: 'identificadorOriginal'
+};
+
+exports.Prisma.adminPasswordResetTokenOrderByRelevanceFieldEnum = {
+  tokenHash: 'tokenHash',
+  requestedIp: 'requestedIp'
+};
+
+exports.Prisma.adminSecurityEventOrderByRelevanceFieldEnum = {
+  eventType: 'eventType',
+  ip: 'ip'
 };
 exports.LogStatus = exports.$Enums.LogStatus = {
   OK: 'OK',
@@ -322,7 +387,10 @@ exports.Prisma.ModelName = {
   wa_logs: 'wa_logs',
   inventario: 'inventario',
   metricasmensuales: 'metricasmensuales',
-  admin: 'admin'
+  admin: 'admin',
+  deletedAccountHistory: 'deletedAccountHistory',
+  adminPasswordResetToken: 'adminPasswordResetToken',
+  adminSecurityEvent: 'adminSecurityEvent'
 };
 
 /**

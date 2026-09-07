@@ -241,7 +241,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    let {
+    const {
       contacto,
       nombre,
       cuenta_id,

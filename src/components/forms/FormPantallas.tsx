@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { usePlataformas } from "@/hooks/usePlataformas";
-import { normalizeContacto } from "@/lib/strings";
+import { formatContactoInput, isContactoUsername, normalizeContacto } from "@/lib/strings";
 import { todayStr } from "@/lib/dates";
 import { FieldPantallas } from "@/components/ui/FieldPantallas";
 import TextArea from "@/components/ui/TextArea";
@@ -1650,23 +1650,23 @@ export default function FormPantallas() {
           <div className="grid gap-4 sm:grid-cols-2">
             <FieldPantallas
               label="Contacto *"
-              type="tel"
-              placeholder="+57 3xxxxxxxxx"
+              type="text"
+              placeholder="+57 3xxxxxxxxx o @username"
               value={user.contacto}
-              onChange={(v: string) => {
-                const soloDigitos = v
-                  .replace(/[^\d\s]/g, "")
-                  .replace(/^\s+/, "");
-                const next = soloDigitos ? `+${soloDigitos}` : "";
-                setUser((s) => ({ ...s, contacto: next }));
-              }}
+              onChange={(v: string) =>
+                setUser((s) => ({ ...s, contacto: formatContactoInput(v) }))
+              }
               required
-              inputMode="tel"
-              pattern="^\+?[\d\s\-\(\)]{7,20}$"
-              title="Formato válido: + seguido de números"
+              inputMode="text"
+              pattern={
+                isContactoUsername(user.contacto)
+                  ? "^@?[A-Za-z][A-Za-z0-9._-]{2,190}$"
+                  : "^\\+?[\\d\\s\\-\\(\\)]{7,20}$"
+              }
+              title="Ingresa un teléfono válido o un username de WhatsApp sin espacios"
               onInvalid={(e: any) =>
                 e.currentTarget.setCustomValidity(
-                  "Ingresa un teléfono en formato + y solo números",
+                  "Ingresa un teléfono válido o un username de WhatsApp",
                 )
               }
               onInput={(e: any) => e.currentTarget.setCustomValidity("")}

@@ -86,7 +86,7 @@ function HeaderRow({
     <div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2 sm:px-4">
       <h3 className="text-lg font-semibold text-neutral-100">{title}</h3>
       <div className="flex items-center gap-2">
-        {rightExtra /* aquí van botones extra, ej: Proton */}
+        {rightExtra}
         {onRefresh && (
           <button
             type="button"
@@ -1106,97 +1106,6 @@ function ContactosPane() {
 }
 
 /* =================================================================== */
-/* Pane: Proton                           */
-/* =================================================================== */
-function ProtonPane() {
-  const [correo, setCorreo] = useState("");
-  const [clave, setClave] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [ok, setOk] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
-  const input =
-    "h-10 w-full rounded-lg px-3 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500";
-  const btn =
-    "h-10 rounded-lg border border-neutral-700 bg-neutral-900 px-3 text-neutral-100 hover:bg-neutral-800 disabled:opacity-50";
-
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setOk(null);
-    setErr(null);
-    if (!correo.trim() || !clave.trim()) {
-      setErr("Escribe correo y clave");
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await fetch("/api/proton", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          correo: correo.trim().toLowerCase(),
-          clave: clave.trim(),
-        }),
-      });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.error ?? "No se pudo ejecutar el script");
-      setOk("Solicitud enviada al script. Revisa el log si es necesario.");
-      setCorreo("");
-      setClave("");
-    } catch (e: any) {
-      setErr(e?.message ?? "Error al ejecutar");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Card>
-      <HeaderRow title="Proton" />
-      <div className="px-3 pb-4 pt-3 sm:px-4 space-y-3">
-        <form
-          onSubmit={onSubmit}
-          className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]"
-        >
-          <div>
-            <label className="block text-sm mb-1 text-neutral-300">
-              Correo
-            </label>
-            <input
-              type="email"
-              className={input}
-              value={correo}
-              onChange={(e) => setCorreo(e.target.value)}
-              placeholder="correo@proton.me"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm mb-1 text-neutral-300">Clave</label>
-            <input
-              type="text"
-              className={input}
-              value={clave}
-              onChange={(e) => setClave(e.target.value)}
-              placeholder="******"
-              required
-            />
-          </div>
-          <div className="flex items-end">
-            <button type="submit" className={btn} disabled={loading}>
-              {loading ? "Enviando…" : "Enviar cambio de clave"}
-            </button>
-          </div>
-        </form>
-
-        {ok && <div className="text-sm text-emerald-300">{ok}</div>}
-        {err && <div className="text-sm text-red-300">Error: {err}</div>}
-      </div>
-    </Card>
-  );
-}
-
-/* =================================================================== */
 /* Pane: Inventario (buscador + lista + form)    */
 /* =================================================================== */
 function InventarioPane() {
@@ -1855,7 +1764,7 @@ function InventarioPane() {
 /* CONTENEDOR CON PESTAÑAS                      */
 /* =================================================================== */
 export default function PlataformasContactosInventarioViewer() {
-  type Tab = "plataformas" | "contactos" | "inventario" | "proton"; // 👈 añade 'proton'
+  type Tab = "plataformas" | "contactos" | "inventario";
   const [tab, setTab] = useState<Tab>("plataformas");
 
   const btnBase = "px-4 py-2 rounded-xl border transition-colors";
@@ -1888,19 +1797,11 @@ export default function PlataformasContactosInventarioViewer() {
         >
           Inventario
         </button>
-        <button
-          className={`${btnBase} ${tab === "proton" ? active : idle}`}
-          onClick={() => setTab("proton")}
-        >
-          Proton
-        </button>{" "}
-        {/* 👈 NUEVO */}
       </div>
       {/* Panel activo */}
       {tab === "plataformas" && <PlataformasPane />}
       {tab === "contactos" && <ContactosPane />}
       {tab === "inventario" && <InventarioPane />}
-      {tab === "proton" && <ProtonPane />} {/* 👈 NUEVO */}
       {/* … (css de la scrollbar se queda igual) … */}
     </div>
   );

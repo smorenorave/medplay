@@ -1,0 +1,3 @@
+-- Los tres índices de esta migración fueron aplicados por MySQL antes de que
+-- una cuarta sentencia inválida fallara. Se conserva esta migración como
+-- marcador después de reconciliarla con `prisma migrate resolve`.

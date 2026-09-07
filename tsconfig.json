@@ -21,10 +21,12 @@
       "@/*": [
         "./src/*"
       ],
-      "@generated/*": ["./src/generated/*"],
+      "@generated/*": [
+        "./src/generated/*"
+      ],
       "@/lib/*": [
         "./lib/*"
-      ] 
+      ]
     },
     "plugins": [
       {
@@ -34,10 +36,11 @@
     "incremental": true
   },
   "include": [
-    "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    ".next/types/**/*.ts"
+    ".next/types/**/*.ts",
+    "next-env.d.ts",
+    ".next-verify/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

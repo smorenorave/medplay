@@ -3,20 +3,14 @@ import { prisma } from '@/lib/db';
 
 export async function GET() {
   try {
-    // Usa las fechas reales del esquema (MySQL-safe). El "as any" evita que TS se queje si tu client no tiene esas claves tipadas.
+    // updatedAt cambia ante cualquier edición, no solo cuando cambian las fechas.
     const agg = await prisma.cuentascompletas.aggregate({
       _max: {
-        fecha_vencimiento: true,
-        fecha_compra: true,
+        updatedAt: true,
       },
     } as any);
 
-    const maxVence  = (agg as any)?._max?.fecha_vencimiento as Date | null | undefined;
-    const maxCompra = (agg as any)?._max?.fecha_compra as Date | null | undefined;
-
-    let latest: Date | null = null;
-    if (maxVence && maxCompra) latest = maxVence > maxCompra ? maxVence : maxCompra;
-    else latest = (maxVence ?? null) || (maxCompra ?? null);
+    const latest = (agg as any)?._max?.updatedAt as Date | null | undefined;
 
     // Stamp en segundos desde epoch
     let stamp = latest ? Math.floor(new Date(latest).getTime() / 1000) : 0;

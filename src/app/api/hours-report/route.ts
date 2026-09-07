@@ -15,7 +15,7 @@ export async function POST(req: Request) {
       extraLabel,
     } = body;
 
-    if (!startedAtISO || !stoppedAtISO || typeof workedMs !== "number") {
+    if (!startedAtISO || !stoppedAtISO || typeof workedMs !== "number" || !Number.isFinite(workedMs)) {
       return Response.json({ ok: false, error: "Datos incompletos" }, { status: 400 });
     }
 
@@ -24,6 +24,9 @@ export async function POST(req: Request) {
 
     const start = new Date(startedAtISO);
     const stop = new Date(stoppedAtISO);
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(stop.getTime()) || workedMs < 0 || workedMs > 24 * 60 * 60 * 1000) {
+      return Response.json({ ok: false, error: "Rango de tiempo inválido" }, { status: 400 });
+    }
 
     const dateStr = new Intl.DateTimeFormat("es-CO", {
       timeZone: TZ,

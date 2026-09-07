@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => null);
     if (!body) return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
 
-    let { correo, contrasena, proveedor, plataforma_id } = body as {
+    const { correo, contrasena, proveedor, plataforma_id } = body as {
       correo?: string;
       contrasena?: string | null;
       proveedor?: string | null;

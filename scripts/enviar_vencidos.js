@@ -7,6 +7,7 @@ const { spawn, execSync } = require('child_process');
 const http = require('http');
 const { chromium } = require('playwright');
 const mysql = require('mysql2/promise');
+const { parseWhatsAppContact, buildWhatsAppChatUrls } = require('./whatsapp-contact');
 
 /* =========================
  * CONFIG GENERAL
@@ -72,7 +73,7 @@ const FALLBACK_MS = 20_000;
 const PRE_SEND_TIMEOUT_MS = 45_000;
 const QUIET_PRE_MS = 1_200;
 const CHAT_RETRIES = 3;
-const GAP_BETWEEN_CONTACTS = 12_000;
+const GAP_BETWEEN_CONTACTS = 18_000;
 
 // Reinicia el navegador cada N contactos para evitar que Edge acumule
 // memoria y termine crasheando ("Target crashed") tras muchas recargas
@@ -494,11 +495,8 @@ async function focusEditorAtEnd(page, editor) {
  * CHAT READINESS
  * ========================= */
 async function ensureChatReady(page, phone, textEncoded) {
-  const variants = [
-    `https://web.whatsapp.com/send?phone=${encodeURIComponent(phone)}&text=${textEncoded}`,
-    `https://web.whatsapp.com/send/?phone=${encodeURIComponent(phone)}&text=${textEncoded}`,
-    `https://web.whatsapp.com/send?phone=${encodeURIComponent(phone)}&text=${textEncoded}&app_absent=0`,
-  ];
+  const variants = buildWhatsAppChatUrls(phone, textEncoded);
+  if (!variants.length) return false;
 
   for (let attempt = 1; attempt <= CHAT_RETRIES; attempt++) {
     const urlToOpen = variants[(attempt - 1) % variants.length];
@@ -738,8 +736,9 @@ function groupByPhone(rows) {
   const map = new Map();
 
   for (const r of rows) {
-    const phone = normalizePhone(r.contacto);
-    if (!isE164(phone)) continue;
+    const parsed = parseWhatsAppContact(r.contacto);
+    if (!parsed) continue;
+    const phone = parsed.value;
 
     const cur = map.get(phone) || { phone, items: [], nombre: r.nombre || null };
     cur.items.push(r);

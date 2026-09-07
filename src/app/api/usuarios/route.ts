@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 
 const UsuarioCreate = z.object({
-  contacto: z.string().min(5),   // p.ej. "+57 3.."
+  contacto: z.string().trim().min(3).max(191),
   nombre: z.string().min(1),
 });
 

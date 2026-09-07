@@ -3,11 +3,11 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getAuthenticatedAdminId } from "@/lib/adminSession";
+import { archiveDeletedAccount } from "@/lib/deletionHistory";
 
 /** Lee y valida el id desde ctx.params (que puede ser Promise en Next 15) */
-async function getId(
-  params: { id?: string } | Promise<{ id?: string }>
-): Promise<number | null> {
+async function getId(params: Promise<{ id?: string }>): Promise<number | null> {
   const p = await params;
   const n = Number(p?.id ?? "");
   if (!Number.isInteger(n) || n <= 0) return null;
@@ -36,7 +36,7 @@ const SELECT_ALL = {
  * ======================================================= */
 export async function GET(
   _req: Request,
-  ctx: { params: { id?: string } | Promise<{ id?: string }> }
+  ctx: { params: Promise<{ id?: string }> }
 ) {
   const id = await getId(ctx.params);
   if (!id) {
@@ -65,7 +65,7 @@ export async function GET(
  * ======================================================= */
 export async function PATCH(
   _req: Request,
-  ctx: { params: { id?: string } | Promise<{ id?: string }> }
+  ctx: { params: Promise<{ id?: string }> }
 ) {
   const id = await getId(ctx.params);
   if (!id) {
@@ -144,8 +144,8 @@ export async function PATCH(
  * DELETE /api/plataformas/:id
  * ======================================================= */
 export async function DELETE(
-  _req: Request,
-  ctx: { params: { id?: string } | Promise<{ id?: string }> }
+  req: Request,
+  ctx: { params: Promise<{ id?: string }> }
 ) {
   const id = await getId(ctx.params);
   if (!id) {
@@ -153,9 +153,33 @@ export async function DELETE(
   }
 
   try {
-    await prisma.plataformas.delete({ where: { id } });
+    const adminId = await getAuthenticatedAdminId(req);
+    await prisma.$transaction(async (tx) => {
+      const platform = await tx.plataformas.findUnique({
+        where: { id },
+        include: { inventario: true },
+      });
+      if (!platform) throw Object.assign(new Error('not-found'), { code: 'P2025' });
+
+      for (const item of platform.inventario) {
+        await archiveDeletedAccount(tx, {
+          plataformaId: platform.id,
+          plataforma: platform.nombre,
+          correo: item.correo,
+          clave: item.clave,
+          tipoRegistro: 'INVENTARIO',
+          tipoEliminacion: 'PLATAFORMA_CON_INVENTARIO',
+          identificadorOriginal: item.id,
+          eliminadoPorAdminId: adminId,
+        });
+      }
+      await tx.plataformas.delete({ where: { id } });
+    });
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err: any) {
+    if (err?.code === "P2025") {
+      return NextResponse.json({ error: "not-found" }, { status: 404 });
+    }
     if (err?.code === "P2003") {
       return NextResponse.json(
         { message: "No se puede eliminar: la plataforma tiene registros asociados." },

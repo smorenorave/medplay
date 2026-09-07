@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
+import { todayYMDBogota } from '@/lib/bogotaDate';
 
 /* ====================== Recharts (solo cliente) ====================== */
 const D = (name: keyof typeof import('recharts')) =>
@@ -47,6 +48,14 @@ type CuentaCompleta = {
 type Plataforma = { id: number; nombre: string };
 type DayPoint   = { day: string; total: number; pantallas: number; completas: number };
 type RankRow    = { name: string; count: number; total: number; pid: number|null };
+type AnnualPoint = {
+  month: number;
+  periodLabel: string;
+  label: string;
+  cuentas_completas: number;
+  pantallas: number;
+  total: number;
+};
 
 /* ====== Snapshot mensual (respuesta GET del router) ====== */
 type MonthlySnapshot = {
@@ -58,6 +67,9 @@ type MonthlySnapshot = {
   total_pantallas: number;
   total_cuentas: number;
   ventas_cantidad: number;
+  pantallas_vendidas: number;
+  cuentas_vendidas: number;
+  total_vendido_unidades: number;
   clientes_activos: number;
   ranking: RankRow[];
   ventas_dias: DayPoint[];
@@ -103,13 +115,11 @@ function safeDayInMonth(iso: string | null | undefined, year: number, month1to12
   return Math.min(Math.max(d, 1), diasMes);
 }
 
-const isFutureOrToday = (iso?: string | null) => {
+const isFuture = (iso?: string | null) => {
   if (!iso) return false;
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso).slice(0, 10));
   if (!m) return false;
-  const d = new Date(+m[1], +m[2]-1, +m[3]);
-  const a = new Date(new Date().toDateString());
-  return d.getTime() >= a.getTime();
+  return `${m[1]}-${m[2]}-${m[3]}` > todayYMDBogota();
 };
 
 const fmtDate = (iso?: string | null) => {
@@ -125,12 +135,6 @@ const fmt = (n: number) => new Intl.NumberFormat('es-CO', { minimumFractionDigit
 /* Colores */
 const PLATFORM_COLORS = ['#3b82f6','#22c55e','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f43f5e','#14b8a6','#eab308','#a855f7','#0ea5e9'];
 const colorForPid = (pid?: number | null) => PLATFORM_COLORS[Math.abs(Number(pid ?? 0)) % PLATFORM_COLORS.length];
-const withAlpha = (hex: string, a = 0.6) => {
-  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  if (!m) return hex;
-  const r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
-  return `rgba(${r}, ${g}, ${b}, ${a})`;
-};
 
 /* ====================== Normalización básica ====================== */
 async function fetchAll<T = any>(urlBase: string, opts: { limit?: number } = {}): Promise<T[]> {
@@ -185,11 +189,14 @@ export default function AdminPanel() {
   const [err, setErr] = useState<string|null>(null);
 
   /* ======== Estados snapshot / export ======== */
-  const [savingSnap, setSavingSnap] = useState(false);
   const [loadingSnap, setLoadingSnap] = useState(false);
   const [msg, setMsg] = useState<string|null>(null);
   const [viewMode, setViewMode] = useState<'live' | 'snapshot'>('live');
   const [snapshot, setSnapshot] = useState<MonthlySnapshot | null>(null);
+  const [annualOpen, setAnnualOpen] = useState(false);
+  const [annualData, setAnnualData] = useState<AnnualPoint[]>([]);
+  const [annualLoading, setAnnualLoading] = useState(false);
+  const [annualError, setAnnualError] = useState<string | null>(null);
 
   /* ======== Estados descarga de registros (XLSX/CSV locales) ======== */
   const [downloading, setDownloading] = useState(false);
@@ -233,8 +240,8 @@ export default function AdminPanel() {
     const pull = (iso?: string|null) => { const m = String(iso ?? '').match(/^(\d{4})/); if (m) years.add(Number(m[1])); };
     pantallas.forEach(p => { pull(p.fecha_compra); pull(p.fecha_vencimiento); });
     completas.forEach(c => { pull(c.fecha_compra); pull(c.fecha_vencimiento); });
-    const arr = Array.from(years.values()).sort((a,b)=>b-a);
-    return arr.length ? arr : [now.getFullYear()];
+    for (let offset = 0; offset < 6; offset++) years.add(now.getFullYear() - offset);
+    return Array.from(years.values()).sort((a,b)=>b-a);
   }, [pantallas, completas]);
 
   /* ===================== Agregaciones LIVE ===================== */
@@ -304,8 +311,8 @@ export default function AdminPanel() {
     });
 
     const activos =
-      pantallas.filter(p => isFutureOrToday(p.fecha_vencimiento)).length +
-      completas .filter(c => isFutureOrToday(c.fecha_vencimiento)).length;
+      pantallas.filter(p => isFuture(p.fecha_vencimiento)).length +
+      completas .filter(c => isFuture(c.fecha_vencimiento)).length;
 
     return {
       totalGeneral,
@@ -321,8 +328,7 @@ export default function AdminPanel() {
 
   const {
     totalGeneral, totalPantMonto, totalCompMonto,
-    totalPantUnid, totalCompUnid,
-    activos, porDia, ranking, perDayPerPlatform, monthPlatformKeys
+    activos, porDia, ranking
   } = agg;
 
   /* ===================== Helpers descarga ===================== */
@@ -334,58 +340,6 @@ export default function AdminPanel() {
     a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 800);
   }, []);
-
-  /* ===================== Guardar snapshot (POST) ===================== */
-  const buildVentasDiaPlataforma = useCallback(() => {
-    const out: { day: string; pid: number|null; tipo: 'C'|'P'; total: number }[] = [];
-    perDayPerPlatform.forEach((row) => {
-      const day = String(row.day);
-      monthPlatformKeys.forEach((k) => {
-        const pid = k === 'NA' ? null : Number(k);
-        out.push({ day, pid, tipo: 'C', total: Number(row[`C_${k}`] ?? 0) });
-        out.push({ day, pid, tipo: 'P', total: Number(row[`P_${k}`] ?? 0) });
-      });
-    });
-    return out;
-  }, [perDayPerPlatform, monthPlatformKeys]);
-
-  const saveMonthlySnapshot = useCallback(async () => {
-    try {
-      setSavingSnap(true); setMsg(null);
-      const payload = {
-        year, month,
-        total_general: totalGeneral,
-        total_pantallas: totalPantMonto,
-        total_cuentas: totalCompMonto,
-        clientes_activos: activos,
-        ventas_cantidad: totalPantUnid + totalCompUnid,
-        ranking: ranking.map(r => ({ name: r.name, count: r.count, total: r.total, pid: r.pid ?? null })),
-        ventas_dias: porDia.map(d => ({ day: d.day, total: d.total, pantallas: d.pantallas, completas: d.completas })),
-        ventas_dia_plataforma: buildVentasDiaPlataforma(), // opcional, el router la guarda en payload
-      };
-
-      const res = await fetch('/api/metricas-mensuales', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        let detail = '';
-        try { detail = (await res.json())?.detail || (await res.json())?.error || ''; } catch {}
-        throw new Error(detail || `Error ${res.status}`);
-      }
-
-      const saved: MonthlySnapshot = await res.json();
-      setMsg(`Snapshot guardado (${saved.periodLabel}).`);
-      setSnapshot(saved);
-      setViewMode('snapshot');
-    } catch (e: any) {
-      setMsg(e?.message ?? 'No se pudo guardar el snapshot');
-    } finally {
-      setSavingSnap(false);
-    }
-  }, [year, month, totalGeneral, totalPantMonto, totalCompMonto, activos, totalPantUnid, totalCompUnid, ranking, porDia, buildVentasDiaPlataforma]);
 
   /* ===================== Cargar snapshot (GET JSON) ===================== */
   const loadMonthlySnapshot = useCallback(async () => {
@@ -409,6 +363,32 @@ export default function AdminPanel() {
       setLoadingSnap(false);
     }
   }, [year, month]);
+
+  useEffect(() => {
+    void loadMonthlySnapshot();
+  }, [loadMonthlySnapshot]);
+
+  useEffect(() => {
+    if (!annualOpen) return;
+    let cancelled = false;
+    setAnnualLoading(true);
+    setAnnualError(null);
+    fetch(`/api/metricas-mensuales?year=${year}&annual=1`, { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Error ${response.status}`);
+        return response.json();
+      })
+      .then((data) => {
+        if (!cancelled) setAnnualData(Array.isArray(data?.months) ? data.months : []);
+      })
+      .catch((error) => {
+        if (!cancelled) setAnnualError(error?.message ?? 'No se pudo cargar la gráfica anual');
+      })
+      .finally(() => {
+        if (!cancelled) setAnnualLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [annualOpen, year]);
 
   const showLive = useCallback(() => {
     setViewMode('live');
@@ -550,6 +530,8 @@ export default function AdminPanel() {
   const kpi_pantallas  = isSnap ? snapshot!.total_pantallas : totalPantMonto;
   const kpi_completas  = isSnap ? snapshot!.total_cuentas   : totalCompMonto;
   const kpi_activos    = isSnap ? snapshot!.clientes_activos: activos;
+  const kpi_pantallas_unidades = isSnap ? snapshot!.pantallas_vendidas : agg.totalPantUnid;
+  const kpi_completas_unidades = isSnap ? snapshot!.cuentas_vendidas : agg.totalCompUnid;
   const seriePorDia    = isSnap ? snapshot!.ventas_dias     : porDia;
   const rankList       = isSnap ? snapshot!.ranking         : ranking;
 
@@ -570,23 +552,17 @@ export default function AdminPanel() {
             {Array.from({length:12}).map((_,i) => <option key={i+1} value={i+1}>{new Date(2020,i,1).toLocaleDateString('es-ES',{month:'long'})}</option>)}
           </select>
 
-          {/* Guardar / Ver snapshot */}
-          <button
-            type="button"
-            onClick={saveMonthlySnapshot}
-            disabled={savingSnap || loading}
-            className="rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800 disabled:opacity-60"
-          >
-            {savingSnap ? 'Guardando…' : 'Guardar snapshot mensual'}
-          </button>
+          <span className="rounded-md border border-sky-700/60 bg-sky-950/40 px-3 py-2 text-sm text-sky-100">
+            {loadingSnap ? 'Actualizando snapshot…' : 'Snapshot automático'}
+          </span>
 
           <button
             type="button"
-            onClick={loadMonthlySnapshot}
-            disabled={loadingSnap || loading}
-            className="rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800 disabled:opacity-60"
+            onClick={() => setAnnualOpen((current) => !current)}
+            className="rounded-md border border-violet-700 bg-violet-900/30 px-3 py-2 font-medium text-violet-100 hover:bg-violet-900/60"
+            aria-expanded={annualOpen}
           >
-            {loadingSnap ? 'Cargando…' : 'Ver snapshot guardado'}
+            {annualOpen ? 'Ocultar crecimiento anual' : 'Ver crecimiento anual'}
           </button>
 
           {isSnap && (
@@ -647,12 +623,52 @@ export default function AdminPanel() {
       {/* KPIs */}
       {!loading && !err && (
         <>
-          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
             <KPI title="Total vendido (mes)" value={`$ ${fmt(kpi_total)}`} />
-            <KPI title="Total Pantallas (mes)" value={`$ ${fmt(kpi_pantallas)}`} />
-            <KPI title="Total Cuentas completas (mes)" value={`$ ${fmt(kpi_completas)}`} />
+            <KPI title="Ingresos por pantallas" value={`$ ${fmt(kpi_pantallas)}`} />
+            <KPI title="Ingresos por cuentas" value={`$ ${fmt(kpi_completas)}`} />
+            <KPI title="Pantallas vendidas" value={fmt(kpi_pantallas_unidades)} />
+            <KPI title="Cuentas vendidas" value={fmt(kpi_completas_unidades)} />
             <KPI title="Clientes activos" value={fmt(kpi_activos)} />
           </section>
+
+          {annualOpen && (
+            <section className="rounded-2xl border border-violet-500/20 bg-neutral-950/60 p-4">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="font-semibold text-neutral-100">Crecimiento anual de ventas · {year}</h2>
+                  <p className="text-sm text-neutral-400">Unidades vendidas por mes, separadas por tipo de servicio.</p>
+                </div>
+                <div className="flex flex-wrap gap-3 text-xs text-neutral-300">
+                  <span><i className="mr-1 inline-block size-2 rounded-full bg-emerald-400" />Cuentas completas</span>
+                  <span><i className="mr-1 inline-block size-2 rounded-full bg-sky-400" />Pantallas</span>
+                  <span><i className="mr-1 inline-block size-2 rounded-full bg-violet-400" />Total</span>
+                </div>
+              </div>
+              {annualLoading && <div className="grid h-72 place-items-center text-neutral-400">Calculando snapshots del año…</div>}
+              {annualError && <div className="rounded-xl border border-red-800/60 bg-red-950/30 p-3 text-red-200">{annualError}</div>}
+              {!annualLoading && !annualError && annualData.length > 0 && (
+                <div className="h-80 min-w-0 overflow-x-auto">
+                  <div className="h-full min-w-[720px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={annualData} barGap={2}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                        <XAxis dataKey="label" tickFormatter={(value: string) => value.slice(0, 3)} />
+                        <YAxis allowDecimals={false} />
+                        <Tooltip labelFormatter={(label: string) => `${label} ${year}`} />
+                        <Bar dataKey="cuentas_completas" name="Cuentas completas" fill="#34d399" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="pantallas" name="Pantallas" fill="#38bdf8" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="total" name="Total general" fill="#a78bfa" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+              {!annualLoading && !annualError && annualData.length === 0 && (
+                <div className="grid h-40 place-items-center text-sm text-neutral-400">No hay ventas registradas para este año.</div>
+              )}
+            </section>
+          )}
 
           {/* Total vendido por día */}
           <section className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-4">

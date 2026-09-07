@@ -723,19 +723,13 @@ export default function CuentasPantallasVencidasPage() {
   };
 
   /* ====== BULK ====== */
-  const collectRows = (scope: "selected" | "visible") =>
-    scope === "selected"
-      ? rows.filter((r) => selected.has(`${r.tipo}:${r.id}`))
-      : filtered.slice(); // visibles
+  const collectRows = () =>
+    rows.filter((r) => selected.has(`${r.tipo}:${r.id}`));
 
-  const askBulkDelete = async (scope: "selected" | "visible") => {
-    const list = collectRows(scope);
+  const askBulkDelete = async () => {
+    const list = collectRows();
     if (list.length === 0) {
-      alert(
-        scope === "selected"
-          ? "No hay filas seleccionadas."
-          : "No hay filas visibles."
-      );
+      alert("No hay filas seleccionadas.");
       return;
     }
     // Pre-chequeo de "últimos"
@@ -752,7 +746,7 @@ export default function CuentasPantallasVencidasPage() {
       rows: list,
       lastKeys,
       normalKeys,
-      scope,
+      scope: "selected",
       busy: false,
       progress: 0,
       total: list.length,
@@ -1125,7 +1119,7 @@ export default function CuentasPantallasVencidasPage() {
 
   /* ====================== Render ====================== */
   return (
-    <div className="mx-auto max-w-[1200px] p-6 space-y-6">
+    <div className="mx-auto max-w-[1200px] space-y-5 p-3 sm:p-6">
       {/* Header */}
       <header className="flex flex-wrap items-center gap-3 justify-between">
         <div className="flex items-end gap-3">
@@ -1161,7 +1155,7 @@ export default function CuentasPantallasVencidasPage() {
           onChange={(e) =>
             setPlatFilter(e.target.value ? Number(e.target.value) : "all")
           }
-          className="w-48 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
+          className="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-neutral-100 outline-none focus:ring-2 focus:ring-sky-500 sm:w-48 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
         >
           <option value="">Todas las plataformas</option>
           {plataformas.map((p) => (
@@ -1174,7 +1168,7 @@ export default function CuentasPantallasVencidasPage() {
         <select
           value={tipoFilter}
           onChange={(e) => setTipoFilter(e.target.value as TipoFilter)}
-          className="w-48 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
+          className="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-neutral-100 outline-none focus:ring-2 focus:ring-sky-500 sm:w-48 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
         >
           <option value="all">Cuentas y Pantallas</option>
           <option value="cuenta">Solo Cuentas completas</option>
@@ -1183,7 +1177,7 @@ export default function CuentasPantallasVencidasPage() {
         <select
           value={view}
           onChange={(e) => setView(e.target.value as ViewFilter)}
-          className="w-56 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
+          className="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-neutral-100 outline-none focus:ring-2 focus:ring-sky-500 sm:w-56 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
         >
           <option value="todos">Todos</option>
           <option value="hoy">Vencen hoy</option>
@@ -1198,7 +1192,7 @@ export default function CuentasPantallasVencidasPage() {
           <div className="text-sm font-semibold text-neutral-200">
             Correos con <em>cambio de clave</em> ({pwChangedEmails.length})
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={copyEmails}
               disabled={pwChangedEmails.length === 0}
@@ -1349,7 +1343,7 @@ export default function CuentasPantallasVencidasPage() {
 
       {/* Tabla + Toolbar de borrado */}
       <section className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-4">
-        <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm font-semibold text-neutral-200">
             Vista:{" "}
             {view === "todos"
@@ -1360,27 +1354,29 @@ export default function CuentasPantallasVencidasPage() {
                   ? "Vencen mañana"
                   : "Anteriores a hoy (vencidas)"}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
             <button
-              onClick={() => askBulkDelete("selected")}
+              onClick={askBulkDelete}
               disabled={selected.size === 0}
               className="rounded-lg border border-rose-800 bg-rose-900/30 px-3 py-2 text-rose-100 hover:bg-rose-900/50 disabled:opacity-60"
               title="Eliminar los registros seleccionados"
             >
               Eliminar seleccionados
             </button>
-            <button
-              onClick={() => askBulkDelete("visible")}
-              disabled={filtered.length === 0}
-              className="rounded-lg border border-rose-800 bg-rose-900/30 px-3 py-2 text-rose-100 hover:bg-rose-900/50 disabled:opacity-60"
-              title="Eliminar todos los registros visibles (según filtros)"
-            >
-              Eliminar todos (visibles)
-            </button>
           </div>
         </div>
 
-        <div className="overflow-auto rounded border border-neutral-800">
+        <div className="grid gap-3 md:hidden">
+          {filtered.map((r) => <article key={`mobile-${r.tipo}-${r.id}`} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+            <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap gap-2"><span className="rounded-lg bg-sky-500/10 px-2 py-1 text-xs font-semibold text-sky-200">{platformName(r.plataforma_id)}</span><span className="rounded-lg bg-white/5 px-2 py-1 text-xs font-semibold text-neutral-300">{r.tipo === "pantalla" ? "Pantalla" : "Cuenta completa"}</span></div><h3 className="mt-3 truncate font-semibold text-white">{r.nombre || r.contacto || "Cliente sin nombre"}</h3><p className="mt-1 truncate text-sm text-neutral-400">{r.correo || "Sin correo"}</p></div><input type="checkbox" className="size-5 shrink-0 accent-sky-500" checked={selected.has(`${r.tipo}:${r.id}`)} onChange={() => setSelected((previous) => { const next = new Set(previous); const key = `${r.tipo}:${r.id}`; next.has(key) ? next.delete(key) : next.add(key); return next; })} aria-label={`Seleccionar ${r.tipo} ${r.id}`} /></div>
+            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-neutral-500">Vencimiento</dt><dd className="mt-0.5 font-medium text-rose-200">{r.fecha_vencimiento || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Contacto</dt><dd className="mt-0.5 truncate font-medium text-neutral-200">{r.contacto || "—"}</dd></div></dl>
+            {r.comentario && <p className="mt-4 line-clamp-2 rounded-xl bg-white/[0.035] p-3 text-xs leading-5 text-neutral-400">{r.comentario}</p>}
+            <button type="button" onClick={() => openEdit(r)} className="mt-4 min-h-11 w-full rounded-xl bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98]">Ver y editar</button>
+          </article>)}
+          {!filtered.length && <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-neutral-400">No se encontraron resultados.</div>}
+        </div>
+
+        <div className="hidden overflow-auto rounded border border-neutral-800 md:block">
           <table className="min-w-[1400px] w-full text-sm">
             <thead className="bg-neutral-900/70 sticky top-0 z-10">
               <tr className="text-xs uppercase text-neutral-400">
@@ -1862,7 +1858,7 @@ export default function CuentasPantallasVencidasPage() {
                 onClick={() => processBulk("delete")}
                 disabled={!!bulkModal.busy}
               >
-                {bulkModal.busy ? "Eliminando…" : "Eliminar todos"}
+                {bulkModal.busy ? "Eliminando…" : "Eliminar selección"}
               </button>
               <button
                 className="px-3 py-2 rounded-lg border border-amber-700 bg-amber-800/40 hover:bg-amber-800/60 disabled:opacity-60"

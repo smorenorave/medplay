@@ -5,6 +5,8 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
+import { getAuthenticatedAdminId } from '@/lib/adminSession';
+import { archiveDeletedAccount } from '@/lib/deletionHistory';
 
 /* ===========================================================
    Helpers
@@ -192,24 +194,52 @@ export async function PUT(
    DELETE /api/cuentascompartidas/[id]
 =========================================================== */
 export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } }
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const id = Number(params.id);
+  const { id: rawId } = await params;
+  const id = Number(rawId);
   if (!Number.isFinite(id)) {
     return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
   }
 
   try {
-    const refs = await prisma.pantallas.count({ where: { cuenta_id: id } });
-    if (refs > 0) {
+    const adminId = await getAuthenticatedAdminId(req);
+    const result = await prisma.$transaction(async (tx) => {
+      const row = await tx.cuentascompartidas.findUnique({
+        where: { id },
+        include: { plataformas: { select: { nombre: true } } },
+      });
+      if (!row) return { status: 'not-found' as const };
+
+      const refs = await tx.pantallas.count({ where: { cuenta_id: id } });
+      if (refs > 0) return { status: 'has-relations' as const };
+
+      await archiveDeletedAccount(tx, {
+        plataformaId: row.plataforma_id,
+        plataforma: row.plataformas?.nombre,
+        correo: row.correo,
+        clave: row.contrasena,
+        proveedor: row.proveedor,
+        tipoRegistro: 'CUENTA_COMPARTIDA',
+        tipoEliminacion: 'CUENTA_COMPARTIDA',
+        identificadorOriginal: row.id,
+        eliminadoPorAdminId: adminId,
+        datosRecuperacion: { cuentaCaida: row.cuenta_caida },
+      });
+      await tx.cuentascompartidas.delete({ where: { id } });
+      return { status: 'deleted' as const };
+    });
+
+    if (result.status === 'not-found') {
+      return NextResponse.json({ error: 'not-found' }, { status: 404 });
+    }
+    if (result.status === 'has-relations') {
       return NextResponse.json(
         { error: 'No se puede borrar: existen pantallas asociadas' },
         { status: 409 }
       );
     }
-
-    await prisma.cuentascompartidas.delete({ where: { id } });
     return NextResponse.json({ deleted: true }, { status: 200 });
   } catch (e: any) {
     return NextResponse.json(

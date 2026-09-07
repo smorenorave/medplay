@@ -11,14 +11,35 @@ function getSecret() {
   return new TextEncoder().encode(secret);
 }
 
-// Rutas a proteger:
-const PROTECTED_PREFIXES = ["/admin"];
+const PUBLIC_API_PATHS = new Set([
+  "/api/admin/login",
+  "/api/admin/logout",
+  "/api/admin/password-recovery/request",
+  "/api/admin/password-recovery/reset",
+  "/api/session/me",
+  "/api/session/ping",
+]);
+
+function isProtectedPath(pathname: string) {
+  return pathname.startsWith("/admin") ||
+    (pathname.startsWith("/api/") && !PUBLIC_API_PATHS.has(pathname));
+}
+
+function unauthorized(req: NextRequest, reason: string) {
+  if (req.nextUrl.pathname.startsWith("/api/")) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  const url = req.nextUrl.clone();
+  url.pathname = "/";
+  url.searchParams.set("reason", reason);
+  return NextResponse.redirect(url);
+}
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // ¿Está en una ruta protegida?
-  const protectedPath = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
+  const protectedPath = isProtectedPath(pathname);
   if (!protectedPath) {
     return NextResponse.next(); // no toca nada
   }
@@ -26,20 +47,14 @@ export async function middleware(req: NextRequest) {
   const token = req.cookies.get(TOKEN_COOKIE)?.value || "";
   if (!token) {
     // No hay token → redirigir al login (o a la home)
-    const url = req.nextUrl.clone();
-    url.pathname = "/";
-    url.searchParams.set("reason", "no-token");
-    return NextResponse.redirect(url);
+    return unauthorized(req, "no-token");
   }
 
   // Verificar JWT
   try {
     await jwtVerify(token, getSecret());
   } catch {
-    const url = req.nextUrl.clone();
-    url.pathname = "/";
-    url.searchParams.set("reason", "invalid-token");
-    const res = NextResponse.redirect(url);
+    const res = unauthorized(req, "invalid-token");
     // limpiar cookies corruptas
     res.cookies.set(TOKEN_COOKIE, "", { path: "/", maxAge: 0 });
     res.cookies.set(ACTIVITY_COOKIE, "", { path: "/", maxAge: 0 });
@@ -53,10 +68,7 @@ export async function middleware(req: NextRequest) {
   const inactive = !last || now - last > INACTIVITY_MS;
 
   if (inactive) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/";
-    url.searchParams.set("reason", "inactive");
-    const res = NextResponse.redirect(url);
+    const res = unauthorized(req, "inactive");
     res.cookies.set(TOKEN_COOKIE, "", { path: "/", maxAge: 0 });
     res.cookies.set(ACTIVITY_COOKIE, "", { path: "/", maxAge: 0 });
     return res;
@@ -65,7 +77,7 @@ export async function middleware(req: NextRequest) {
   // Si todo ok, AVANZA y refresca lastActivity para navegación del lado del servidor
   const res = NextResponse.next();
   res.cookies.set(ACTIVITY_COOKIE, String(now), {
-    httpOnly: false,
+    httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
@@ -75,5 +87,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*"], // protege /admin y sus subrutas
+  matcher: ["/admin/:path*", "/api/:path*"],
 };

@@ -23,7 +23,7 @@ model cuentascompartidas {
 
 model cuentascompletas {
   id                              BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
-  contacto                        String      @db.VarChar(50)
+  contacto                        String      @db.VarChar(191)
   plataforma_id                   Int
   proveedor                       String?     @db.VarChar(64)
   fecha_compra                    DateTime?   @db.Date
@@ -32,6 +32,7 @@ model cuentascompletas {
   total_pagado_completa           Decimal?    @db.Decimal(10, 2)
   estado                          String?     @db.VarChar(20)
   comentario                      String?     @db.Text
+  updatedAt                       DateTime    @default(now()) @updatedAt
   contrasena                      String      @map("contrasena") @db.VarChar(100)
   correo                          String      @db.VarChar(100)
   total_ganado                    Decimal?    @db.Decimal(18, 2)
@@ -42,12 +43,15 @@ model cuentascompletas {
   @@index([contacto], map: "idx_contacto")
   @@index([plataforma_id], map: "idx_plataforma_id")
   @@index([proveedor], map: "idx_proveedor")
+  @@index([updatedAt], map: "cuentascompletas_updatedAt_idx")
+  @@index([estado, fecha_vencimiento], map: "cuentascompletas_estado_vencimiento_idx")
+  @@index([plataforma_id, fecha_vencimiento], map: "cuentascompletas_plataforma_vencimiento_idx")
 }
 
 model pantallas {
   id                     Int                @id @default(autoincrement())
   cuenta_id              Int
-  contacto               String             @db.VarChar(50)
+  contacto               String             @db.VarChar(191)
   nro_pantalla           String             @db.VarChar(50)
   fecha_compra           DateTime           @db.Date
   fecha_vencimiento      DateTime           @db.Date
@@ -55,6 +59,7 @@ model pantallas {
   total_pagado           Decimal?           @default(0.00) @db.Decimal(10, 2)
   estado                 String             @db.VarChar(20)
   comentario             String?            @db.Text
+  updatedAt              DateTime           @default(now()) @updatedAt
   total_ganado           Decimal?           @db.Decimal(18, 2)
   total_pagado_proveedor Decimal?           @db.Decimal(18, 2)
   usuarios               usuarios           @relation(fields: [contacto], references: [contacto], onDelete: Cascade, map: "fk_pantalla_contacto")
@@ -62,6 +67,8 @@ model pantallas {
 
   @@index([contacto], map: "fk_pantalla_contacto")
   @@index([cuenta_id], map: "fk_pantalla_cuenta")
+  @@index([updatedAt], map: "pantallas_updatedAt_idx")
+  @@index([estado, fecha_vencimiento], map: "pantallas_estado_vencimiento_idx")
 }
 
 model plataformas {
@@ -78,7 +85,7 @@ model plataformas {
 }
 
 model usuarios {
-  contacto         String             @id @unique(map: "contacto_UNIQUE") @db.VarChar(50)
+  contacto         String             @id @unique(map: "contacto_UNIQUE") @db.VarChar(191)
   nombre           String?            @db.VarChar(100)
   cuentascompletas cuentascompletas[]
   pantallas        pantallas[]
@@ -116,29 +123,85 @@ model inventario {
 }
 
 model metricasmensuales {
-  id              Int      @id @default(autoincrement())
-  year            Int
-  month           Int
-  periodLabel     String
-  totalGeneral    Decimal  @db.Decimal(18, 2)
-  totalPantallas  Decimal  @db.Decimal(18, 2)
-  totalCuentas    Decimal  @db.Decimal(18, 2)
-  ventasCantidad  Int
-  clientesActivos Int
-  ranking         Json
-  ventasDias      Json
-  payload         Json?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                Int      @id @default(autoincrement())
+  year              Int
+  month             Int
+  periodLabel       String
+  totalGeneral      Decimal  @db.Decimal(18, 2)
+  totalPantallas    Decimal  @db.Decimal(18, 2)
+  totalCuentas      Decimal  @db.Decimal(18, 2)
+  ventasCantidad    Int
+  pantallasVendidas Int      @default(0)
+  cuentasVendidas   Int      @default(0)
+  clientesActivos   Int
+  ranking           Json
+  ventasDias        Json
+  payload           Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@unique([year, month], name: "year_month")
 }
 
 model admin {
-  id         Int      @id @default(autoincrement())
-  usuario    String   @unique @db.VarChar(100)
-  contrasena String   @db.VarChar(255)
-  creado_en  DateTime @default(now())
+  id              Int                       @id @default(autoincrement())
+  usuario         String                    @unique @db.VarChar(100)
+  email           String?                   @unique @db.VarChar(191)
+  contrasena      String                    @db.VarChar(255)
+  creado_en       DateTime                  @default(now())
+  resetTokens     adminPasswordResetToken[]
+  securityEvents  adminSecurityEvent[]
+  deletionHistory deletedAccountHistory[]
+}
+
+model deletedAccountHistory {
+  id                    BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  dedupeKey             String   @unique @db.VarChar(255)
+  plataformaId          Int?
+  plataforma            String   @db.VarChar(100)
+  correo                String   @db.VarChar(191)
+  clave                 String?  @db.VarChar(255)
+  proveedor             String?  @db.VarChar(100)
+  tipoRegistro          String   @db.VarChar(32)
+  tipoEliminacion       String   @db.VarChar(64)
+  identificadorOriginal String?  @db.VarChar(64)
+  eliminadoPorAdminId   Int?
+  datosRecuperacion     Json?
+  cantidadEliminaciones Int      @default(1)
+  primeraEliminacion    DateTime @default(now())
+  ultimaEliminacion     DateTime @default(now())
+  eliminadoPor          admin?   @relation(fields: [eliminadoPorAdminId], references: [id], onDelete: SetNull)
+
+  @@index([plataformaId, correo])
+  @@index([ultimaEliminacion])
+  @@index([eliminadoPorAdminId, ultimaEliminacion])
+}
+
+model adminPasswordResetToken {
+  id          Int       @id @default(autoincrement())
+  adminId     Int
+  tokenHash   String    @unique @db.Char(64)
+  expiresAt   DateTime
+  usedAt      DateTime?
+  requestedIp String?   @db.VarChar(64)
+  createdAt   DateTime  @default(now())
+  admin       admin     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId, expiresAt])
+}
+
+model adminSecurityEvent {
+  id        Int      @id @default(autoincrement())
+  adminId   Int?
+  eventType String   @db.VarChar(64)
+  success   Boolean
+  ip        String?  @db.VarChar(64)
+  metadata  Json?
+  createdAt DateTime @default(now())
+  admin     admin?   @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([adminId, createdAt])
+  @@index([eventType, createdAt])
 }
 
 enum LogStatus {

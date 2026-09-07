@@ -63,6 +63,21 @@ export type metricasmensuales = $Result.DefaultSelection<Prisma.$metricasmensual
  * 
  */
 export type admin = $Result.DefaultSelection<Prisma.$adminPayload>
+/**
+ * Model deletedAccountHistory
+ * 
+ */
+export type deletedAccountHistory = $Result.DefaultSelection<Prisma.$deletedAccountHistoryPayload>
+/**
+ * Model adminPasswordResetToken
+ * 
+ */
+export type adminPasswordResetToken = $Result.DefaultSelection<Prisma.$adminPasswordResetTokenPayload>
+/**
+ * Model adminSecurityEvent
+ * 
+ */
+export type adminSecurityEvent = $Result.DefaultSelection<Prisma.$adminSecurityEventPayload>
 
 /**
  * Enums
@@ -299,6 +314,36 @@ export class PrismaClient<
     * ```
     */
   get admin(): Prisma.adminDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.deletedAccountHistory`: Exposes CRUD operations for the **deletedAccountHistory** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more DeletedAccountHistories
+    * const deletedAccountHistories = await prisma.deletedAccountHistory.findMany()
+    * ```
+    */
+  get deletedAccountHistory(): Prisma.deletedAccountHistoryDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.adminPasswordResetToken`: Exposes CRUD operations for the **adminPasswordResetToken** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more AdminPasswordResetTokens
+    * const adminPasswordResetTokens = await prisma.adminPasswordResetToken.findMany()
+    * ```
+    */
+  get adminPasswordResetToken(): Prisma.adminPasswordResetTokenDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.adminSecurityEvent`: Exposes CRUD operations for the **adminSecurityEvent** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more AdminSecurityEvents
+    * const adminSecurityEvents = await prisma.adminSecurityEvent.findMany()
+    * ```
+    */
+  get adminSecurityEvent(): Prisma.adminSecurityEventDelegate<ExtArgs, ClientOptions>;
 }
 
 export namespace Prisma {
@@ -749,7 +794,10 @@ export namespace Prisma {
     wa_logs: 'wa_logs',
     inventario: 'inventario',
     metricasmensuales: 'metricasmensuales',
-    admin: 'admin'
+    admin: 'admin',
+    deletedAccountHistory: 'deletedAccountHistory',
+    adminPasswordResetToken: 'adminPasswordResetToken',
+    adminSecurityEvent: 'adminSecurityEvent'
   };
 
   export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -768,7 +816,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "cuentascompartidas" | "cuentascompletas" | "pantallas" | "plataformas" | "usuarios" | "wa_notificaciones" | "wa_logs" | "inventario" | "metricasmensuales" | "admin"
+      modelProps: "cuentascompartidas" | "cuentascompletas" | "pantallas" | "plataformas" | "usuarios" | "wa_notificaciones" | "wa_logs" | "inventario" | "metricasmensuales" | "admin" | "deletedAccountHistory" | "adminPasswordResetToken" | "adminSecurityEvent"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -1432,6 +1480,204 @@ export namespace Prisma {
           }
         }
       }
+      deletedAccountHistory: {
+        payload: Prisma.$deletedAccountHistoryPayload<ExtArgs>
+        fields: Prisma.deletedAccountHistoryFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.deletedAccountHistoryFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$deletedAccountHistoryPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.deletedAccountHistoryFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$deletedAccountHistoryPayload>
+          }
+          findFirst: {
+            args: Prisma.deletedAccountHistoryFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$deletedAccountHistoryPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.deletedAccountHistoryFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$deletedAccountHistoryPayload>
+          }
+          findMany: {
+            args: Prisma.deletedAccountHistoryFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$deletedAccountHistoryPayload>[]
+          }
+          create: {
+            args: Prisma.deletedAccountHistoryCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$deletedAccountHistoryPayload>
+          }
+          createMany: {
+            args: Prisma.deletedAccountHistoryCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          delete: {
+            args: Prisma.deletedAccountHistoryDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$deletedAccountHistoryPayload>
+          }
+          update: {
+            args: Prisma.deletedAccountHistoryUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$deletedAccountHistoryPayload>
+          }
+          deleteMany: {
+            args: Prisma.deletedAccountHistoryDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.deletedAccountHistoryUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          upsert: {
+            args: Prisma.deletedAccountHistoryUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$deletedAccountHistoryPayload>
+          }
+          aggregate: {
+            args: Prisma.DeletedAccountHistoryAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateDeletedAccountHistory>
+          }
+          groupBy: {
+            args: Prisma.deletedAccountHistoryGroupByArgs<ExtArgs>
+            result: $Utils.Optional<DeletedAccountHistoryGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.deletedAccountHistoryCountArgs<ExtArgs>
+            result: $Utils.Optional<DeletedAccountHistoryCountAggregateOutputType> | number
+          }
+        }
+      }
+      adminPasswordResetToken: {
+        payload: Prisma.$adminPasswordResetTokenPayload<ExtArgs>
+        fields: Prisma.adminPasswordResetTokenFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.adminPasswordResetTokenFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$adminPasswordResetTokenPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.adminPasswordResetTokenFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$adminPasswordResetTokenPayload>
+          }
+          findFirst: {
+            args: Prisma.adminPasswordResetTokenFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$adminPasswordResetTokenPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.adminPasswordResetTokenFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$adminPasswordResetTokenPayload>
+          }
+          findMany: {
+            args: Prisma.adminPasswordResetTokenFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$adminPasswordResetTokenPayload>[]
+          }
+          create: {
+            args: Prisma.adminPasswordResetTokenCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$adminPasswordResetTokenPayload>
+          }
+          createMany: {
+            args: Prisma.adminPasswordResetTokenCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          delete: {
+            args: Prisma.adminPasswordResetTokenDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$adminPasswordResetTokenPayload>
+          }
+          update: {
+            args: Prisma.adminPasswordResetTokenUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$adminPasswordResetTokenPayload>
+          }
+          deleteMany: {
+            args: Prisma.adminPasswordResetTokenDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.adminPasswordResetTokenUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          upsert: {
+            args: Prisma.adminPasswordResetTokenUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$adminPasswordResetTokenPayload>
+          }
+          aggregate: {
+            args: Prisma.AdminPasswordResetTokenAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateAdminPasswordResetToken>
+          }
+          groupBy: {
+            args: Prisma.adminPasswordResetTokenGroupByArgs<ExtArgs>
+            result: $Utils.Optional<AdminPasswordResetTokenGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.adminPasswordResetTokenCountArgs<ExtArgs>
+            result: $Utils.Optional<AdminPasswordResetTokenCountAggregateOutputType> | number
+          }
+        }
+      }
+      adminSecurityEvent: {
+        payload: Prisma.$adminSecurityEventPayload<ExtArgs>
+        fields: Prisma.adminSecurityEventFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.adminSecurityEventFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$adminSecurityEventPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.adminSecurityEventFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$adminSecurityEventPayload>
+          }
+          findFirst: {
+            args: Prisma.adminSecurityEventFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$adminSecurityEventPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.adminSecurityEventFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$adminSecurityEventPayload>
+          }
+          findMany: {
+            args: Prisma.adminSecurityEventFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$adminSecurityEventPayload>[]
+          }
+          create: {
+            args: Prisma.adminSecurityEventCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$adminSecurityEventPayload>
+          }
+          createMany: {
+            args: Prisma.adminSecurityEventCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          delete: {
+            args: Prisma.adminSecurityEventDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$adminSecurityEventPayload>
+          }
+          update: {
+            args: Prisma.adminSecurityEventUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$adminSecurityEventPayload>
+          }
+          deleteMany: {
+            args: Prisma.adminSecurityEventDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.adminSecurityEventUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          upsert: {
+            args: Prisma.adminSecurityEventUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$adminSecurityEventPayload>
+          }
+          aggregate: {
+            args: Prisma.AdminSecurityEventAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateAdminSecurityEvent>
+          }
+          groupBy: {
+            args: Prisma.adminSecurityEventGroupByArgs<ExtArgs>
+            result: $Utils.Optional<AdminSecurityEventGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.adminSecurityEventCountArgs<ExtArgs>
+            result: $Utils.Optional<AdminSecurityEventCountAggregateOutputType> | number
+          }
+        }
+      }
     }
   } & {
     other: {
@@ -1538,6 +1784,9 @@ export namespace Prisma {
     inventario?: inventarioOmit
     metricasmensuales?: metricasmensualesOmit
     admin?: adminOmit
+    deletedAccountHistory?: deletedAccountHistoryOmit
+    adminPasswordResetToken?: adminPasswordResetTokenOmit
+    adminSecurityEvent?: adminSecurityEventOmit
   }
 
   /* Types for Logging */
@@ -1730,6 +1979,55 @@ export namespace Prisma {
    */
   export type UsuariosCountOutputTypeCountPantallasArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: pantallasWhereInput
+  }
+
+
+  /**
+   * Count Type AdminCountOutputType
+   */
+
+  export type AdminCountOutputType = {
+    resetTokens: number
+    securityEvents: number
+    deletionHistory: number
+  }
+
+  export type AdminCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    resetTokens?: boolean | AdminCountOutputTypeCountResetTokensArgs
+    securityEvents?: boolean | AdminCountOutputTypeCountSecurityEventsArgs
+    deletionHistory?: boolean | AdminCountOutputTypeCountDeletionHistoryArgs
+  }
+
+  // Custom InputTypes
+  /**
+   * AdminCountOutputType without action
+   */
+  export type AdminCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AdminCountOutputType
+     */
+    select?: AdminCountOutputTypeSelect<ExtArgs> | null
+  }
+
+  /**
+   * AdminCountOutputType without action
+   */
+  export type AdminCountOutputTypeCountResetTokensArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: adminPasswordResetTokenWhereInput
+  }
+
+  /**
+   * AdminCountOutputType without action
+   */
+  export type AdminCountOutputTypeCountSecurityEventsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: adminSecurityEventWhereInput
+  }
+
+  /**
+   * AdminCountOutputType without action
+   */
+  export type AdminCountOutputTypeCountDeletionHistoryArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: deletedAccountHistoryWhereInput
   }
 
 
@@ -2805,6 +3103,7 @@ export namespace Prisma {
     total_pagado_completa: Decimal | null
     estado: string | null
     comentario: string | null
+    updatedAt: Date | null
     contrasena: string | null
     correo: string | null
     total_ganado: Decimal | null
@@ -2822,6 +3121,7 @@ export namespace Prisma {
     total_pagado_completa: Decimal | null
     estado: string | null
     comentario: string | null
+    updatedAt: Date | null
     contrasena: string | null
     correo: string | null
     total_ganado: Decimal | null
@@ -2839,6 +3139,7 @@ export namespace Prisma {
     total_pagado_completa: number
     estado: number
     comentario: number
+    updatedAt: number
     contrasena: number
     correo: number
     total_ganado: number
@@ -2876,6 +3177,7 @@ export namespace Prisma {
     total_pagado_completa?: true
     estado?: true
     comentario?: true
+    updatedAt?: true
     contrasena?: true
     correo?: true
     total_ganado?: true
@@ -2893,6 +3195,7 @@ export namespace Prisma {
     total_pagado_completa?: true
     estado?: true
     comentario?: true
+    updatedAt?: true
     contrasena?: true
     correo?: true
     total_ganado?: true
@@ -2910,6 +3213,7 @@ export namespace Prisma {
     total_pagado_completa?: true
     estado?: true
     comentario?: true
+    updatedAt?: true
     contrasena?: true
     correo?: true
     total_ganado?: true
@@ -3014,6 +3318,7 @@ export namespace Prisma {
     total_pagado_completa: Decimal | null
     estado: string | null
     comentario: string | null
+    updatedAt: Date
     contrasena: string
     correo: string
     total_ganado: Decimal | null
@@ -3050,6 +3355,7 @@ export namespace Prisma {
     total_pagado_completa?: boolean
     estado?: boolean
     comentario?: boolean
+    updatedAt?: boolean
     contrasena?: boolean
     correo?: boolean
     total_ganado?: boolean
@@ -3071,13 +3377,14 @@ export namespace Prisma {
     total_pagado_completa?: boolean
     estado?: boolean
     comentario?: boolean
+    updatedAt?: boolean
     contrasena?: boolean
     correo?: boolean
     total_ganado?: boolean
     total_pagado_proveedor_completa?: boolean
   }
 
-  export type cuentascompletasOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "contacto" | "plataforma_id" | "proveedor" | "fecha_compra" | "fecha_vencimiento" | "meses_pagados" | "total_pagado_completa" | "estado" | "comentario" | "contrasena" | "correo" | "total_ganado" | "total_pagado_proveedor_completa", ExtArgs["result"]["cuentascompletas"]>
+  export type cuentascompletasOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "contacto" | "plataforma_id" | "proveedor" | "fecha_compra" | "fecha_vencimiento" | "meses_pagados" | "total_pagado_completa" | "estado" | "comentario" | "updatedAt" | "contrasena" | "correo" | "total_ganado" | "total_pagado_proveedor_completa", ExtArgs["result"]["cuentascompletas"]>
   export type cuentascompletasInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     plataformas?: boolean | plataformasDefaultArgs<ExtArgs>
     usuarios?: boolean | usuariosDefaultArgs<ExtArgs>
@@ -3100,6 +3407,7 @@ export namespace Prisma {
       total_pagado_completa: Prisma.Decimal | null
       estado: string | null
       comentario: string | null
+      updatedAt: Date
       contrasena: string
       correo: string
       total_ganado: Prisma.Decimal | null
@@ -3485,6 +3793,7 @@ export namespace Prisma {
     readonly total_pagado_completa: FieldRef<"cuentascompletas", 'Decimal'>
     readonly estado: FieldRef<"cuentascompletas", 'String'>
     readonly comentario: FieldRef<"cuentascompletas", 'String'>
+    readonly updatedAt: FieldRef<"cuentascompletas", 'DateTime'>
     readonly contrasena: FieldRef<"cuentascompletas", 'String'>
     readonly correo: FieldRef<"cuentascompletas", 'String'>
     readonly total_ganado: FieldRef<"cuentascompletas", 'Decimal'>
@@ -3891,6 +4200,7 @@ export namespace Prisma {
     total_pagado: Decimal | null
     estado: string | null
     comentario: string | null
+    updatedAt: Date | null
     total_ganado: Decimal | null
     total_pagado_proveedor: Decimal | null
   }
@@ -3906,6 +4216,7 @@ export namespace Prisma {
     total_pagado: Decimal | null
     estado: string | null
     comentario: string | null
+    updatedAt: Date | null
     total_ganado: Decimal | null
     total_pagado_proveedor: Decimal | null
   }
@@ -3921,6 +4232,7 @@ export namespace Prisma {
     total_pagado: number
     estado: number
     comentario: number
+    updatedAt: number
     total_ganado: number
     total_pagado_proveedor: number
     _all: number
@@ -3956,6 +4268,7 @@ export namespace Prisma {
     total_pagado?: true
     estado?: true
     comentario?: true
+    updatedAt?: true
     total_ganado?: true
     total_pagado_proveedor?: true
   }
@@ -3971,6 +4284,7 @@ export namespace Prisma {
     total_pagado?: true
     estado?: true
     comentario?: true
+    updatedAt?: true
     total_ganado?: true
     total_pagado_proveedor?: true
   }
@@ -3986,6 +4300,7 @@ export namespace Prisma {
     total_pagado?: true
     estado?: true
     comentario?: true
+    updatedAt?: true
     total_ganado?: true
     total_pagado_proveedor?: true
     _all?: true
@@ -4088,6 +4403,7 @@ export namespace Prisma {
     total_pagado: Decimal | null
     estado: string
     comentario: string | null
+    updatedAt: Date
     total_ganado: Decimal | null
     total_pagado_proveedor: Decimal | null
     _count: PantallasCountAggregateOutputType | null
@@ -4122,6 +4438,7 @@ export namespace Prisma {
     total_pagado?: boolean
     estado?: boolean
     comentario?: boolean
+    updatedAt?: boolean
     total_ganado?: boolean
     total_pagado_proveedor?: boolean
     usuarios?: boolean | usuariosDefaultArgs<ExtArgs>
@@ -4141,11 +4458,12 @@ export namespace Prisma {
     total_pagado?: boolean
     estado?: boolean
     comentario?: boolean
+    updatedAt?: boolean
     total_ganado?: boolean
     total_pagado_proveedor?: boolean
   }
 
-  export type pantallasOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "cuenta_id" | "contacto" | "nro_pantalla" | "fecha_compra" | "fecha_vencimiento" | "meses_pagados" | "total_pagado" | "estado" | "comentario" | "total_ganado" | "total_pagado_proveedor", ExtArgs["result"]["pantallas"]>
+  export type pantallasOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "cuenta_id" | "contacto" | "nro_pantalla" | "fecha_compra" | "fecha_vencimiento" | "meses_pagados" | "total_pagado" | "estado" | "comentario" | "updatedAt" | "total_ganado" | "total_pagado_proveedor", ExtArgs["result"]["pantallas"]>
   export type pantallasInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     usuarios?: boolean | usuariosDefaultArgs<ExtArgs>
     cuentascompartidas?: boolean | cuentascompartidasDefaultArgs<ExtArgs>
@@ -4168,6 +4486,7 @@ export namespace Prisma {
       total_pagado: Prisma.Decimal | null
       estado: string
       comentario: string | null
+      updatedAt: Date
       total_ganado: Prisma.Decimal | null
       total_pagado_proveedor: Prisma.Decimal | null
     }, ExtArgs["result"]["pantallas"]>
@@ -4551,6 +4870,7 @@ export namespace Prisma {
     readonly total_pagado: FieldRef<"pantallas", 'Decimal'>
     readonly estado: FieldRef<"pantallas", 'String'>
     readonly comentario: FieldRef<"pantallas", 'String'>
+    readonly updatedAt: FieldRef<"pantallas", 'DateTime'>
     readonly total_ganado: FieldRef<"pantallas", 'Decimal'>
     readonly total_pagado_proveedor: FieldRef<"pantallas", 'Decimal'>
   }
@@ -9748,6 +10068,8 @@ export namespace Prisma {
     totalPantallas: Decimal | null
     totalCuentas: Decimal | null
     ventasCantidad: number | null
+    pantallasVendidas: number | null
+    cuentasVendidas: number | null
     clientesActivos: number | null
   }
 
@@ -9759,6 +10081,8 @@ export namespace Prisma {
     totalPantallas: Decimal | null
     totalCuentas: Decimal | null
     ventasCantidad: number | null
+    pantallasVendidas: number | null
+    cuentasVendidas: number | null
     clientesActivos: number | null
   }
 
@@ -9771,6 +10095,8 @@ export namespace Prisma {
     totalPantallas: Decimal | null
     totalCuentas: Decimal | null
     ventasCantidad: number | null
+    pantallasVendidas: number | null
+    cuentasVendidas: number | null
     clientesActivos: number | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -9785,6 +10111,8 @@ export namespace Prisma {
     totalPantallas: Decimal | null
     totalCuentas: Decimal | null
     ventasCantidad: number | null
+    pantallasVendidas: number | null
+    cuentasVendidas: number | null
     clientesActivos: number | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -9799,6 +10127,8 @@ export namespace Prisma {
     totalPantallas: number
     totalCuentas: number
     ventasCantidad: number
+    pantallasVendidas: number
+    cuentasVendidas: number
     clientesActivos: number
     ranking: number
     ventasDias: number
@@ -9817,6 +10147,8 @@ export namespace Prisma {
     totalPantallas?: true
     totalCuentas?: true
     ventasCantidad?: true
+    pantallasVendidas?: true
+    cuentasVendidas?: true
     clientesActivos?: true
   }
 
@@ -9828,6 +10160,8 @@ export namespace Prisma {
     totalPantallas?: true
     totalCuentas?: true
     ventasCantidad?: true
+    pantallasVendidas?: true
+    cuentasVendidas?: true
     clientesActivos?: true
   }
 
@@ -9840,6 +10174,8 @@ export namespace Prisma {
     totalPantallas?: true
     totalCuentas?: true
     ventasCantidad?: true
+    pantallasVendidas?: true
+    cuentasVendidas?: true
     clientesActivos?: true
     createdAt?: true
     updatedAt?: true
@@ -9854,6 +10190,8 @@ export namespace Prisma {
     totalPantallas?: true
     totalCuentas?: true
     ventasCantidad?: true
+    pantallasVendidas?: true
+    cuentasVendidas?: true
     clientesActivos?: true
     createdAt?: true
     updatedAt?: true
@@ -9868,6 +10206,8 @@ export namespace Prisma {
     totalPantallas?: true
     totalCuentas?: true
     ventasCantidad?: true
+    pantallasVendidas?: true
+    cuentasVendidas?: true
     clientesActivos?: true
     ranking?: true
     ventasDias?: true
@@ -9972,6 +10312,8 @@ export namespace Prisma {
     totalPantallas: Decimal
     totalCuentas: Decimal
     ventasCantidad: number
+    pantallasVendidas: number
+    cuentasVendidas: number
     clientesActivos: number
     ranking: JsonValue
     ventasDias: JsonValue
@@ -10008,6 +10350,8 @@ export namespace Prisma {
     totalPantallas?: boolean
     totalCuentas?: boolean
     ventasCantidad?: boolean
+    pantallasVendidas?: boolean
+    cuentasVendidas?: boolean
     clientesActivos?: boolean
     ranking?: boolean
     ventasDias?: boolean
@@ -10027,6 +10371,8 @@ export namespace Prisma {
     totalPantallas?: boolean
     totalCuentas?: boolean
     ventasCantidad?: boolean
+    pantallasVendidas?: boolean
+    cuentasVendidas?: boolean
     clientesActivos?: boolean
     ranking?: boolean
     ventasDias?: boolean
@@ -10035,7 +10381,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type metricasmensualesOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "year" | "month" | "periodLabel" | "totalGeneral" | "totalPantallas" | "totalCuentas" | "ventasCantidad" | "clientesActivos" | "ranking" | "ventasDias" | "payload" | "createdAt" | "updatedAt", ExtArgs["result"]["metricasmensuales"]>
+  export type metricasmensualesOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "year" | "month" | "periodLabel" | "totalGeneral" | "totalPantallas" | "totalCuentas" | "ventasCantidad" | "pantallasVendidas" | "cuentasVendidas" | "clientesActivos" | "ranking" | "ventasDias" | "payload" | "createdAt" | "updatedAt", ExtArgs["result"]["metricasmensuales"]>
 
   export type $metricasmensualesPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "metricasmensuales"
@@ -10049,6 +10395,8 @@ export namespace Prisma {
       totalPantallas: Prisma.Decimal
       totalCuentas: Prisma.Decimal
       ventasCantidad: number
+      pantallasVendidas: number
+      cuentasVendidas: number
       clientesActivos: number
       ranking: Prisma.JsonValue
       ventasDias: Prisma.JsonValue
@@ -10432,6 +10780,8 @@ export namespace Prisma {
     readonly totalPantallas: FieldRef<"metricasmensuales", 'Decimal'>
     readonly totalCuentas: FieldRef<"metricasmensuales", 'Decimal'>
     readonly ventasCantidad: FieldRef<"metricasmensuales", 'Int'>
+    readonly pantallasVendidas: FieldRef<"metricasmensuales", 'Int'>
+    readonly cuentasVendidas: FieldRef<"metricasmensuales", 'Int'>
     readonly clientesActivos: FieldRef<"metricasmensuales", 'Int'>
     readonly ranking: FieldRef<"metricasmensuales", 'Json'>
     readonly ventasDias: FieldRef<"metricasmensuales", 'Json'>
@@ -10782,6 +11132,7 @@ export namespace Prisma {
   export type AdminMinAggregateOutputType = {
     id: number | null
     usuario: string | null
+    email: string | null
     contrasena: string | null
     creado_en: Date | null
   }
@@ -10789,6 +11140,7 @@ export namespace Prisma {
   export type AdminMaxAggregateOutputType = {
     id: number | null
     usuario: string | null
+    email: string | null
     contrasena: string | null
     creado_en: Date | null
   }
@@ -10796,6 +11148,7 @@ export namespace Prisma {
   export type AdminCountAggregateOutputType = {
     id: number
     usuario: number
+    email: number
     contrasena: number
     creado_en: number
     _all: number
@@ -10813,6 +11166,7 @@ export namespace Prisma {
   export type AdminMinAggregateInputType = {
     id?: true
     usuario?: true
+    email?: true
     contrasena?: true
     creado_en?: true
   }
@@ -10820,6 +11174,7 @@ export namespace Prisma {
   export type AdminMaxAggregateInputType = {
     id?: true
     usuario?: true
+    email?: true
     contrasena?: true
     creado_en?: true
   }
@@ -10827,6 +11182,7 @@ export namespace Prisma {
   export type AdminCountAggregateInputType = {
     id?: true
     usuario?: true
+    email?: true
     contrasena?: true
     creado_en?: true
     _all?: true
@@ -10921,6 +11277,7 @@ export namespace Prisma {
   export type AdminGroupByOutputType = {
     id: number
     usuario: string
+    email: string | null
     contrasena: string
     creado_en: Date
     _count: AdminCountAggregateOutputType | null
@@ -10947,8 +11304,13 @@ export namespace Prisma {
   export type adminSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
     usuario?: boolean
+    email?: boolean
     contrasena?: boolean
     creado_en?: boolean
+    resetTokens?: boolean | admin$resetTokensArgs<ExtArgs>
+    securityEvents?: boolean | admin$securityEventsArgs<ExtArgs>
+    deletionHistory?: boolean | admin$deletionHistoryArgs<ExtArgs>
+    _count?: boolean | AdminCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["admin"]>
 
 
@@ -10956,18 +11318,30 @@ export namespace Prisma {
   export type adminSelectScalar = {
     id?: boolean
     usuario?: boolean
+    email?: boolean
     contrasena?: boolean
     creado_en?: boolean
   }
 
-  export type adminOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "usuario" | "contrasena" | "creado_en", ExtArgs["result"]["admin"]>
+  export type adminOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "usuario" | "email" | "contrasena" | "creado_en", ExtArgs["result"]["admin"]>
+  export type adminInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    resetTokens?: boolean | admin$resetTokensArgs<ExtArgs>
+    securityEvents?: boolean | admin$securityEventsArgs<ExtArgs>
+    deletionHistory?: boolean | admin$deletionHistoryArgs<ExtArgs>
+    _count?: boolean | AdminCountOutputTypeDefaultArgs<ExtArgs>
+  }
 
   export type $adminPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "admin"
-    objects: {}
+    objects: {
+      resetTokens: Prisma.$adminPasswordResetTokenPayload<ExtArgs>[]
+      securityEvents: Prisma.$adminSecurityEventPayload<ExtArgs>[]
+      deletionHistory: Prisma.$deletedAccountHistoryPayload<ExtArgs>[]
+    }
     scalars: $Extensions.GetPayloadResult<{
       id: number
       usuario: string
+      email: string | null
       contrasena: string
       creado_en: Date
     }, ExtArgs["result"]["admin"]>
@@ -11310,6 +11684,9 @@ export namespace Prisma {
    */
   export interface Prisma__adminClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
     readonly [Symbol.toStringTag]: "PrismaPromise"
+    resetTokens<T extends admin$resetTokensArgs<ExtArgs> = {}>(args?: Subset<T, admin$resetTokensArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$adminPasswordResetTokenPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    securityEvents<T extends admin$securityEventsArgs<ExtArgs> = {}>(args?: Subset<T, admin$securityEventsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$adminSecurityEventPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    deletionHistory<T extends admin$deletionHistoryArgs<ExtArgs> = {}>(args?: Subset<T, admin$deletionHistoryArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$deletedAccountHistoryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -11341,6 +11718,7 @@ export namespace Prisma {
   interface adminFieldRefs {
     readonly id: FieldRef<"admin", 'Int'>
     readonly usuario: FieldRef<"admin", 'String'>
+    readonly email: FieldRef<"admin", 'String'>
     readonly contrasena: FieldRef<"admin", 'String'>
     readonly creado_en: FieldRef<"admin", 'DateTime'>
   }
@@ -11360,6 +11738,10 @@ export namespace Prisma {
      */
     omit?: adminOmit<ExtArgs> | null
     /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminInclude<ExtArgs> | null
+    /**
      * Filter, which admin to fetch.
      */
     where: adminWhereUniqueInput
@@ -11378,6 +11760,10 @@ export namespace Prisma {
      */
     omit?: adminOmit<ExtArgs> | null
     /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminInclude<ExtArgs> | null
+    /**
      * Filter, which admin to fetch.
      */
     where: adminWhereUniqueInput
@@ -11395,6 +11781,10 @@ export namespace Prisma {
      * Omit specific fields from the admin
      */
     omit?: adminOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminInclude<ExtArgs> | null
     /**
      * Filter, which admin to fetch.
      */
@@ -11444,6 +11834,10 @@ export namespace Prisma {
      */
     omit?: adminOmit<ExtArgs> | null
     /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminInclude<ExtArgs> | null
+    /**
      * Filter, which admin to fetch.
      */
     where?: adminWhereInput
@@ -11492,6 +11886,10 @@ export namespace Prisma {
      */
     omit?: adminOmit<ExtArgs> | null
     /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminInclude<ExtArgs> | null
+    /**
      * Filter, which admins to fetch.
      */
     where?: adminWhereInput
@@ -11535,6 +11933,10 @@ export namespace Prisma {
      */
     omit?: adminOmit<ExtArgs> | null
     /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminInclude<ExtArgs> | null
+    /**
      * The data needed to create a admin.
      */
     data: XOR<adminCreateInput, adminUncheckedCreateInput>
@@ -11563,6 +11965,10 @@ export namespace Prisma {
      * Omit specific fields from the admin
      */
     omit?: adminOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminInclude<ExtArgs> | null
     /**
      * The data needed to update a admin.
      */
@@ -11604,6 +12010,10 @@ export namespace Prisma {
      */
     omit?: adminOmit<ExtArgs> | null
     /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminInclude<ExtArgs> | null
+    /**
      * The filter to search for the admin to update in case it exists.
      */
     where: adminWhereUniqueInput
@@ -11630,6 +12040,10 @@ export namespace Prisma {
      */
     omit?: adminOmit<ExtArgs> | null
     /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminInclude<ExtArgs> | null
+    /**
      * Filter which admin to delete.
      */
     where: adminWhereUniqueInput
@@ -11650,6 +12064,78 @@ export namespace Prisma {
   }
 
   /**
+   * admin.resetTokens
+   */
+  export type admin$resetTokensArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminPasswordResetToken
+     */
+    select?: adminPasswordResetTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminPasswordResetToken
+     */
+    omit?: adminPasswordResetTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminPasswordResetTokenInclude<ExtArgs> | null
+    where?: adminPasswordResetTokenWhereInput
+    orderBy?: adminPasswordResetTokenOrderByWithRelationInput | adminPasswordResetTokenOrderByWithRelationInput[]
+    cursor?: adminPasswordResetTokenWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: AdminPasswordResetTokenScalarFieldEnum | AdminPasswordResetTokenScalarFieldEnum[]
+  }
+
+  /**
+   * admin.securityEvents
+   */
+  export type admin$securityEventsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminSecurityEvent
+     */
+    select?: adminSecurityEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminSecurityEvent
+     */
+    omit?: adminSecurityEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminSecurityEventInclude<ExtArgs> | null
+    where?: adminSecurityEventWhereInput
+    orderBy?: adminSecurityEventOrderByWithRelationInput | adminSecurityEventOrderByWithRelationInput[]
+    cursor?: adminSecurityEventWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: AdminSecurityEventScalarFieldEnum | AdminSecurityEventScalarFieldEnum[]
+  }
+
+  /**
+   * admin.deletionHistory
+   */
+  export type admin$deletionHistoryArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the deletedAccountHistory
+     */
+    select?: deletedAccountHistorySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the deletedAccountHistory
+     */
+    omit?: deletedAccountHistoryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: deletedAccountHistoryInclude<ExtArgs> | null
+    where?: deletedAccountHistoryWhereInput
+    orderBy?: deletedAccountHistoryOrderByWithRelationInput | deletedAccountHistoryOrderByWithRelationInput[]
+    cursor?: deletedAccountHistoryWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: DeletedAccountHistoryScalarFieldEnum | DeletedAccountHistoryScalarFieldEnum[]
+  }
+
+  /**
    * admin without action
    */
   export type adminDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -11661,6 +12147,3103 @@ export namespace Prisma {
      * Omit specific fields from the admin
      */
     omit?: adminOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model deletedAccountHistory
+   */
+
+  export type AggregateDeletedAccountHistory = {
+    _count: DeletedAccountHistoryCountAggregateOutputType | null
+    _avg: DeletedAccountHistoryAvgAggregateOutputType | null
+    _sum: DeletedAccountHistorySumAggregateOutputType | null
+    _min: DeletedAccountHistoryMinAggregateOutputType | null
+    _max: DeletedAccountHistoryMaxAggregateOutputType | null
+  }
+
+  export type DeletedAccountHistoryAvgAggregateOutputType = {
+    id: number | null
+    plataformaId: number | null
+    eliminadoPorAdminId: number | null
+    cantidadEliminaciones: number | null
+  }
+
+  export type DeletedAccountHistorySumAggregateOutputType = {
+    id: bigint | null
+    plataformaId: number | null
+    eliminadoPorAdminId: number | null
+    cantidadEliminaciones: number | null
+  }
+
+  export type DeletedAccountHistoryMinAggregateOutputType = {
+    id: bigint | null
+    dedupeKey: string | null
+    plataformaId: number | null
+    plataforma: string | null
+    correo: string | null
+    clave: string | null
+    proveedor: string | null
+    tipoRegistro: string | null
+    tipoEliminacion: string | null
+    identificadorOriginal: string | null
+    eliminadoPorAdminId: number | null
+    cantidadEliminaciones: number | null
+    primeraEliminacion: Date | null
+    ultimaEliminacion: Date | null
+  }
+
+  export type DeletedAccountHistoryMaxAggregateOutputType = {
+    id: bigint | null
+    dedupeKey: string | null
+    plataformaId: number | null
+    plataforma: string | null
+    correo: string | null
+    clave: string | null
+    proveedor: string | null
+    tipoRegistro: string | null
+    tipoEliminacion: string | null
+    identificadorOriginal: string | null
+    eliminadoPorAdminId: number | null
+    cantidadEliminaciones: number | null
+    primeraEliminacion: Date | null
+    ultimaEliminacion: Date | null
+  }
+
+  export type DeletedAccountHistoryCountAggregateOutputType = {
+    id: number
+    dedupeKey: number
+    plataformaId: number
+    plataforma: number
+    correo: number
+    clave: number
+    proveedor: number
+    tipoRegistro: number
+    tipoEliminacion: number
+    identificadorOriginal: number
+    eliminadoPorAdminId: number
+    datosRecuperacion: number
+    cantidadEliminaciones: number
+    primeraEliminacion: number
+    ultimaEliminacion: number
+    _all: number
+  }
+
+
+  export type DeletedAccountHistoryAvgAggregateInputType = {
+    id?: true
+    plataformaId?: true
+    eliminadoPorAdminId?: true
+    cantidadEliminaciones?: true
+  }
+
+  export type DeletedAccountHistorySumAggregateInputType = {
+    id?: true
+    plataformaId?: true
+    eliminadoPorAdminId?: true
+    cantidadEliminaciones?: true
+  }
+
+  export type DeletedAccountHistoryMinAggregateInputType = {
+    id?: true
+    dedupeKey?: true
+    plataformaId?: true
+    plataforma?: true
+    correo?: true
+    clave?: true
+    proveedor?: true
+    tipoRegistro?: true
+    tipoEliminacion?: true
+    identificadorOriginal?: true
+    eliminadoPorAdminId?: true
+    cantidadEliminaciones?: true
+    primeraEliminacion?: true
+    ultimaEliminacion?: true
+  }
+
+  export type DeletedAccountHistoryMaxAggregateInputType = {
+    id?: true
+    dedupeKey?: true
+    plataformaId?: true
+    plataforma?: true
+    correo?: true
+    clave?: true
+    proveedor?: true
+    tipoRegistro?: true
+    tipoEliminacion?: true
+    identificadorOriginal?: true
+    eliminadoPorAdminId?: true
+    cantidadEliminaciones?: true
+    primeraEliminacion?: true
+    ultimaEliminacion?: true
+  }
+
+  export type DeletedAccountHistoryCountAggregateInputType = {
+    id?: true
+    dedupeKey?: true
+    plataformaId?: true
+    plataforma?: true
+    correo?: true
+    clave?: true
+    proveedor?: true
+    tipoRegistro?: true
+    tipoEliminacion?: true
+    identificadorOriginal?: true
+    eliminadoPorAdminId?: true
+    datosRecuperacion?: true
+    cantidadEliminaciones?: true
+    primeraEliminacion?: true
+    ultimaEliminacion?: true
+    _all?: true
+  }
+
+  export type DeletedAccountHistoryAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which deletedAccountHistory to aggregate.
+     */
+    where?: deletedAccountHistoryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of deletedAccountHistories to fetch.
+     */
+    orderBy?: deletedAccountHistoryOrderByWithRelationInput | deletedAccountHistoryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: deletedAccountHistoryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` deletedAccountHistories from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` deletedAccountHistories.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned deletedAccountHistories
+    **/
+    _count?: true | DeletedAccountHistoryCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: DeletedAccountHistoryAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: DeletedAccountHistorySumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: DeletedAccountHistoryMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: DeletedAccountHistoryMaxAggregateInputType
+  }
+
+  export type GetDeletedAccountHistoryAggregateType<T extends DeletedAccountHistoryAggregateArgs> = {
+        [P in keyof T & keyof AggregateDeletedAccountHistory]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateDeletedAccountHistory[P]>
+      : GetScalarType<T[P], AggregateDeletedAccountHistory[P]>
+  }
+
+
+
+
+  export type deletedAccountHistoryGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: deletedAccountHistoryWhereInput
+    orderBy?: deletedAccountHistoryOrderByWithAggregationInput | deletedAccountHistoryOrderByWithAggregationInput[]
+    by: DeletedAccountHistoryScalarFieldEnum[] | DeletedAccountHistoryScalarFieldEnum
+    having?: deletedAccountHistoryScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: DeletedAccountHistoryCountAggregateInputType | true
+    _avg?: DeletedAccountHistoryAvgAggregateInputType
+    _sum?: DeletedAccountHistorySumAggregateInputType
+    _min?: DeletedAccountHistoryMinAggregateInputType
+    _max?: DeletedAccountHistoryMaxAggregateInputType
+  }
+
+  export type DeletedAccountHistoryGroupByOutputType = {
+    id: bigint
+    dedupeKey: string
+    plataformaId: number | null
+    plataforma: string
+    correo: string
+    clave: string | null
+    proveedor: string | null
+    tipoRegistro: string
+    tipoEliminacion: string
+    identificadorOriginal: string | null
+    eliminadoPorAdminId: number | null
+    datosRecuperacion: JsonValue | null
+    cantidadEliminaciones: number
+    primeraEliminacion: Date
+    ultimaEliminacion: Date
+    _count: DeletedAccountHistoryCountAggregateOutputType | null
+    _avg: DeletedAccountHistoryAvgAggregateOutputType | null
+    _sum: DeletedAccountHistorySumAggregateOutputType | null
+    _min: DeletedAccountHistoryMinAggregateOutputType | null
+    _max: DeletedAccountHistoryMaxAggregateOutputType | null
+  }
+
+  type GetDeletedAccountHistoryGroupByPayload<T extends deletedAccountHistoryGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<DeletedAccountHistoryGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof DeletedAccountHistoryGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], DeletedAccountHistoryGroupByOutputType[P]>
+            : GetScalarType<T[P], DeletedAccountHistoryGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type deletedAccountHistorySelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    dedupeKey?: boolean
+    plataformaId?: boolean
+    plataforma?: boolean
+    correo?: boolean
+    clave?: boolean
+    proveedor?: boolean
+    tipoRegistro?: boolean
+    tipoEliminacion?: boolean
+    identificadorOriginal?: boolean
+    eliminadoPorAdminId?: boolean
+    datosRecuperacion?: boolean
+    cantidadEliminaciones?: boolean
+    primeraEliminacion?: boolean
+    ultimaEliminacion?: boolean
+    eliminadoPor?: boolean | deletedAccountHistory$eliminadoPorArgs<ExtArgs>
+  }, ExtArgs["result"]["deletedAccountHistory"]>
+
+
+
+  export type deletedAccountHistorySelectScalar = {
+    id?: boolean
+    dedupeKey?: boolean
+    plataformaId?: boolean
+    plataforma?: boolean
+    correo?: boolean
+    clave?: boolean
+    proveedor?: boolean
+    tipoRegistro?: boolean
+    tipoEliminacion?: boolean
+    identificadorOriginal?: boolean
+    eliminadoPorAdminId?: boolean
+    datosRecuperacion?: boolean
+    cantidadEliminaciones?: boolean
+    primeraEliminacion?: boolean
+    ultimaEliminacion?: boolean
+  }
+
+  export type deletedAccountHistoryOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "dedupeKey" | "plataformaId" | "plataforma" | "correo" | "clave" | "proveedor" | "tipoRegistro" | "tipoEliminacion" | "identificadorOriginal" | "eliminadoPorAdminId" | "datosRecuperacion" | "cantidadEliminaciones" | "primeraEliminacion" | "ultimaEliminacion", ExtArgs["result"]["deletedAccountHistory"]>
+  export type deletedAccountHistoryInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    eliminadoPor?: boolean | deletedAccountHistory$eliminadoPorArgs<ExtArgs>
+  }
+
+  export type $deletedAccountHistoryPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "deletedAccountHistory"
+    objects: {
+      eliminadoPor: Prisma.$adminPayload<ExtArgs> | null
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: bigint
+      dedupeKey: string
+      plataformaId: number | null
+      plataforma: string
+      correo: string
+      clave: string | null
+      proveedor: string | null
+      tipoRegistro: string
+      tipoEliminacion: string
+      identificadorOriginal: string | null
+      eliminadoPorAdminId: number | null
+      datosRecuperacion: Prisma.JsonValue | null
+      cantidadEliminaciones: number
+      primeraEliminacion: Date
+      ultimaEliminacion: Date
+    }, ExtArgs["result"]["deletedAccountHistory"]>
+    composites: {}
+  }
+
+  type deletedAccountHistoryGetPayload<S extends boolean | null | undefined | deletedAccountHistoryDefaultArgs> = $Result.GetResult<Prisma.$deletedAccountHistoryPayload, S>
+
+  type deletedAccountHistoryCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<deletedAccountHistoryFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: DeletedAccountHistoryCountAggregateInputType | true
+    }
+
+  export interface deletedAccountHistoryDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['deletedAccountHistory'], meta: { name: 'deletedAccountHistory' } }
+    /**
+     * Find zero or one DeletedAccountHistory that matches the filter.
+     * @param {deletedAccountHistoryFindUniqueArgs} args - Arguments to find a DeletedAccountHistory
+     * @example
+     * // Get one DeletedAccountHistory
+     * const deletedAccountHistory = await prisma.deletedAccountHistory.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends deletedAccountHistoryFindUniqueArgs>(args: SelectSubset<T, deletedAccountHistoryFindUniqueArgs<ExtArgs>>): Prisma__deletedAccountHistoryClient<$Result.GetResult<Prisma.$deletedAccountHistoryPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one DeletedAccountHistory that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {deletedAccountHistoryFindUniqueOrThrowArgs} args - Arguments to find a DeletedAccountHistory
+     * @example
+     * // Get one DeletedAccountHistory
+     * const deletedAccountHistory = await prisma.deletedAccountHistory.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends deletedAccountHistoryFindUniqueOrThrowArgs>(args: SelectSubset<T, deletedAccountHistoryFindUniqueOrThrowArgs<ExtArgs>>): Prisma__deletedAccountHistoryClient<$Result.GetResult<Prisma.$deletedAccountHistoryPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first DeletedAccountHistory that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {deletedAccountHistoryFindFirstArgs} args - Arguments to find a DeletedAccountHistory
+     * @example
+     * // Get one DeletedAccountHistory
+     * const deletedAccountHistory = await prisma.deletedAccountHistory.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends deletedAccountHistoryFindFirstArgs>(args?: SelectSubset<T, deletedAccountHistoryFindFirstArgs<ExtArgs>>): Prisma__deletedAccountHistoryClient<$Result.GetResult<Prisma.$deletedAccountHistoryPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first DeletedAccountHistory that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {deletedAccountHistoryFindFirstOrThrowArgs} args - Arguments to find a DeletedAccountHistory
+     * @example
+     * // Get one DeletedAccountHistory
+     * const deletedAccountHistory = await prisma.deletedAccountHistory.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends deletedAccountHistoryFindFirstOrThrowArgs>(args?: SelectSubset<T, deletedAccountHistoryFindFirstOrThrowArgs<ExtArgs>>): Prisma__deletedAccountHistoryClient<$Result.GetResult<Prisma.$deletedAccountHistoryPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more DeletedAccountHistories that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {deletedAccountHistoryFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all DeletedAccountHistories
+     * const deletedAccountHistories = await prisma.deletedAccountHistory.findMany()
+     * 
+     * // Get first 10 DeletedAccountHistories
+     * const deletedAccountHistories = await prisma.deletedAccountHistory.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const deletedAccountHistoryWithIdOnly = await prisma.deletedAccountHistory.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends deletedAccountHistoryFindManyArgs>(args?: SelectSubset<T, deletedAccountHistoryFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$deletedAccountHistoryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a DeletedAccountHistory.
+     * @param {deletedAccountHistoryCreateArgs} args - Arguments to create a DeletedAccountHistory.
+     * @example
+     * // Create one DeletedAccountHistory
+     * const DeletedAccountHistory = await prisma.deletedAccountHistory.create({
+     *   data: {
+     *     // ... data to create a DeletedAccountHistory
+     *   }
+     * })
+     * 
+     */
+    create<T extends deletedAccountHistoryCreateArgs>(args: SelectSubset<T, deletedAccountHistoryCreateArgs<ExtArgs>>): Prisma__deletedAccountHistoryClient<$Result.GetResult<Prisma.$deletedAccountHistoryPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many DeletedAccountHistories.
+     * @param {deletedAccountHistoryCreateManyArgs} args - Arguments to create many DeletedAccountHistories.
+     * @example
+     * // Create many DeletedAccountHistories
+     * const deletedAccountHistory = await prisma.deletedAccountHistory.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends deletedAccountHistoryCreateManyArgs>(args?: SelectSubset<T, deletedAccountHistoryCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a DeletedAccountHistory.
+     * @param {deletedAccountHistoryDeleteArgs} args - Arguments to delete one DeletedAccountHistory.
+     * @example
+     * // Delete one DeletedAccountHistory
+     * const DeletedAccountHistory = await prisma.deletedAccountHistory.delete({
+     *   where: {
+     *     // ... filter to delete one DeletedAccountHistory
+     *   }
+     * })
+     * 
+     */
+    delete<T extends deletedAccountHistoryDeleteArgs>(args: SelectSubset<T, deletedAccountHistoryDeleteArgs<ExtArgs>>): Prisma__deletedAccountHistoryClient<$Result.GetResult<Prisma.$deletedAccountHistoryPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one DeletedAccountHistory.
+     * @param {deletedAccountHistoryUpdateArgs} args - Arguments to update one DeletedAccountHistory.
+     * @example
+     * // Update one DeletedAccountHistory
+     * const deletedAccountHistory = await prisma.deletedAccountHistory.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends deletedAccountHistoryUpdateArgs>(args: SelectSubset<T, deletedAccountHistoryUpdateArgs<ExtArgs>>): Prisma__deletedAccountHistoryClient<$Result.GetResult<Prisma.$deletedAccountHistoryPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more DeletedAccountHistories.
+     * @param {deletedAccountHistoryDeleteManyArgs} args - Arguments to filter DeletedAccountHistories to delete.
+     * @example
+     * // Delete a few DeletedAccountHistories
+     * const { count } = await prisma.deletedAccountHistory.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends deletedAccountHistoryDeleteManyArgs>(args?: SelectSubset<T, deletedAccountHistoryDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more DeletedAccountHistories.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {deletedAccountHistoryUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many DeletedAccountHistories
+     * const deletedAccountHistory = await prisma.deletedAccountHistory.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends deletedAccountHistoryUpdateManyArgs>(args: SelectSubset<T, deletedAccountHistoryUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one DeletedAccountHistory.
+     * @param {deletedAccountHistoryUpsertArgs} args - Arguments to update or create a DeletedAccountHistory.
+     * @example
+     * // Update or create a DeletedAccountHistory
+     * const deletedAccountHistory = await prisma.deletedAccountHistory.upsert({
+     *   create: {
+     *     // ... data to create a DeletedAccountHistory
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the DeletedAccountHistory we want to update
+     *   }
+     * })
+     */
+    upsert<T extends deletedAccountHistoryUpsertArgs>(args: SelectSubset<T, deletedAccountHistoryUpsertArgs<ExtArgs>>): Prisma__deletedAccountHistoryClient<$Result.GetResult<Prisma.$deletedAccountHistoryPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of DeletedAccountHistories.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {deletedAccountHistoryCountArgs} args - Arguments to filter DeletedAccountHistories to count.
+     * @example
+     * // Count the number of DeletedAccountHistories
+     * const count = await prisma.deletedAccountHistory.count({
+     *   where: {
+     *     // ... the filter for the DeletedAccountHistories we want to count
+     *   }
+     * })
+    **/
+    count<T extends deletedAccountHistoryCountArgs>(
+      args?: Subset<T, deletedAccountHistoryCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], DeletedAccountHistoryCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a DeletedAccountHistory.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {DeletedAccountHistoryAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends DeletedAccountHistoryAggregateArgs>(args: Subset<T, DeletedAccountHistoryAggregateArgs>): Prisma.PrismaPromise<GetDeletedAccountHistoryAggregateType<T>>
+
+    /**
+     * Group by DeletedAccountHistory.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {deletedAccountHistoryGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends deletedAccountHistoryGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: deletedAccountHistoryGroupByArgs['orderBy'] }
+        : { orderBy?: deletedAccountHistoryGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, deletedAccountHistoryGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetDeletedAccountHistoryGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the deletedAccountHistory model
+   */
+  readonly fields: deletedAccountHistoryFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for deletedAccountHistory.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__deletedAccountHistoryClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    eliminadoPor<T extends deletedAccountHistory$eliminadoPorArgs<ExtArgs> = {}>(args?: Subset<T, deletedAccountHistory$eliminadoPorArgs<ExtArgs>>): Prisma__adminClient<$Result.GetResult<Prisma.$adminPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the deletedAccountHistory model
+   */
+  interface deletedAccountHistoryFieldRefs {
+    readonly id: FieldRef<"deletedAccountHistory", 'BigInt'>
+    readonly dedupeKey: FieldRef<"deletedAccountHistory", 'String'>
+    readonly plataformaId: FieldRef<"deletedAccountHistory", 'Int'>
+    readonly plataforma: FieldRef<"deletedAccountHistory", 'String'>
+    readonly correo: FieldRef<"deletedAccountHistory", 'String'>
+    readonly clave: FieldRef<"deletedAccountHistory", 'String'>
+    readonly proveedor: FieldRef<"deletedAccountHistory", 'String'>
+    readonly tipoRegistro: FieldRef<"deletedAccountHistory", 'String'>
+    readonly tipoEliminacion: FieldRef<"deletedAccountHistory", 'String'>
+    readonly identificadorOriginal: FieldRef<"deletedAccountHistory", 'String'>
+    readonly eliminadoPorAdminId: FieldRef<"deletedAccountHistory", 'Int'>
+    readonly datosRecuperacion: FieldRef<"deletedAccountHistory", 'Json'>
+    readonly cantidadEliminaciones: FieldRef<"deletedAccountHistory", 'Int'>
+    readonly primeraEliminacion: FieldRef<"deletedAccountHistory", 'DateTime'>
+    readonly ultimaEliminacion: FieldRef<"deletedAccountHistory", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * deletedAccountHistory findUnique
+   */
+  export type deletedAccountHistoryFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the deletedAccountHistory
+     */
+    select?: deletedAccountHistorySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the deletedAccountHistory
+     */
+    omit?: deletedAccountHistoryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: deletedAccountHistoryInclude<ExtArgs> | null
+    /**
+     * Filter, which deletedAccountHistory to fetch.
+     */
+    where: deletedAccountHistoryWhereUniqueInput
+  }
+
+  /**
+   * deletedAccountHistory findUniqueOrThrow
+   */
+  export type deletedAccountHistoryFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the deletedAccountHistory
+     */
+    select?: deletedAccountHistorySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the deletedAccountHistory
+     */
+    omit?: deletedAccountHistoryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: deletedAccountHistoryInclude<ExtArgs> | null
+    /**
+     * Filter, which deletedAccountHistory to fetch.
+     */
+    where: deletedAccountHistoryWhereUniqueInput
+  }
+
+  /**
+   * deletedAccountHistory findFirst
+   */
+  export type deletedAccountHistoryFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the deletedAccountHistory
+     */
+    select?: deletedAccountHistorySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the deletedAccountHistory
+     */
+    omit?: deletedAccountHistoryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: deletedAccountHistoryInclude<ExtArgs> | null
+    /**
+     * Filter, which deletedAccountHistory to fetch.
+     */
+    where?: deletedAccountHistoryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of deletedAccountHistories to fetch.
+     */
+    orderBy?: deletedAccountHistoryOrderByWithRelationInput | deletedAccountHistoryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for deletedAccountHistories.
+     */
+    cursor?: deletedAccountHistoryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` deletedAccountHistories from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` deletedAccountHistories.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of deletedAccountHistories.
+     */
+    distinct?: DeletedAccountHistoryScalarFieldEnum | DeletedAccountHistoryScalarFieldEnum[]
+  }
+
+  /**
+   * deletedAccountHistory findFirstOrThrow
+   */
+  export type deletedAccountHistoryFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the deletedAccountHistory
+     */
+    select?: deletedAccountHistorySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the deletedAccountHistory
+     */
+    omit?: deletedAccountHistoryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: deletedAccountHistoryInclude<ExtArgs> | null
+    /**
+     * Filter, which deletedAccountHistory to fetch.
+     */
+    where?: deletedAccountHistoryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of deletedAccountHistories to fetch.
+     */
+    orderBy?: deletedAccountHistoryOrderByWithRelationInput | deletedAccountHistoryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for deletedAccountHistories.
+     */
+    cursor?: deletedAccountHistoryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` deletedAccountHistories from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` deletedAccountHistories.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of deletedAccountHistories.
+     */
+    distinct?: DeletedAccountHistoryScalarFieldEnum | DeletedAccountHistoryScalarFieldEnum[]
+  }
+
+  /**
+   * deletedAccountHistory findMany
+   */
+  export type deletedAccountHistoryFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the deletedAccountHistory
+     */
+    select?: deletedAccountHistorySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the deletedAccountHistory
+     */
+    omit?: deletedAccountHistoryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: deletedAccountHistoryInclude<ExtArgs> | null
+    /**
+     * Filter, which deletedAccountHistories to fetch.
+     */
+    where?: deletedAccountHistoryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of deletedAccountHistories to fetch.
+     */
+    orderBy?: deletedAccountHistoryOrderByWithRelationInput | deletedAccountHistoryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing deletedAccountHistories.
+     */
+    cursor?: deletedAccountHistoryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` deletedAccountHistories from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` deletedAccountHistories.
+     */
+    skip?: number
+    distinct?: DeletedAccountHistoryScalarFieldEnum | DeletedAccountHistoryScalarFieldEnum[]
+  }
+
+  /**
+   * deletedAccountHistory create
+   */
+  export type deletedAccountHistoryCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the deletedAccountHistory
+     */
+    select?: deletedAccountHistorySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the deletedAccountHistory
+     */
+    omit?: deletedAccountHistoryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: deletedAccountHistoryInclude<ExtArgs> | null
+    /**
+     * The data needed to create a deletedAccountHistory.
+     */
+    data: XOR<deletedAccountHistoryCreateInput, deletedAccountHistoryUncheckedCreateInput>
+  }
+
+  /**
+   * deletedAccountHistory createMany
+   */
+  export type deletedAccountHistoryCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many deletedAccountHistories.
+     */
+    data: deletedAccountHistoryCreateManyInput | deletedAccountHistoryCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * deletedAccountHistory update
+   */
+  export type deletedAccountHistoryUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the deletedAccountHistory
+     */
+    select?: deletedAccountHistorySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the deletedAccountHistory
+     */
+    omit?: deletedAccountHistoryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: deletedAccountHistoryInclude<ExtArgs> | null
+    /**
+     * The data needed to update a deletedAccountHistory.
+     */
+    data: XOR<deletedAccountHistoryUpdateInput, deletedAccountHistoryUncheckedUpdateInput>
+    /**
+     * Choose, which deletedAccountHistory to update.
+     */
+    where: deletedAccountHistoryWhereUniqueInput
+  }
+
+  /**
+   * deletedAccountHistory updateMany
+   */
+  export type deletedAccountHistoryUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update deletedAccountHistories.
+     */
+    data: XOR<deletedAccountHistoryUpdateManyMutationInput, deletedAccountHistoryUncheckedUpdateManyInput>
+    /**
+     * Filter which deletedAccountHistories to update
+     */
+    where?: deletedAccountHistoryWhereInput
+    /**
+     * Limit how many deletedAccountHistories to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * deletedAccountHistory upsert
+   */
+  export type deletedAccountHistoryUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the deletedAccountHistory
+     */
+    select?: deletedAccountHistorySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the deletedAccountHistory
+     */
+    omit?: deletedAccountHistoryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: deletedAccountHistoryInclude<ExtArgs> | null
+    /**
+     * The filter to search for the deletedAccountHistory to update in case it exists.
+     */
+    where: deletedAccountHistoryWhereUniqueInput
+    /**
+     * In case the deletedAccountHistory found by the `where` argument doesn't exist, create a new deletedAccountHistory with this data.
+     */
+    create: XOR<deletedAccountHistoryCreateInput, deletedAccountHistoryUncheckedCreateInput>
+    /**
+     * In case the deletedAccountHistory was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<deletedAccountHistoryUpdateInput, deletedAccountHistoryUncheckedUpdateInput>
+  }
+
+  /**
+   * deletedAccountHistory delete
+   */
+  export type deletedAccountHistoryDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the deletedAccountHistory
+     */
+    select?: deletedAccountHistorySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the deletedAccountHistory
+     */
+    omit?: deletedAccountHistoryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: deletedAccountHistoryInclude<ExtArgs> | null
+    /**
+     * Filter which deletedAccountHistory to delete.
+     */
+    where: deletedAccountHistoryWhereUniqueInput
+  }
+
+  /**
+   * deletedAccountHistory deleteMany
+   */
+  export type deletedAccountHistoryDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which deletedAccountHistories to delete
+     */
+    where?: deletedAccountHistoryWhereInput
+    /**
+     * Limit how many deletedAccountHistories to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * deletedAccountHistory.eliminadoPor
+   */
+  export type deletedAccountHistory$eliminadoPorArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the admin
+     */
+    select?: adminSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the admin
+     */
+    omit?: adminOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminInclude<ExtArgs> | null
+    where?: adminWhereInput
+  }
+
+  /**
+   * deletedAccountHistory without action
+   */
+  export type deletedAccountHistoryDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the deletedAccountHistory
+     */
+    select?: deletedAccountHistorySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the deletedAccountHistory
+     */
+    omit?: deletedAccountHistoryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: deletedAccountHistoryInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model adminPasswordResetToken
+   */
+
+  export type AggregateAdminPasswordResetToken = {
+    _count: AdminPasswordResetTokenCountAggregateOutputType | null
+    _avg: AdminPasswordResetTokenAvgAggregateOutputType | null
+    _sum: AdminPasswordResetTokenSumAggregateOutputType | null
+    _min: AdminPasswordResetTokenMinAggregateOutputType | null
+    _max: AdminPasswordResetTokenMaxAggregateOutputType | null
+  }
+
+  export type AdminPasswordResetTokenAvgAggregateOutputType = {
+    id: number | null
+    adminId: number | null
+  }
+
+  export type AdminPasswordResetTokenSumAggregateOutputType = {
+    id: number | null
+    adminId: number | null
+  }
+
+  export type AdminPasswordResetTokenMinAggregateOutputType = {
+    id: number | null
+    adminId: number | null
+    tokenHash: string | null
+    expiresAt: Date | null
+    usedAt: Date | null
+    requestedIp: string | null
+    createdAt: Date | null
+  }
+
+  export type AdminPasswordResetTokenMaxAggregateOutputType = {
+    id: number | null
+    adminId: number | null
+    tokenHash: string | null
+    expiresAt: Date | null
+    usedAt: Date | null
+    requestedIp: string | null
+    createdAt: Date | null
+  }
+
+  export type AdminPasswordResetTokenCountAggregateOutputType = {
+    id: number
+    adminId: number
+    tokenHash: number
+    expiresAt: number
+    usedAt: number
+    requestedIp: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type AdminPasswordResetTokenAvgAggregateInputType = {
+    id?: true
+    adminId?: true
+  }
+
+  export type AdminPasswordResetTokenSumAggregateInputType = {
+    id?: true
+    adminId?: true
+  }
+
+  export type AdminPasswordResetTokenMinAggregateInputType = {
+    id?: true
+    adminId?: true
+    tokenHash?: true
+    expiresAt?: true
+    usedAt?: true
+    requestedIp?: true
+    createdAt?: true
+  }
+
+  export type AdminPasswordResetTokenMaxAggregateInputType = {
+    id?: true
+    adminId?: true
+    tokenHash?: true
+    expiresAt?: true
+    usedAt?: true
+    requestedIp?: true
+    createdAt?: true
+  }
+
+  export type AdminPasswordResetTokenCountAggregateInputType = {
+    id?: true
+    adminId?: true
+    tokenHash?: true
+    expiresAt?: true
+    usedAt?: true
+    requestedIp?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type AdminPasswordResetTokenAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which adminPasswordResetToken to aggregate.
+     */
+    where?: adminPasswordResetTokenWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of adminPasswordResetTokens to fetch.
+     */
+    orderBy?: adminPasswordResetTokenOrderByWithRelationInput | adminPasswordResetTokenOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: adminPasswordResetTokenWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` adminPasswordResetTokens from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` adminPasswordResetTokens.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned adminPasswordResetTokens
+    **/
+    _count?: true | AdminPasswordResetTokenCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: AdminPasswordResetTokenAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: AdminPasswordResetTokenSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: AdminPasswordResetTokenMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: AdminPasswordResetTokenMaxAggregateInputType
+  }
+
+  export type GetAdminPasswordResetTokenAggregateType<T extends AdminPasswordResetTokenAggregateArgs> = {
+        [P in keyof T & keyof AggregateAdminPasswordResetToken]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateAdminPasswordResetToken[P]>
+      : GetScalarType<T[P], AggregateAdminPasswordResetToken[P]>
+  }
+
+
+
+
+  export type adminPasswordResetTokenGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: adminPasswordResetTokenWhereInput
+    orderBy?: adminPasswordResetTokenOrderByWithAggregationInput | adminPasswordResetTokenOrderByWithAggregationInput[]
+    by: AdminPasswordResetTokenScalarFieldEnum[] | AdminPasswordResetTokenScalarFieldEnum
+    having?: adminPasswordResetTokenScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: AdminPasswordResetTokenCountAggregateInputType | true
+    _avg?: AdminPasswordResetTokenAvgAggregateInputType
+    _sum?: AdminPasswordResetTokenSumAggregateInputType
+    _min?: AdminPasswordResetTokenMinAggregateInputType
+    _max?: AdminPasswordResetTokenMaxAggregateInputType
+  }
+
+  export type AdminPasswordResetTokenGroupByOutputType = {
+    id: number
+    adminId: number
+    tokenHash: string
+    expiresAt: Date
+    usedAt: Date | null
+    requestedIp: string | null
+    createdAt: Date
+    _count: AdminPasswordResetTokenCountAggregateOutputType | null
+    _avg: AdminPasswordResetTokenAvgAggregateOutputType | null
+    _sum: AdminPasswordResetTokenSumAggregateOutputType | null
+    _min: AdminPasswordResetTokenMinAggregateOutputType | null
+    _max: AdminPasswordResetTokenMaxAggregateOutputType | null
+  }
+
+  type GetAdminPasswordResetTokenGroupByPayload<T extends adminPasswordResetTokenGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<AdminPasswordResetTokenGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof AdminPasswordResetTokenGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], AdminPasswordResetTokenGroupByOutputType[P]>
+            : GetScalarType<T[P], AdminPasswordResetTokenGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type adminPasswordResetTokenSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    adminId?: boolean
+    tokenHash?: boolean
+    expiresAt?: boolean
+    usedAt?: boolean
+    requestedIp?: boolean
+    createdAt?: boolean
+    admin?: boolean | adminDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["adminPasswordResetToken"]>
+
+
+
+  export type adminPasswordResetTokenSelectScalar = {
+    id?: boolean
+    adminId?: boolean
+    tokenHash?: boolean
+    expiresAt?: boolean
+    usedAt?: boolean
+    requestedIp?: boolean
+    createdAt?: boolean
+  }
+
+  export type adminPasswordResetTokenOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "adminId" | "tokenHash" | "expiresAt" | "usedAt" | "requestedIp" | "createdAt", ExtArgs["result"]["adminPasswordResetToken"]>
+  export type adminPasswordResetTokenInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    admin?: boolean | adminDefaultArgs<ExtArgs>
+  }
+
+  export type $adminPasswordResetTokenPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "adminPasswordResetToken"
+    objects: {
+      admin: Prisma.$adminPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: number
+      adminId: number
+      tokenHash: string
+      expiresAt: Date
+      usedAt: Date | null
+      requestedIp: string | null
+      createdAt: Date
+    }, ExtArgs["result"]["adminPasswordResetToken"]>
+    composites: {}
+  }
+
+  type adminPasswordResetTokenGetPayload<S extends boolean | null | undefined | adminPasswordResetTokenDefaultArgs> = $Result.GetResult<Prisma.$adminPasswordResetTokenPayload, S>
+
+  type adminPasswordResetTokenCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<adminPasswordResetTokenFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: AdminPasswordResetTokenCountAggregateInputType | true
+    }
+
+  export interface adminPasswordResetTokenDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['adminPasswordResetToken'], meta: { name: 'adminPasswordResetToken' } }
+    /**
+     * Find zero or one AdminPasswordResetToken that matches the filter.
+     * @param {adminPasswordResetTokenFindUniqueArgs} args - Arguments to find a AdminPasswordResetToken
+     * @example
+     * // Get one AdminPasswordResetToken
+     * const adminPasswordResetToken = await prisma.adminPasswordResetToken.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends adminPasswordResetTokenFindUniqueArgs>(args: SelectSubset<T, adminPasswordResetTokenFindUniqueArgs<ExtArgs>>): Prisma__adminPasswordResetTokenClient<$Result.GetResult<Prisma.$adminPasswordResetTokenPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one AdminPasswordResetToken that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {adminPasswordResetTokenFindUniqueOrThrowArgs} args - Arguments to find a AdminPasswordResetToken
+     * @example
+     * // Get one AdminPasswordResetToken
+     * const adminPasswordResetToken = await prisma.adminPasswordResetToken.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends adminPasswordResetTokenFindUniqueOrThrowArgs>(args: SelectSubset<T, adminPasswordResetTokenFindUniqueOrThrowArgs<ExtArgs>>): Prisma__adminPasswordResetTokenClient<$Result.GetResult<Prisma.$adminPasswordResetTokenPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first AdminPasswordResetToken that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {adminPasswordResetTokenFindFirstArgs} args - Arguments to find a AdminPasswordResetToken
+     * @example
+     * // Get one AdminPasswordResetToken
+     * const adminPasswordResetToken = await prisma.adminPasswordResetToken.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends adminPasswordResetTokenFindFirstArgs>(args?: SelectSubset<T, adminPasswordResetTokenFindFirstArgs<ExtArgs>>): Prisma__adminPasswordResetTokenClient<$Result.GetResult<Prisma.$adminPasswordResetTokenPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first AdminPasswordResetToken that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {adminPasswordResetTokenFindFirstOrThrowArgs} args - Arguments to find a AdminPasswordResetToken
+     * @example
+     * // Get one AdminPasswordResetToken
+     * const adminPasswordResetToken = await prisma.adminPasswordResetToken.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends adminPasswordResetTokenFindFirstOrThrowArgs>(args?: SelectSubset<T, adminPasswordResetTokenFindFirstOrThrowArgs<ExtArgs>>): Prisma__adminPasswordResetTokenClient<$Result.GetResult<Prisma.$adminPasswordResetTokenPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more AdminPasswordResetTokens that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {adminPasswordResetTokenFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all AdminPasswordResetTokens
+     * const adminPasswordResetTokens = await prisma.adminPasswordResetToken.findMany()
+     * 
+     * // Get first 10 AdminPasswordResetTokens
+     * const adminPasswordResetTokens = await prisma.adminPasswordResetToken.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const adminPasswordResetTokenWithIdOnly = await prisma.adminPasswordResetToken.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends adminPasswordResetTokenFindManyArgs>(args?: SelectSubset<T, adminPasswordResetTokenFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$adminPasswordResetTokenPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a AdminPasswordResetToken.
+     * @param {adminPasswordResetTokenCreateArgs} args - Arguments to create a AdminPasswordResetToken.
+     * @example
+     * // Create one AdminPasswordResetToken
+     * const AdminPasswordResetToken = await prisma.adminPasswordResetToken.create({
+     *   data: {
+     *     // ... data to create a AdminPasswordResetToken
+     *   }
+     * })
+     * 
+     */
+    create<T extends adminPasswordResetTokenCreateArgs>(args: SelectSubset<T, adminPasswordResetTokenCreateArgs<ExtArgs>>): Prisma__adminPasswordResetTokenClient<$Result.GetResult<Prisma.$adminPasswordResetTokenPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many AdminPasswordResetTokens.
+     * @param {adminPasswordResetTokenCreateManyArgs} args - Arguments to create many AdminPasswordResetTokens.
+     * @example
+     * // Create many AdminPasswordResetTokens
+     * const adminPasswordResetToken = await prisma.adminPasswordResetToken.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends adminPasswordResetTokenCreateManyArgs>(args?: SelectSubset<T, adminPasswordResetTokenCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a AdminPasswordResetToken.
+     * @param {adminPasswordResetTokenDeleteArgs} args - Arguments to delete one AdminPasswordResetToken.
+     * @example
+     * // Delete one AdminPasswordResetToken
+     * const AdminPasswordResetToken = await prisma.adminPasswordResetToken.delete({
+     *   where: {
+     *     // ... filter to delete one AdminPasswordResetToken
+     *   }
+     * })
+     * 
+     */
+    delete<T extends adminPasswordResetTokenDeleteArgs>(args: SelectSubset<T, adminPasswordResetTokenDeleteArgs<ExtArgs>>): Prisma__adminPasswordResetTokenClient<$Result.GetResult<Prisma.$adminPasswordResetTokenPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one AdminPasswordResetToken.
+     * @param {adminPasswordResetTokenUpdateArgs} args - Arguments to update one AdminPasswordResetToken.
+     * @example
+     * // Update one AdminPasswordResetToken
+     * const adminPasswordResetToken = await prisma.adminPasswordResetToken.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends adminPasswordResetTokenUpdateArgs>(args: SelectSubset<T, adminPasswordResetTokenUpdateArgs<ExtArgs>>): Prisma__adminPasswordResetTokenClient<$Result.GetResult<Prisma.$adminPasswordResetTokenPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more AdminPasswordResetTokens.
+     * @param {adminPasswordResetTokenDeleteManyArgs} args - Arguments to filter AdminPasswordResetTokens to delete.
+     * @example
+     * // Delete a few AdminPasswordResetTokens
+     * const { count } = await prisma.adminPasswordResetToken.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends adminPasswordResetTokenDeleteManyArgs>(args?: SelectSubset<T, adminPasswordResetTokenDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more AdminPasswordResetTokens.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {adminPasswordResetTokenUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many AdminPasswordResetTokens
+     * const adminPasswordResetToken = await prisma.adminPasswordResetToken.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends adminPasswordResetTokenUpdateManyArgs>(args: SelectSubset<T, adminPasswordResetTokenUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one AdminPasswordResetToken.
+     * @param {adminPasswordResetTokenUpsertArgs} args - Arguments to update or create a AdminPasswordResetToken.
+     * @example
+     * // Update or create a AdminPasswordResetToken
+     * const adminPasswordResetToken = await prisma.adminPasswordResetToken.upsert({
+     *   create: {
+     *     // ... data to create a AdminPasswordResetToken
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the AdminPasswordResetToken we want to update
+     *   }
+     * })
+     */
+    upsert<T extends adminPasswordResetTokenUpsertArgs>(args: SelectSubset<T, adminPasswordResetTokenUpsertArgs<ExtArgs>>): Prisma__adminPasswordResetTokenClient<$Result.GetResult<Prisma.$adminPasswordResetTokenPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of AdminPasswordResetTokens.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {adminPasswordResetTokenCountArgs} args - Arguments to filter AdminPasswordResetTokens to count.
+     * @example
+     * // Count the number of AdminPasswordResetTokens
+     * const count = await prisma.adminPasswordResetToken.count({
+     *   where: {
+     *     // ... the filter for the AdminPasswordResetTokens we want to count
+     *   }
+     * })
+    **/
+    count<T extends adminPasswordResetTokenCountArgs>(
+      args?: Subset<T, adminPasswordResetTokenCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], AdminPasswordResetTokenCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a AdminPasswordResetToken.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AdminPasswordResetTokenAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends AdminPasswordResetTokenAggregateArgs>(args: Subset<T, AdminPasswordResetTokenAggregateArgs>): Prisma.PrismaPromise<GetAdminPasswordResetTokenAggregateType<T>>
+
+    /**
+     * Group by AdminPasswordResetToken.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {adminPasswordResetTokenGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends adminPasswordResetTokenGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: adminPasswordResetTokenGroupByArgs['orderBy'] }
+        : { orderBy?: adminPasswordResetTokenGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, adminPasswordResetTokenGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetAdminPasswordResetTokenGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the adminPasswordResetToken model
+   */
+  readonly fields: adminPasswordResetTokenFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for adminPasswordResetToken.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__adminPasswordResetTokenClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    admin<T extends adminDefaultArgs<ExtArgs> = {}>(args?: Subset<T, adminDefaultArgs<ExtArgs>>): Prisma__adminClient<$Result.GetResult<Prisma.$adminPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the adminPasswordResetToken model
+   */
+  interface adminPasswordResetTokenFieldRefs {
+    readonly id: FieldRef<"adminPasswordResetToken", 'Int'>
+    readonly adminId: FieldRef<"adminPasswordResetToken", 'Int'>
+    readonly tokenHash: FieldRef<"adminPasswordResetToken", 'String'>
+    readonly expiresAt: FieldRef<"adminPasswordResetToken", 'DateTime'>
+    readonly usedAt: FieldRef<"adminPasswordResetToken", 'DateTime'>
+    readonly requestedIp: FieldRef<"adminPasswordResetToken", 'String'>
+    readonly createdAt: FieldRef<"adminPasswordResetToken", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * adminPasswordResetToken findUnique
+   */
+  export type adminPasswordResetTokenFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminPasswordResetToken
+     */
+    select?: adminPasswordResetTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminPasswordResetToken
+     */
+    omit?: adminPasswordResetTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminPasswordResetTokenInclude<ExtArgs> | null
+    /**
+     * Filter, which adminPasswordResetToken to fetch.
+     */
+    where: adminPasswordResetTokenWhereUniqueInput
+  }
+
+  /**
+   * adminPasswordResetToken findUniqueOrThrow
+   */
+  export type adminPasswordResetTokenFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminPasswordResetToken
+     */
+    select?: adminPasswordResetTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminPasswordResetToken
+     */
+    omit?: adminPasswordResetTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminPasswordResetTokenInclude<ExtArgs> | null
+    /**
+     * Filter, which adminPasswordResetToken to fetch.
+     */
+    where: adminPasswordResetTokenWhereUniqueInput
+  }
+
+  /**
+   * adminPasswordResetToken findFirst
+   */
+  export type adminPasswordResetTokenFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminPasswordResetToken
+     */
+    select?: adminPasswordResetTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminPasswordResetToken
+     */
+    omit?: adminPasswordResetTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminPasswordResetTokenInclude<ExtArgs> | null
+    /**
+     * Filter, which adminPasswordResetToken to fetch.
+     */
+    where?: adminPasswordResetTokenWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of adminPasswordResetTokens to fetch.
+     */
+    orderBy?: adminPasswordResetTokenOrderByWithRelationInput | adminPasswordResetTokenOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for adminPasswordResetTokens.
+     */
+    cursor?: adminPasswordResetTokenWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` adminPasswordResetTokens from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` adminPasswordResetTokens.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of adminPasswordResetTokens.
+     */
+    distinct?: AdminPasswordResetTokenScalarFieldEnum | AdminPasswordResetTokenScalarFieldEnum[]
+  }
+
+  /**
+   * adminPasswordResetToken findFirstOrThrow
+   */
+  export type adminPasswordResetTokenFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminPasswordResetToken
+     */
+    select?: adminPasswordResetTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminPasswordResetToken
+     */
+    omit?: adminPasswordResetTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminPasswordResetTokenInclude<ExtArgs> | null
+    /**
+     * Filter, which adminPasswordResetToken to fetch.
+     */
+    where?: adminPasswordResetTokenWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of adminPasswordResetTokens to fetch.
+     */
+    orderBy?: adminPasswordResetTokenOrderByWithRelationInput | adminPasswordResetTokenOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for adminPasswordResetTokens.
+     */
+    cursor?: adminPasswordResetTokenWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` adminPasswordResetTokens from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` adminPasswordResetTokens.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of adminPasswordResetTokens.
+     */
+    distinct?: AdminPasswordResetTokenScalarFieldEnum | AdminPasswordResetTokenScalarFieldEnum[]
+  }
+
+  /**
+   * adminPasswordResetToken findMany
+   */
+  export type adminPasswordResetTokenFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminPasswordResetToken
+     */
+    select?: adminPasswordResetTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminPasswordResetToken
+     */
+    omit?: adminPasswordResetTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminPasswordResetTokenInclude<ExtArgs> | null
+    /**
+     * Filter, which adminPasswordResetTokens to fetch.
+     */
+    where?: adminPasswordResetTokenWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of adminPasswordResetTokens to fetch.
+     */
+    orderBy?: adminPasswordResetTokenOrderByWithRelationInput | adminPasswordResetTokenOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing adminPasswordResetTokens.
+     */
+    cursor?: adminPasswordResetTokenWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` adminPasswordResetTokens from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` adminPasswordResetTokens.
+     */
+    skip?: number
+    distinct?: AdminPasswordResetTokenScalarFieldEnum | AdminPasswordResetTokenScalarFieldEnum[]
+  }
+
+  /**
+   * adminPasswordResetToken create
+   */
+  export type adminPasswordResetTokenCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminPasswordResetToken
+     */
+    select?: adminPasswordResetTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminPasswordResetToken
+     */
+    omit?: adminPasswordResetTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminPasswordResetTokenInclude<ExtArgs> | null
+    /**
+     * The data needed to create a adminPasswordResetToken.
+     */
+    data: XOR<adminPasswordResetTokenCreateInput, adminPasswordResetTokenUncheckedCreateInput>
+  }
+
+  /**
+   * adminPasswordResetToken createMany
+   */
+  export type adminPasswordResetTokenCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many adminPasswordResetTokens.
+     */
+    data: adminPasswordResetTokenCreateManyInput | adminPasswordResetTokenCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * adminPasswordResetToken update
+   */
+  export type adminPasswordResetTokenUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminPasswordResetToken
+     */
+    select?: adminPasswordResetTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminPasswordResetToken
+     */
+    omit?: adminPasswordResetTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminPasswordResetTokenInclude<ExtArgs> | null
+    /**
+     * The data needed to update a adminPasswordResetToken.
+     */
+    data: XOR<adminPasswordResetTokenUpdateInput, adminPasswordResetTokenUncheckedUpdateInput>
+    /**
+     * Choose, which adminPasswordResetToken to update.
+     */
+    where: adminPasswordResetTokenWhereUniqueInput
+  }
+
+  /**
+   * adminPasswordResetToken updateMany
+   */
+  export type adminPasswordResetTokenUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update adminPasswordResetTokens.
+     */
+    data: XOR<adminPasswordResetTokenUpdateManyMutationInput, adminPasswordResetTokenUncheckedUpdateManyInput>
+    /**
+     * Filter which adminPasswordResetTokens to update
+     */
+    where?: adminPasswordResetTokenWhereInput
+    /**
+     * Limit how many adminPasswordResetTokens to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * adminPasswordResetToken upsert
+   */
+  export type adminPasswordResetTokenUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminPasswordResetToken
+     */
+    select?: adminPasswordResetTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminPasswordResetToken
+     */
+    omit?: adminPasswordResetTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminPasswordResetTokenInclude<ExtArgs> | null
+    /**
+     * The filter to search for the adminPasswordResetToken to update in case it exists.
+     */
+    where: adminPasswordResetTokenWhereUniqueInput
+    /**
+     * In case the adminPasswordResetToken found by the `where` argument doesn't exist, create a new adminPasswordResetToken with this data.
+     */
+    create: XOR<adminPasswordResetTokenCreateInput, adminPasswordResetTokenUncheckedCreateInput>
+    /**
+     * In case the adminPasswordResetToken was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<adminPasswordResetTokenUpdateInput, adminPasswordResetTokenUncheckedUpdateInput>
+  }
+
+  /**
+   * adminPasswordResetToken delete
+   */
+  export type adminPasswordResetTokenDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminPasswordResetToken
+     */
+    select?: adminPasswordResetTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminPasswordResetToken
+     */
+    omit?: adminPasswordResetTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminPasswordResetTokenInclude<ExtArgs> | null
+    /**
+     * Filter which adminPasswordResetToken to delete.
+     */
+    where: adminPasswordResetTokenWhereUniqueInput
+  }
+
+  /**
+   * adminPasswordResetToken deleteMany
+   */
+  export type adminPasswordResetTokenDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which adminPasswordResetTokens to delete
+     */
+    where?: adminPasswordResetTokenWhereInput
+    /**
+     * Limit how many adminPasswordResetTokens to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * adminPasswordResetToken without action
+   */
+  export type adminPasswordResetTokenDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminPasswordResetToken
+     */
+    select?: adminPasswordResetTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminPasswordResetToken
+     */
+    omit?: adminPasswordResetTokenOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminPasswordResetTokenInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model adminSecurityEvent
+   */
+
+  export type AggregateAdminSecurityEvent = {
+    _count: AdminSecurityEventCountAggregateOutputType | null
+    _avg: AdminSecurityEventAvgAggregateOutputType | null
+    _sum: AdminSecurityEventSumAggregateOutputType | null
+    _min: AdminSecurityEventMinAggregateOutputType | null
+    _max: AdminSecurityEventMaxAggregateOutputType | null
+  }
+
+  export type AdminSecurityEventAvgAggregateOutputType = {
+    id: number | null
+    adminId: number | null
+  }
+
+  export type AdminSecurityEventSumAggregateOutputType = {
+    id: number | null
+    adminId: number | null
+  }
+
+  export type AdminSecurityEventMinAggregateOutputType = {
+    id: number | null
+    adminId: number | null
+    eventType: string | null
+    success: boolean | null
+    ip: string | null
+    createdAt: Date | null
+  }
+
+  export type AdminSecurityEventMaxAggregateOutputType = {
+    id: number | null
+    adminId: number | null
+    eventType: string | null
+    success: boolean | null
+    ip: string | null
+    createdAt: Date | null
+  }
+
+  export type AdminSecurityEventCountAggregateOutputType = {
+    id: number
+    adminId: number
+    eventType: number
+    success: number
+    ip: number
+    metadata: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type AdminSecurityEventAvgAggregateInputType = {
+    id?: true
+    adminId?: true
+  }
+
+  export type AdminSecurityEventSumAggregateInputType = {
+    id?: true
+    adminId?: true
+  }
+
+  export type AdminSecurityEventMinAggregateInputType = {
+    id?: true
+    adminId?: true
+    eventType?: true
+    success?: true
+    ip?: true
+    createdAt?: true
+  }
+
+  export type AdminSecurityEventMaxAggregateInputType = {
+    id?: true
+    adminId?: true
+    eventType?: true
+    success?: true
+    ip?: true
+    createdAt?: true
+  }
+
+  export type AdminSecurityEventCountAggregateInputType = {
+    id?: true
+    adminId?: true
+    eventType?: true
+    success?: true
+    ip?: true
+    metadata?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type AdminSecurityEventAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which adminSecurityEvent to aggregate.
+     */
+    where?: adminSecurityEventWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of adminSecurityEvents to fetch.
+     */
+    orderBy?: adminSecurityEventOrderByWithRelationInput | adminSecurityEventOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: adminSecurityEventWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` adminSecurityEvents from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` adminSecurityEvents.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned adminSecurityEvents
+    **/
+    _count?: true | AdminSecurityEventCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: AdminSecurityEventAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: AdminSecurityEventSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: AdminSecurityEventMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: AdminSecurityEventMaxAggregateInputType
+  }
+
+  export type GetAdminSecurityEventAggregateType<T extends AdminSecurityEventAggregateArgs> = {
+        [P in keyof T & keyof AggregateAdminSecurityEvent]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateAdminSecurityEvent[P]>
+      : GetScalarType<T[P], AggregateAdminSecurityEvent[P]>
+  }
+
+
+
+
+  export type adminSecurityEventGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: adminSecurityEventWhereInput
+    orderBy?: adminSecurityEventOrderByWithAggregationInput | adminSecurityEventOrderByWithAggregationInput[]
+    by: AdminSecurityEventScalarFieldEnum[] | AdminSecurityEventScalarFieldEnum
+    having?: adminSecurityEventScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: AdminSecurityEventCountAggregateInputType | true
+    _avg?: AdminSecurityEventAvgAggregateInputType
+    _sum?: AdminSecurityEventSumAggregateInputType
+    _min?: AdminSecurityEventMinAggregateInputType
+    _max?: AdminSecurityEventMaxAggregateInputType
+  }
+
+  export type AdminSecurityEventGroupByOutputType = {
+    id: number
+    adminId: number | null
+    eventType: string
+    success: boolean
+    ip: string | null
+    metadata: JsonValue | null
+    createdAt: Date
+    _count: AdminSecurityEventCountAggregateOutputType | null
+    _avg: AdminSecurityEventAvgAggregateOutputType | null
+    _sum: AdminSecurityEventSumAggregateOutputType | null
+    _min: AdminSecurityEventMinAggregateOutputType | null
+    _max: AdminSecurityEventMaxAggregateOutputType | null
+  }
+
+  type GetAdminSecurityEventGroupByPayload<T extends adminSecurityEventGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<AdminSecurityEventGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof AdminSecurityEventGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], AdminSecurityEventGroupByOutputType[P]>
+            : GetScalarType<T[P], AdminSecurityEventGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type adminSecurityEventSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    adminId?: boolean
+    eventType?: boolean
+    success?: boolean
+    ip?: boolean
+    metadata?: boolean
+    createdAt?: boolean
+    admin?: boolean | adminSecurityEvent$adminArgs<ExtArgs>
+  }, ExtArgs["result"]["adminSecurityEvent"]>
+
+
+
+  export type adminSecurityEventSelectScalar = {
+    id?: boolean
+    adminId?: boolean
+    eventType?: boolean
+    success?: boolean
+    ip?: boolean
+    metadata?: boolean
+    createdAt?: boolean
+  }
+
+  export type adminSecurityEventOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "adminId" | "eventType" | "success" | "ip" | "metadata" | "createdAt", ExtArgs["result"]["adminSecurityEvent"]>
+  export type adminSecurityEventInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    admin?: boolean | adminSecurityEvent$adminArgs<ExtArgs>
+  }
+
+  export type $adminSecurityEventPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "adminSecurityEvent"
+    objects: {
+      admin: Prisma.$adminPayload<ExtArgs> | null
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: number
+      adminId: number | null
+      eventType: string
+      success: boolean
+      ip: string | null
+      metadata: Prisma.JsonValue | null
+      createdAt: Date
+    }, ExtArgs["result"]["adminSecurityEvent"]>
+    composites: {}
+  }
+
+  type adminSecurityEventGetPayload<S extends boolean | null | undefined | adminSecurityEventDefaultArgs> = $Result.GetResult<Prisma.$adminSecurityEventPayload, S>
+
+  type adminSecurityEventCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<adminSecurityEventFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: AdminSecurityEventCountAggregateInputType | true
+    }
+
+  export interface adminSecurityEventDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['adminSecurityEvent'], meta: { name: 'adminSecurityEvent' } }
+    /**
+     * Find zero or one AdminSecurityEvent that matches the filter.
+     * @param {adminSecurityEventFindUniqueArgs} args - Arguments to find a AdminSecurityEvent
+     * @example
+     * // Get one AdminSecurityEvent
+     * const adminSecurityEvent = await prisma.adminSecurityEvent.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends adminSecurityEventFindUniqueArgs>(args: SelectSubset<T, adminSecurityEventFindUniqueArgs<ExtArgs>>): Prisma__adminSecurityEventClient<$Result.GetResult<Prisma.$adminSecurityEventPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one AdminSecurityEvent that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {adminSecurityEventFindUniqueOrThrowArgs} args - Arguments to find a AdminSecurityEvent
+     * @example
+     * // Get one AdminSecurityEvent
+     * const adminSecurityEvent = await prisma.adminSecurityEvent.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends adminSecurityEventFindUniqueOrThrowArgs>(args: SelectSubset<T, adminSecurityEventFindUniqueOrThrowArgs<ExtArgs>>): Prisma__adminSecurityEventClient<$Result.GetResult<Prisma.$adminSecurityEventPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first AdminSecurityEvent that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {adminSecurityEventFindFirstArgs} args - Arguments to find a AdminSecurityEvent
+     * @example
+     * // Get one AdminSecurityEvent
+     * const adminSecurityEvent = await prisma.adminSecurityEvent.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends adminSecurityEventFindFirstArgs>(args?: SelectSubset<T, adminSecurityEventFindFirstArgs<ExtArgs>>): Prisma__adminSecurityEventClient<$Result.GetResult<Prisma.$adminSecurityEventPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first AdminSecurityEvent that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {adminSecurityEventFindFirstOrThrowArgs} args - Arguments to find a AdminSecurityEvent
+     * @example
+     * // Get one AdminSecurityEvent
+     * const adminSecurityEvent = await prisma.adminSecurityEvent.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends adminSecurityEventFindFirstOrThrowArgs>(args?: SelectSubset<T, adminSecurityEventFindFirstOrThrowArgs<ExtArgs>>): Prisma__adminSecurityEventClient<$Result.GetResult<Prisma.$adminSecurityEventPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more AdminSecurityEvents that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {adminSecurityEventFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all AdminSecurityEvents
+     * const adminSecurityEvents = await prisma.adminSecurityEvent.findMany()
+     * 
+     * // Get first 10 AdminSecurityEvents
+     * const adminSecurityEvents = await prisma.adminSecurityEvent.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const adminSecurityEventWithIdOnly = await prisma.adminSecurityEvent.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends adminSecurityEventFindManyArgs>(args?: SelectSubset<T, adminSecurityEventFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$adminSecurityEventPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a AdminSecurityEvent.
+     * @param {adminSecurityEventCreateArgs} args - Arguments to create a AdminSecurityEvent.
+     * @example
+     * // Create one AdminSecurityEvent
+     * const AdminSecurityEvent = await prisma.adminSecurityEvent.create({
+     *   data: {
+     *     // ... data to create a AdminSecurityEvent
+     *   }
+     * })
+     * 
+     */
+    create<T extends adminSecurityEventCreateArgs>(args: SelectSubset<T, adminSecurityEventCreateArgs<ExtArgs>>): Prisma__adminSecurityEventClient<$Result.GetResult<Prisma.$adminSecurityEventPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many AdminSecurityEvents.
+     * @param {adminSecurityEventCreateManyArgs} args - Arguments to create many AdminSecurityEvents.
+     * @example
+     * // Create many AdminSecurityEvents
+     * const adminSecurityEvent = await prisma.adminSecurityEvent.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends adminSecurityEventCreateManyArgs>(args?: SelectSubset<T, adminSecurityEventCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a AdminSecurityEvent.
+     * @param {adminSecurityEventDeleteArgs} args - Arguments to delete one AdminSecurityEvent.
+     * @example
+     * // Delete one AdminSecurityEvent
+     * const AdminSecurityEvent = await prisma.adminSecurityEvent.delete({
+     *   where: {
+     *     // ... filter to delete one AdminSecurityEvent
+     *   }
+     * })
+     * 
+     */
+    delete<T extends adminSecurityEventDeleteArgs>(args: SelectSubset<T, adminSecurityEventDeleteArgs<ExtArgs>>): Prisma__adminSecurityEventClient<$Result.GetResult<Prisma.$adminSecurityEventPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one AdminSecurityEvent.
+     * @param {adminSecurityEventUpdateArgs} args - Arguments to update one AdminSecurityEvent.
+     * @example
+     * // Update one AdminSecurityEvent
+     * const adminSecurityEvent = await prisma.adminSecurityEvent.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends adminSecurityEventUpdateArgs>(args: SelectSubset<T, adminSecurityEventUpdateArgs<ExtArgs>>): Prisma__adminSecurityEventClient<$Result.GetResult<Prisma.$adminSecurityEventPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more AdminSecurityEvents.
+     * @param {adminSecurityEventDeleteManyArgs} args - Arguments to filter AdminSecurityEvents to delete.
+     * @example
+     * // Delete a few AdminSecurityEvents
+     * const { count } = await prisma.adminSecurityEvent.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends adminSecurityEventDeleteManyArgs>(args?: SelectSubset<T, adminSecurityEventDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more AdminSecurityEvents.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {adminSecurityEventUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many AdminSecurityEvents
+     * const adminSecurityEvent = await prisma.adminSecurityEvent.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends adminSecurityEventUpdateManyArgs>(args: SelectSubset<T, adminSecurityEventUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one AdminSecurityEvent.
+     * @param {adminSecurityEventUpsertArgs} args - Arguments to update or create a AdminSecurityEvent.
+     * @example
+     * // Update or create a AdminSecurityEvent
+     * const adminSecurityEvent = await prisma.adminSecurityEvent.upsert({
+     *   create: {
+     *     // ... data to create a AdminSecurityEvent
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the AdminSecurityEvent we want to update
+     *   }
+     * })
+     */
+    upsert<T extends adminSecurityEventUpsertArgs>(args: SelectSubset<T, adminSecurityEventUpsertArgs<ExtArgs>>): Prisma__adminSecurityEventClient<$Result.GetResult<Prisma.$adminSecurityEventPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of AdminSecurityEvents.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {adminSecurityEventCountArgs} args - Arguments to filter AdminSecurityEvents to count.
+     * @example
+     * // Count the number of AdminSecurityEvents
+     * const count = await prisma.adminSecurityEvent.count({
+     *   where: {
+     *     // ... the filter for the AdminSecurityEvents we want to count
+     *   }
+     * })
+    **/
+    count<T extends adminSecurityEventCountArgs>(
+      args?: Subset<T, adminSecurityEventCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], AdminSecurityEventCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a AdminSecurityEvent.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AdminSecurityEventAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends AdminSecurityEventAggregateArgs>(args: Subset<T, AdminSecurityEventAggregateArgs>): Prisma.PrismaPromise<GetAdminSecurityEventAggregateType<T>>
+
+    /**
+     * Group by AdminSecurityEvent.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {adminSecurityEventGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends adminSecurityEventGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: adminSecurityEventGroupByArgs['orderBy'] }
+        : { orderBy?: adminSecurityEventGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, adminSecurityEventGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetAdminSecurityEventGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the adminSecurityEvent model
+   */
+  readonly fields: adminSecurityEventFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for adminSecurityEvent.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__adminSecurityEventClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    admin<T extends adminSecurityEvent$adminArgs<ExtArgs> = {}>(args?: Subset<T, adminSecurityEvent$adminArgs<ExtArgs>>): Prisma__adminClient<$Result.GetResult<Prisma.$adminPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the adminSecurityEvent model
+   */
+  interface adminSecurityEventFieldRefs {
+    readonly id: FieldRef<"adminSecurityEvent", 'Int'>
+    readonly adminId: FieldRef<"adminSecurityEvent", 'Int'>
+    readonly eventType: FieldRef<"adminSecurityEvent", 'String'>
+    readonly success: FieldRef<"adminSecurityEvent", 'Boolean'>
+    readonly ip: FieldRef<"adminSecurityEvent", 'String'>
+    readonly metadata: FieldRef<"adminSecurityEvent", 'Json'>
+    readonly createdAt: FieldRef<"adminSecurityEvent", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * adminSecurityEvent findUnique
+   */
+  export type adminSecurityEventFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminSecurityEvent
+     */
+    select?: adminSecurityEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminSecurityEvent
+     */
+    omit?: adminSecurityEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminSecurityEventInclude<ExtArgs> | null
+    /**
+     * Filter, which adminSecurityEvent to fetch.
+     */
+    where: adminSecurityEventWhereUniqueInput
+  }
+
+  /**
+   * adminSecurityEvent findUniqueOrThrow
+   */
+  export type adminSecurityEventFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminSecurityEvent
+     */
+    select?: adminSecurityEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminSecurityEvent
+     */
+    omit?: adminSecurityEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminSecurityEventInclude<ExtArgs> | null
+    /**
+     * Filter, which adminSecurityEvent to fetch.
+     */
+    where: adminSecurityEventWhereUniqueInput
+  }
+
+  /**
+   * adminSecurityEvent findFirst
+   */
+  export type adminSecurityEventFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminSecurityEvent
+     */
+    select?: adminSecurityEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminSecurityEvent
+     */
+    omit?: adminSecurityEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminSecurityEventInclude<ExtArgs> | null
+    /**
+     * Filter, which adminSecurityEvent to fetch.
+     */
+    where?: adminSecurityEventWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of adminSecurityEvents to fetch.
+     */
+    orderBy?: adminSecurityEventOrderByWithRelationInput | adminSecurityEventOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for adminSecurityEvents.
+     */
+    cursor?: adminSecurityEventWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` adminSecurityEvents from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` adminSecurityEvents.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of adminSecurityEvents.
+     */
+    distinct?: AdminSecurityEventScalarFieldEnum | AdminSecurityEventScalarFieldEnum[]
+  }
+
+  /**
+   * adminSecurityEvent findFirstOrThrow
+   */
+  export type adminSecurityEventFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminSecurityEvent
+     */
+    select?: adminSecurityEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminSecurityEvent
+     */
+    omit?: adminSecurityEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminSecurityEventInclude<ExtArgs> | null
+    /**
+     * Filter, which adminSecurityEvent to fetch.
+     */
+    where?: adminSecurityEventWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of adminSecurityEvents to fetch.
+     */
+    orderBy?: adminSecurityEventOrderByWithRelationInput | adminSecurityEventOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for adminSecurityEvents.
+     */
+    cursor?: adminSecurityEventWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` adminSecurityEvents from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` adminSecurityEvents.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of adminSecurityEvents.
+     */
+    distinct?: AdminSecurityEventScalarFieldEnum | AdminSecurityEventScalarFieldEnum[]
+  }
+
+  /**
+   * adminSecurityEvent findMany
+   */
+  export type adminSecurityEventFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminSecurityEvent
+     */
+    select?: adminSecurityEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminSecurityEvent
+     */
+    omit?: adminSecurityEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminSecurityEventInclude<ExtArgs> | null
+    /**
+     * Filter, which adminSecurityEvents to fetch.
+     */
+    where?: adminSecurityEventWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of adminSecurityEvents to fetch.
+     */
+    orderBy?: adminSecurityEventOrderByWithRelationInput | adminSecurityEventOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing adminSecurityEvents.
+     */
+    cursor?: adminSecurityEventWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` adminSecurityEvents from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` adminSecurityEvents.
+     */
+    skip?: number
+    distinct?: AdminSecurityEventScalarFieldEnum | AdminSecurityEventScalarFieldEnum[]
+  }
+
+  /**
+   * adminSecurityEvent create
+   */
+  export type adminSecurityEventCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminSecurityEvent
+     */
+    select?: adminSecurityEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminSecurityEvent
+     */
+    omit?: adminSecurityEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminSecurityEventInclude<ExtArgs> | null
+    /**
+     * The data needed to create a adminSecurityEvent.
+     */
+    data: XOR<adminSecurityEventCreateInput, adminSecurityEventUncheckedCreateInput>
+  }
+
+  /**
+   * adminSecurityEvent createMany
+   */
+  export type adminSecurityEventCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many adminSecurityEvents.
+     */
+    data: adminSecurityEventCreateManyInput | adminSecurityEventCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * adminSecurityEvent update
+   */
+  export type adminSecurityEventUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminSecurityEvent
+     */
+    select?: adminSecurityEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminSecurityEvent
+     */
+    omit?: adminSecurityEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminSecurityEventInclude<ExtArgs> | null
+    /**
+     * The data needed to update a adminSecurityEvent.
+     */
+    data: XOR<adminSecurityEventUpdateInput, adminSecurityEventUncheckedUpdateInput>
+    /**
+     * Choose, which adminSecurityEvent to update.
+     */
+    where: adminSecurityEventWhereUniqueInput
+  }
+
+  /**
+   * adminSecurityEvent updateMany
+   */
+  export type adminSecurityEventUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update adminSecurityEvents.
+     */
+    data: XOR<adminSecurityEventUpdateManyMutationInput, adminSecurityEventUncheckedUpdateManyInput>
+    /**
+     * Filter which adminSecurityEvents to update
+     */
+    where?: adminSecurityEventWhereInput
+    /**
+     * Limit how many adminSecurityEvents to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * adminSecurityEvent upsert
+   */
+  export type adminSecurityEventUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminSecurityEvent
+     */
+    select?: adminSecurityEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminSecurityEvent
+     */
+    omit?: adminSecurityEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminSecurityEventInclude<ExtArgs> | null
+    /**
+     * The filter to search for the adminSecurityEvent to update in case it exists.
+     */
+    where: adminSecurityEventWhereUniqueInput
+    /**
+     * In case the adminSecurityEvent found by the `where` argument doesn't exist, create a new adminSecurityEvent with this data.
+     */
+    create: XOR<adminSecurityEventCreateInput, adminSecurityEventUncheckedCreateInput>
+    /**
+     * In case the adminSecurityEvent was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<adminSecurityEventUpdateInput, adminSecurityEventUncheckedUpdateInput>
+  }
+
+  /**
+   * adminSecurityEvent delete
+   */
+  export type adminSecurityEventDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminSecurityEvent
+     */
+    select?: adminSecurityEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminSecurityEvent
+     */
+    omit?: adminSecurityEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminSecurityEventInclude<ExtArgs> | null
+    /**
+     * Filter which adminSecurityEvent to delete.
+     */
+    where: adminSecurityEventWhereUniqueInput
+  }
+
+  /**
+   * adminSecurityEvent deleteMany
+   */
+  export type adminSecurityEventDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which adminSecurityEvents to delete
+     */
+    where?: adminSecurityEventWhereInput
+    /**
+     * Limit how many adminSecurityEvents to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * adminSecurityEvent.admin
+   */
+  export type adminSecurityEvent$adminArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the admin
+     */
+    select?: adminSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the admin
+     */
+    omit?: adminOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminInclude<ExtArgs> | null
+    where?: adminWhereInput
+  }
+
+  /**
+   * adminSecurityEvent without action
+   */
+  export type adminSecurityEventDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the adminSecurityEvent
+     */
+    select?: adminSecurityEventSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the adminSecurityEvent
+     */
+    omit?: adminSecurityEventOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminSecurityEventInclude<ExtArgs> | null
   }
 
 
@@ -11701,6 +15284,7 @@ export namespace Prisma {
     total_pagado_completa: 'total_pagado_completa',
     estado: 'estado',
     comentario: 'comentario',
+    updatedAt: 'updatedAt',
     contrasena: 'contrasena',
     correo: 'correo',
     total_ganado: 'total_ganado',
@@ -11721,6 +15305,7 @@ export namespace Prisma {
     total_pagado: 'total_pagado',
     estado: 'estado',
     comentario: 'comentario',
+    updatedAt: 'updatedAt',
     total_ganado: 'total_ganado',
     total_pagado_proveedor: 'total_pagado_proveedor'
   };
@@ -11789,6 +15374,8 @@ export namespace Prisma {
     totalPantallas: 'totalPantallas',
     totalCuentas: 'totalCuentas',
     ventasCantidad: 'ventasCantidad',
+    pantallasVendidas: 'pantallasVendidas',
+    cuentasVendidas: 'cuentasVendidas',
     clientesActivos: 'clientesActivos',
     ranking: 'ranking',
     ventasDias: 'ventasDias',
@@ -11803,11 +15390,59 @@ export namespace Prisma {
   export const AdminScalarFieldEnum: {
     id: 'id',
     usuario: 'usuario',
+    email: 'email',
     contrasena: 'contrasena',
     creado_en: 'creado_en'
   };
 
   export type AdminScalarFieldEnum = (typeof AdminScalarFieldEnum)[keyof typeof AdminScalarFieldEnum]
+
+
+  export const DeletedAccountHistoryScalarFieldEnum: {
+    id: 'id',
+    dedupeKey: 'dedupeKey',
+    plataformaId: 'plataformaId',
+    plataforma: 'plataforma',
+    correo: 'correo',
+    clave: 'clave',
+    proveedor: 'proveedor',
+    tipoRegistro: 'tipoRegistro',
+    tipoEliminacion: 'tipoEliminacion',
+    identificadorOriginal: 'identificadorOriginal',
+    eliminadoPorAdminId: 'eliminadoPorAdminId',
+    datosRecuperacion: 'datosRecuperacion',
+    cantidadEliminaciones: 'cantidadEliminaciones',
+    primeraEliminacion: 'primeraEliminacion',
+    ultimaEliminacion: 'ultimaEliminacion'
+  };
+
+  export type DeletedAccountHistoryScalarFieldEnum = (typeof DeletedAccountHistoryScalarFieldEnum)[keyof typeof DeletedAccountHistoryScalarFieldEnum]
+
+
+  export const AdminPasswordResetTokenScalarFieldEnum: {
+    id: 'id',
+    adminId: 'adminId',
+    tokenHash: 'tokenHash',
+    expiresAt: 'expiresAt',
+    usedAt: 'usedAt',
+    requestedIp: 'requestedIp',
+    createdAt: 'createdAt'
+  };
+
+  export type AdminPasswordResetTokenScalarFieldEnum = (typeof AdminPasswordResetTokenScalarFieldEnum)[keyof typeof AdminPasswordResetTokenScalarFieldEnum]
+
+
+  export const AdminSecurityEventScalarFieldEnum: {
+    id: 'id',
+    adminId: 'adminId',
+    eventType: 'eventType',
+    success: 'success',
+    ip: 'ip',
+    metadata: 'metadata',
+    createdAt: 'createdAt'
+  };
+
+  export type AdminSecurityEventScalarFieldEnum = (typeof AdminSecurityEventScalarFieldEnum)[keyof typeof AdminSecurityEventScalarFieldEnum]
 
 
   export const SortOrder: {
@@ -11936,10 +15571,41 @@ export namespace Prisma {
 
   export const adminOrderByRelevanceFieldEnum: {
     usuario: 'usuario',
+    email: 'email',
     contrasena: 'contrasena'
   };
 
   export type adminOrderByRelevanceFieldEnum = (typeof adminOrderByRelevanceFieldEnum)[keyof typeof adminOrderByRelevanceFieldEnum]
+
+
+  export const deletedAccountHistoryOrderByRelevanceFieldEnum: {
+    dedupeKey: 'dedupeKey',
+    plataforma: 'plataforma',
+    correo: 'correo',
+    clave: 'clave',
+    proveedor: 'proveedor',
+    tipoRegistro: 'tipoRegistro',
+    tipoEliminacion: 'tipoEliminacion',
+    identificadorOriginal: 'identificadorOriginal'
+  };
+
+  export type deletedAccountHistoryOrderByRelevanceFieldEnum = (typeof deletedAccountHistoryOrderByRelevanceFieldEnum)[keyof typeof deletedAccountHistoryOrderByRelevanceFieldEnum]
+
+
+  export const adminPasswordResetTokenOrderByRelevanceFieldEnum: {
+    tokenHash: 'tokenHash',
+    requestedIp: 'requestedIp'
+  };
+
+  export type adminPasswordResetTokenOrderByRelevanceFieldEnum = (typeof adminPasswordResetTokenOrderByRelevanceFieldEnum)[keyof typeof adminPasswordResetTokenOrderByRelevanceFieldEnum]
+
+
+  export const adminSecurityEventOrderByRelevanceFieldEnum: {
+    eventType: 'eventType',
+    ip: 'ip'
+  };
+
+  export type adminSecurityEventOrderByRelevanceFieldEnum = (typeof adminSecurityEventOrderByRelevanceFieldEnum)[keyof typeof adminSecurityEventOrderByRelevanceFieldEnum]
 
 
   /**
@@ -12100,6 +15766,7 @@ export namespace Prisma {
     total_pagado_completa?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
     estado?: StringNullableFilter<"cuentascompletas"> | string | null
     comentario?: StringNullableFilter<"cuentascompletas"> | string | null
+    updatedAt?: DateTimeFilter<"cuentascompletas"> | Date | string
     contrasena?: StringFilter<"cuentascompletas"> | string
     correo?: StringFilter<"cuentascompletas"> | string
     total_ganado?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
@@ -12119,6 +15786,7 @@ export namespace Prisma {
     total_pagado_completa?: SortOrderInput | SortOrder
     estado?: SortOrderInput | SortOrder
     comentario?: SortOrderInput | SortOrder
+    updatedAt?: SortOrder
     contrasena?: SortOrder
     correo?: SortOrder
     total_ganado?: SortOrderInput | SortOrder
@@ -12142,6 +15810,7 @@ export namespace Prisma {
     total_pagado_completa?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
     estado?: StringNullableFilter<"cuentascompletas"> | string | null
     comentario?: StringNullableFilter<"cuentascompletas"> | string | null
+    updatedAt?: DateTimeFilter<"cuentascompletas"> | Date | string
     contrasena?: StringFilter<"cuentascompletas"> | string
     correo?: StringFilter<"cuentascompletas"> | string
     total_ganado?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
@@ -12161,6 +15830,7 @@ export namespace Prisma {
     total_pagado_completa?: SortOrderInput | SortOrder
     estado?: SortOrderInput | SortOrder
     comentario?: SortOrderInput | SortOrder
+    updatedAt?: SortOrder
     contrasena?: SortOrder
     correo?: SortOrder
     total_ganado?: SortOrderInput | SortOrder
@@ -12186,6 +15856,7 @@ export namespace Prisma {
     total_pagado_completa?: DecimalNullableWithAggregatesFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
     estado?: StringNullableWithAggregatesFilter<"cuentascompletas"> | string | null
     comentario?: StringNullableWithAggregatesFilter<"cuentascompletas"> | string | null
+    updatedAt?: DateTimeWithAggregatesFilter<"cuentascompletas"> | Date | string
     contrasena?: StringWithAggregatesFilter<"cuentascompletas"> | string
     correo?: StringWithAggregatesFilter<"cuentascompletas"> | string
     total_ganado?: DecimalNullableWithAggregatesFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
@@ -12206,6 +15877,7 @@ export namespace Prisma {
     total_pagado?: DecimalNullableFilter<"pantallas"> | Decimal | DecimalJsLike | number | string | null
     estado?: StringFilter<"pantallas"> | string
     comentario?: StringNullableFilter<"pantallas"> | string | null
+    updatedAt?: DateTimeFilter<"pantallas"> | Date | string
     total_ganado?: DecimalNullableFilter<"pantallas"> | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: DecimalNullableFilter<"pantallas"> | Decimal | DecimalJsLike | number | string | null
     usuarios?: XOR<UsuariosScalarRelationFilter, usuariosWhereInput>
@@ -12223,6 +15895,7 @@ export namespace Prisma {
     total_pagado?: SortOrderInput | SortOrder
     estado?: SortOrder
     comentario?: SortOrderInput | SortOrder
+    updatedAt?: SortOrder
     total_ganado?: SortOrderInput | SortOrder
     total_pagado_proveedor?: SortOrderInput | SortOrder
     usuarios?: usuariosOrderByWithRelationInput
@@ -12244,6 +15917,7 @@ export namespace Prisma {
     total_pagado?: DecimalNullableFilter<"pantallas"> | Decimal | DecimalJsLike | number | string | null
     estado?: StringFilter<"pantallas"> | string
     comentario?: StringNullableFilter<"pantallas"> | string | null
+    updatedAt?: DateTimeFilter<"pantallas"> | Date | string
     total_ganado?: DecimalNullableFilter<"pantallas"> | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: DecimalNullableFilter<"pantallas"> | Decimal | DecimalJsLike | number | string | null
     usuarios?: XOR<UsuariosScalarRelationFilter, usuariosWhereInput>
@@ -12261,6 +15935,7 @@ export namespace Prisma {
     total_pagado?: SortOrderInput | SortOrder
     estado?: SortOrder
     comentario?: SortOrderInput | SortOrder
+    updatedAt?: SortOrder
     total_ganado?: SortOrderInput | SortOrder
     total_pagado_proveedor?: SortOrderInput | SortOrder
     _count?: pantallasCountOrderByAggregateInput
@@ -12284,6 +15959,7 @@ export namespace Prisma {
     total_pagado?: DecimalNullableWithAggregatesFilter<"pantallas"> | Decimal | DecimalJsLike | number | string | null
     estado?: StringWithAggregatesFilter<"pantallas"> | string
     comentario?: StringNullableWithAggregatesFilter<"pantallas"> | string | null
+    updatedAt?: DateTimeWithAggregatesFilter<"pantallas"> | Date | string
     total_ganado?: DecimalNullableWithAggregatesFilter<"pantallas"> | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: DecimalNullableWithAggregatesFilter<"pantallas"> | Decimal | DecimalJsLike | number | string | null
   }
@@ -12578,6 +16254,8 @@ export namespace Prisma {
     totalPantallas?: DecimalFilter<"metricasmensuales"> | Decimal | DecimalJsLike | number | string
     totalCuentas?: DecimalFilter<"metricasmensuales"> | Decimal | DecimalJsLike | number | string
     ventasCantidad?: IntFilter<"metricasmensuales"> | number
+    pantallasVendidas?: IntFilter<"metricasmensuales"> | number
+    cuentasVendidas?: IntFilter<"metricasmensuales"> | number
     clientesActivos?: IntFilter<"metricasmensuales"> | number
     ranking?: JsonFilter<"metricasmensuales">
     ventasDias?: JsonFilter<"metricasmensuales">
@@ -12595,6 +16273,8 @@ export namespace Prisma {
     totalPantallas?: SortOrder
     totalCuentas?: SortOrder
     ventasCantidad?: SortOrder
+    pantallasVendidas?: SortOrder
+    cuentasVendidas?: SortOrder
     clientesActivos?: SortOrder
     ranking?: SortOrder
     ventasDias?: SortOrder
@@ -12617,6 +16297,8 @@ export namespace Prisma {
     totalPantallas?: DecimalFilter<"metricasmensuales"> | Decimal | DecimalJsLike | number | string
     totalCuentas?: DecimalFilter<"metricasmensuales"> | Decimal | DecimalJsLike | number | string
     ventasCantidad?: IntFilter<"metricasmensuales"> | number
+    pantallasVendidas?: IntFilter<"metricasmensuales"> | number
+    cuentasVendidas?: IntFilter<"metricasmensuales"> | number
     clientesActivos?: IntFilter<"metricasmensuales"> | number
     ranking?: JsonFilter<"metricasmensuales">
     ventasDias?: JsonFilter<"metricasmensuales">
@@ -12634,6 +16316,8 @@ export namespace Prisma {
     totalPantallas?: SortOrder
     totalCuentas?: SortOrder
     ventasCantidad?: SortOrder
+    pantallasVendidas?: SortOrder
+    cuentasVendidas?: SortOrder
     clientesActivos?: SortOrder
     ranking?: SortOrder
     ventasDias?: SortOrder
@@ -12659,6 +16343,8 @@ export namespace Prisma {
     totalPantallas?: DecimalWithAggregatesFilter<"metricasmensuales"> | Decimal | DecimalJsLike | number | string
     totalCuentas?: DecimalWithAggregatesFilter<"metricasmensuales"> | Decimal | DecimalJsLike | number | string
     ventasCantidad?: IntWithAggregatesFilter<"metricasmensuales"> | number
+    pantallasVendidas?: IntWithAggregatesFilter<"metricasmensuales"> | number
+    cuentasVendidas?: IntWithAggregatesFilter<"metricasmensuales"> | number
     clientesActivos?: IntWithAggregatesFilter<"metricasmensuales"> | number
     ranking?: JsonWithAggregatesFilter<"metricasmensuales">
     ventasDias?: JsonWithAggregatesFilter<"metricasmensuales">
@@ -12673,31 +16359,44 @@ export namespace Prisma {
     NOT?: adminWhereInput | adminWhereInput[]
     id?: IntFilter<"admin"> | number
     usuario?: StringFilter<"admin"> | string
+    email?: StringNullableFilter<"admin"> | string | null
     contrasena?: StringFilter<"admin"> | string
     creado_en?: DateTimeFilter<"admin"> | Date | string
+    resetTokens?: AdminPasswordResetTokenListRelationFilter
+    securityEvents?: AdminSecurityEventListRelationFilter
+    deletionHistory?: DeletedAccountHistoryListRelationFilter
   }
 
   export type adminOrderByWithRelationInput = {
     id?: SortOrder
     usuario?: SortOrder
+    email?: SortOrderInput | SortOrder
     contrasena?: SortOrder
     creado_en?: SortOrder
+    resetTokens?: adminPasswordResetTokenOrderByRelationAggregateInput
+    securityEvents?: adminSecurityEventOrderByRelationAggregateInput
+    deletionHistory?: deletedAccountHistoryOrderByRelationAggregateInput
     _relevance?: adminOrderByRelevanceInput
   }
 
   export type adminWhereUniqueInput = Prisma.AtLeast<{
     id?: number
     usuario?: string
+    email?: string
     AND?: adminWhereInput | adminWhereInput[]
     OR?: adminWhereInput[]
     NOT?: adminWhereInput | adminWhereInput[]
     contrasena?: StringFilter<"admin"> | string
     creado_en?: DateTimeFilter<"admin"> | Date | string
-  }, "id" | "usuario">
+    resetTokens?: AdminPasswordResetTokenListRelationFilter
+    securityEvents?: AdminSecurityEventListRelationFilter
+    deletionHistory?: DeletedAccountHistoryListRelationFilter
+  }, "id" | "usuario" | "email">
 
   export type adminOrderByWithAggregationInput = {
     id?: SortOrder
     usuario?: SortOrder
+    email?: SortOrderInput | SortOrder
     contrasena?: SortOrder
     creado_en?: SortOrder
     _count?: adminCountOrderByAggregateInput
@@ -12713,8 +16412,253 @@ export namespace Prisma {
     NOT?: adminScalarWhereWithAggregatesInput | adminScalarWhereWithAggregatesInput[]
     id?: IntWithAggregatesFilter<"admin"> | number
     usuario?: StringWithAggregatesFilter<"admin"> | string
+    email?: StringNullableWithAggregatesFilter<"admin"> | string | null
     contrasena?: StringWithAggregatesFilter<"admin"> | string
     creado_en?: DateTimeWithAggregatesFilter<"admin"> | Date | string
+  }
+
+  export type deletedAccountHistoryWhereInput = {
+    AND?: deletedAccountHistoryWhereInput | deletedAccountHistoryWhereInput[]
+    OR?: deletedAccountHistoryWhereInput[]
+    NOT?: deletedAccountHistoryWhereInput | deletedAccountHistoryWhereInput[]
+    id?: BigIntFilter<"deletedAccountHistory"> | bigint | number
+    dedupeKey?: StringFilter<"deletedAccountHistory"> | string
+    plataformaId?: IntNullableFilter<"deletedAccountHistory"> | number | null
+    plataforma?: StringFilter<"deletedAccountHistory"> | string
+    correo?: StringFilter<"deletedAccountHistory"> | string
+    clave?: StringNullableFilter<"deletedAccountHistory"> | string | null
+    proveedor?: StringNullableFilter<"deletedAccountHistory"> | string | null
+    tipoRegistro?: StringFilter<"deletedAccountHistory"> | string
+    tipoEliminacion?: StringFilter<"deletedAccountHistory"> | string
+    identificadorOriginal?: StringNullableFilter<"deletedAccountHistory"> | string | null
+    eliminadoPorAdminId?: IntNullableFilter<"deletedAccountHistory"> | number | null
+    datosRecuperacion?: JsonNullableFilter<"deletedAccountHistory">
+    cantidadEliminaciones?: IntFilter<"deletedAccountHistory"> | number
+    primeraEliminacion?: DateTimeFilter<"deletedAccountHistory"> | Date | string
+    ultimaEliminacion?: DateTimeFilter<"deletedAccountHistory"> | Date | string
+    eliminadoPor?: XOR<AdminNullableScalarRelationFilter, adminWhereInput> | null
+  }
+
+  export type deletedAccountHistoryOrderByWithRelationInput = {
+    id?: SortOrder
+    dedupeKey?: SortOrder
+    plataformaId?: SortOrderInput | SortOrder
+    plataforma?: SortOrder
+    correo?: SortOrder
+    clave?: SortOrderInput | SortOrder
+    proveedor?: SortOrderInput | SortOrder
+    tipoRegistro?: SortOrder
+    tipoEliminacion?: SortOrder
+    identificadorOriginal?: SortOrderInput | SortOrder
+    eliminadoPorAdminId?: SortOrderInput | SortOrder
+    datosRecuperacion?: SortOrderInput | SortOrder
+    cantidadEliminaciones?: SortOrder
+    primeraEliminacion?: SortOrder
+    ultimaEliminacion?: SortOrder
+    eliminadoPor?: adminOrderByWithRelationInput
+    _relevance?: deletedAccountHistoryOrderByRelevanceInput
+  }
+
+  export type deletedAccountHistoryWhereUniqueInput = Prisma.AtLeast<{
+    id?: bigint | number
+    dedupeKey?: string
+    AND?: deletedAccountHistoryWhereInput | deletedAccountHistoryWhereInput[]
+    OR?: deletedAccountHistoryWhereInput[]
+    NOT?: deletedAccountHistoryWhereInput | deletedAccountHistoryWhereInput[]
+    plataformaId?: IntNullableFilter<"deletedAccountHistory"> | number | null
+    plataforma?: StringFilter<"deletedAccountHistory"> | string
+    correo?: StringFilter<"deletedAccountHistory"> | string
+    clave?: StringNullableFilter<"deletedAccountHistory"> | string | null
+    proveedor?: StringNullableFilter<"deletedAccountHistory"> | string | null
+    tipoRegistro?: StringFilter<"deletedAccountHistory"> | string
+    tipoEliminacion?: StringFilter<"deletedAccountHistory"> | string
+    identificadorOriginal?: StringNullableFilter<"deletedAccountHistory"> | string | null
+    eliminadoPorAdminId?: IntNullableFilter<"deletedAccountHistory"> | number | null
+    datosRecuperacion?: JsonNullableFilter<"deletedAccountHistory">
+    cantidadEliminaciones?: IntFilter<"deletedAccountHistory"> | number
+    primeraEliminacion?: DateTimeFilter<"deletedAccountHistory"> | Date | string
+    ultimaEliminacion?: DateTimeFilter<"deletedAccountHistory"> | Date | string
+    eliminadoPor?: XOR<AdminNullableScalarRelationFilter, adminWhereInput> | null
+  }, "id" | "dedupeKey">
+
+  export type deletedAccountHistoryOrderByWithAggregationInput = {
+    id?: SortOrder
+    dedupeKey?: SortOrder
+    plataformaId?: SortOrderInput | SortOrder
+    plataforma?: SortOrder
+    correo?: SortOrder
+    clave?: SortOrderInput | SortOrder
+    proveedor?: SortOrderInput | SortOrder
+    tipoRegistro?: SortOrder
+    tipoEliminacion?: SortOrder
+    identificadorOriginal?: SortOrderInput | SortOrder
+    eliminadoPorAdminId?: SortOrderInput | SortOrder
+    datosRecuperacion?: SortOrderInput | SortOrder
+    cantidadEliminaciones?: SortOrder
+    primeraEliminacion?: SortOrder
+    ultimaEliminacion?: SortOrder
+    _count?: deletedAccountHistoryCountOrderByAggregateInput
+    _avg?: deletedAccountHistoryAvgOrderByAggregateInput
+    _max?: deletedAccountHistoryMaxOrderByAggregateInput
+    _min?: deletedAccountHistoryMinOrderByAggregateInput
+    _sum?: deletedAccountHistorySumOrderByAggregateInput
+  }
+
+  export type deletedAccountHistoryScalarWhereWithAggregatesInput = {
+    AND?: deletedAccountHistoryScalarWhereWithAggregatesInput | deletedAccountHistoryScalarWhereWithAggregatesInput[]
+    OR?: deletedAccountHistoryScalarWhereWithAggregatesInput[]
+    NOT?: deletedAccountHistoryScalarWhereWithAggregatesInput | deletedAccountHistoryScalarWhereWithAggregatesInput[]
+    id?: BigIntWithAggregatesFilter<"deletedAccountHistory"> | bigint | number
+    dedupeKey?: StringWithAggregatesFilter<"deletedAccountHistory"> | string
+    plataformaId?: IntNullableWithAggregatesFilter<"deletedAccountHistory"> | number | null
+    plataforma?: StringWithAggregatesFilter<"deletedAccountHistory"> | string
+    correo?: StringWithAggregatesFilter<"deletedAccountHistory"> | string
+    clave?: StringNullableWithAggregatesFilter<"deletedAccountHistory"> | string | null
+    proveedor?: StringNullableWithAggregatesFilter<"deletedAccountHistory"> | string | null
+    tipoRegistro?: StringWithAggregatesFilter<"deletedAccountHistory"> | string
+    tipoEliminacion?: StringWithAggregatesFilter<"deletedAccountHistory"> | string
+    identificadorOriginal?: StringNullableWithAggregatesFilter<"deletedAccountHistory"> | string | null
+    eliminadoPorAdminId?: IntNullableWithAggregatesFilter<"deletedAccountHistory"> | number | null
+    datosRecuperacion?: JsonNullableWithAggregatesFilter<"deletedAccountHistory">
+    cantidadEliminaciones?: IntWithAggregatesFilter<"deletedAccountHistory"> | number
+    primeraEliminacion?: DateTimeWithAggregatesFilter<"deletedAccountHistory"> | Date | string
+    ultimaEliminacion?: DateTimeWithAggregatesFilter<"deletedAccountHistory"> | Date | string
+  }
+
+  export type adminPasswordResetTokenWhereInput = {
+    AND?: adminPasswordResetTokenWhereInput | adminPasswordResetTokenWhereInput[]
+    OR?: adminPasswordResetTokenWhereInput[]
+    NOT?: adminPasswordResetTokenWhereInput | adminPasswordResetTokenWhereInput[]
+    id?: IntFilter<"adminPasswordResetToken"> | number
+    adminId?: IntFilter<"adminPasswordResetToken"> | number
+    tokenHash?: StringFilter<"adminPasswordResetToken"> | string
+    expiresAt?: DateTimeFilter<"adminPasswordResetToken"> | Date | string
+    usedAt?: DateTimeNullableFilter<"adminPasswordResetToken"> | Date | string | null
+    requestedIp?: StringNullableFilter<"adminPasswordResetToken"> | string | null
+    createdAt?: DateTimeFilter<"adminPasswordResetToken"> | Date | string
+    admin?: XOR<AdminScalarRelationFilter, adminWhereInput>
+  }
+
+  export type adminPasswordResetTokenOrderByWithRelationInput = {
+    id?: SortOrder
+    adminId?: SortOrder
+    tokenHash?: SortOrder
+    expiresAt?: SortOrder
+    usedAt?: SortOrderInput | SortOrder
+    requestedIp?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    admin?: adminOrderByWithRelationInput
+    _relevance?: adminPasswordResetTokenOrderByRelevanceInput
+  }
+
+  export type adminPasswordResetTokenWhereUniqueInput = Prisma.AtLeast<{
+    id?: number
+    tokenHash?: string
+    AND?: adminPasswordResetTokenWhereInput | adminPasswordResetTokenWhereInput[]
+    OR?: adminPasswordResetTokenWhereInput[]
+    NOT?: adminPasswordResetTokenWhereInput | adminPasswordResetTokenWhereInput[]
+    adminId?: IntFilter<"adminPasswordResetToken"> | number
+    expiresAt?: DateTimeFilter<"adminPasswordResetToken"> | Date | string
+    usedAt?: DateTimeNullableFilter<"adminPasswordResetToken"> | Date | string | null
+    requestedIp?: StringNullableFilter<"adminPasswordResetToken"> | string | null
+    createdAt?: DateTimeFilter<"adminPasswordResetToken"> | Date | string
+    admin?: XOR<AdminScalarRelationFilter, adminWhereInput>
+  }, "id" | "tokenHash">
+
+  export type adminPasswordResetTokenOrderByWithAggregationInput = {
+    id?: SortOrder
+    adminId?: SortOrder
+    tokenHash?: SortOrder
+    expiresAt?: SortOrder
+    usedAt?: SortOrderInput | SortOrder
+    requestedIp?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    _count?: adminPasswordResetTokenCountOrderByAggregateInput
+    _avg?: adminPasswordResetTokenAvgOrderByAggregateInput
+    _max?: adminPasswordResetTokenMaxOrderByAggregateInput
+    _min?: adminPasswordResetTokenMinOrderByAggregateInput
+    _sum?: adminPasswordResetTokenSumOrderByAggregateInput
+  }
+
+  export type adminPasswordResetTokenScalarWhereWithAggregatesInput = {
+    AND?: adminPasswordResetTokenScalarWhereWithAggregatesInput | adminPasswordResetTokenScalarWhereWithAggregatesInput[]
+    OR?: adminPasswordResetTokenScalarWhereWithAggregatesInput[]
+    NOT?: adminPasswordResetTokenScalarWhereWithAggregatesInput | adminPasswordResetTokenScalarWhereWithAggregatesInput[]
+    id?: IntWithAggregatesFilter<"adminPasswordResetToken"> | number
+    adminId?: IntWithAggregatesFilter<"adminPasswordResetToken"> | number
+    tokenHash?: StringWithAggregatesFilter<"adminPasswordResetToken"> | string
+    expiresAt?: DateTimeWithAggregatesFilter<"adminPasswordResetToken"> | Date | string
+    usedAt?: DateTimeNullableWithAggregatesFilter<"adminPasswordResetToken"> | Date | string | null
+    requestedIp?: StringNullableWithAggregatesFilter<"adminPasswordResetToken"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"adminPasswordResetToken"> | Date | string
+  }
+
+  export type adminSecurityEventWhereInput = {
+    AND?: adminSecurityEventWhereInput | adminSecurityEventWhereInput[]
+    OR?: adminSecurityEventWhereInput[]
+    NOT?: adminSecurityEventWhereInput | adminSecurityEventWhereInput[]
+    id?: IntFilter<"adminSecurityEvent"> | number
+    adminId?: IntNullableFilter<"adminSecurityEvent"> | number | null
+    eventType?: StringFilter<"adminSecurityEvent"> | string
+    success?: BoolFilter<"adminSecurityEvent"> | boolean
+    ip?: StringNullableFilter<"adminSecurityEvent"> | string | null
+    metadata?: JsonNullableFilter<"adminSecurityEvent">
+    createdAt?: DateTimeFilter<"adminSecurityEvent"> | Date | string
+    admin?: XOR<AdminNullableScalarRelationFilter, adminWhereInput> | null
+  }
+
+  export type adminSecurityEventOrderByWithRelationInput = {
+    id?: SortOrder
+    adminId?: SortOrderInput | SortOrder
+    eventType?: SortOrder
+    success?: SortOrder
+    ip?: SortOrderInput | SortOrder
+    metadata?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    admin?: adminOrderByWithRelationInput
+    _relevance?: adminSecurityEventOrderByRelevanceInput
+  }
+
+  export type adminSecurityEventWhereUniqueInput = Prisma.AtLeast<{
+    id?: number
+    AND?: adminSecurityEventWhereInput | adminSecurityEventWhereInput[]
+    OR?: adminSecurityEventWhereInput[]
+    NOT?: adminSecurityEventWhereInput | adminSecurityEventWhereInput[]
+    adminId?: IntNullableFilter<"adminSecurityEvent"> | number | null
+    eventType?: StringFilter<"adminSecurityEvent"> | string
+    success?: BoolFilter<"adminSecurityEvent"> | boolean
+    ip?: StringNullableFilter<"adminSecurityEvent"> | string | null
+    metadata?: JsonNullableFilter<"adminSecurityEvent">
+    createdAt?: DateTimeFilter<"adminSecurityEvent"> | Date | string
+    admin?: XOR<AdminNullableScalarRelationFilter, adminWhereInput> | null
+  }, "id">
+
+  export type adminSecurityEventOrderByWithAggregationInput = {
+    id?: SortOrder
+    adminId?: SortOrderInput | SortOrder
+    eventType?: SortOrder
+    success?: SortOrder
+    ip?: SortOrderInput | SortOrder
+    metadata?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    _count?: adminSecurityEventCountOrderByAggregateInput
+    _avg?: adminSecurityEventAvgOrderByAggregateInput
+    _max?: adminSecurityEventMaxOrderByAggregateInput
+    _min?: adminSecurityEventMinOrderByAggregateInput
+    _sum?: adminSecurityEventSumOrderByAggregateInput
+  }
+
+  export type adminSecurityEventScalarWhereWithAggregatesInput = {
+    AND?: adminSecurityEventScalarWhereWithAggregatesInput | adminSecurityEventScalarWhereWithAggregatesInput[]
+    OR?: adminSecurityEventScalarWhereWithAggregatesInput[]
+    NOT?: adminSecurityEventScalarWhereWithAggregatesInput | adminSecurityEventScalarWhereWithAggregatesInput[]
+    id?: IntWithAggregatesFilter<"adminSecurityEvent"> | number
+    adminId?: IntNullableWithAggregatesFilter<"adminSecurityEvent"> | number | null
+    eventType?: StringWithAggregatesFilter<"adminSecurityEvent"> | string
+    success?: BoolWithAggregatesFilter<"adminSecurityEvent"> | boolean
+    ip?: StringNullableWithAggregatesFilter<"adminSecurityEvent"> | string | null
+    metadata?: JsonNullableWithAggregatesFilter<"adminSecurityEvent">
+    createdAt?: DateTimeWithAggregatesFilter<"adminSecurityEvent"> | Date | string
   }
 
   export type cuentascompartidasCreateInput = {
@@ -12789,6 +16733,7 @@ export namespace Prisma {
     total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     estado?: string | null
     comentario?: string | null
+    updatedAt?: Date | string
     contrasena: string
     correo: string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
@@ -12808,6 +16753,7 @@ export namespace Prisma {
     total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     estado?: string | null
     comentario?: string | null
+    updatedAt?: Date | string
     contrasena: string
     correo: string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
@@ -12823,6 +16769,7 @@ export namespace Prisma {
     total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: NullableStringFieldUpdateOperationsInput | string | null
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     contrasena?: StringFieldUpdateOperationsInput | string
     correo?: StringFieldUpdateOperationsInput | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
@@ -12842,6 +16789,7 @@ export namespace Prisma {
     total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: NullableStringFieldUpdateOperationsInput | string | null
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     contrasena?: StringFieldUpdateOperationsInput | string
     correo?: StringFieldUpdateOperationsInput | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
@@ -12859,6 +16807,7 @@ export namespace Prisma {
     total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     estado?: string | null
     comentario?: string | null
+    updatedAt?: Date | string
     contrasena: string
     correo: string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
@@ -12874,6 +16823,7 @@ export namespace Prisma {
     total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: NullableStringFieldUpdateOperationsInput | string | null
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     contrasena?: StringFieldUpdateOperationsInput | string
     correo?: StringFieldUpdateOperationsInput | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
@@ -12891,6 +16841,7 @@ export namespace Prisma {
     total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: NullableStringFieldUpdateOperationsInput | string | null
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     contrasena?: StringFieldUpdateOperationsInput | string
     correo?: StringFieldUpdateOperationsInput | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
@@ -12905,6 +16856,7 @@ export namespace Prisma {
     total_pagado?: Decimal | DecimalJsLike | number | string | null
     estado: string
     comentario?: string | null
+    updatedAt?: Date | string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
     usuarios: usuariosCreateNestedOneWithoutPantallasInput
@@ -12922,6 +16874,7 @@ export namespace Prisma {
     total_pagado?: Decimal | DecimalJsLike | number | string | null
     estado: string
     comentario?: string | null
+    updatedAt?: Date | string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
   }
@@ -12934,6 +16887,7 @@ export namespace Prisma {
     total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: StringFieldUpdateOperationsInput | string
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     usuarios?: usuariosUpdateOneRequiredWithoutPantallasNestedInput
@@ -12951,6 +16905,7 @@ export namespace Prisma {
     total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: StringFieldUpdateOperationsInput | string
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
   }
@@ -12966,6 +16921,7 @@ export namespace Prisma {
     total_pagado?: Decimal | DecimalJsLike | number | string | null
     estado: string
     comentario?: string | null
+    updatedAt?: Date | string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
   }
@@ -12978,6 +16934,7 @@ export namespace Prisma {
     total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: StringFieldUpdateOperationsInput | string
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
   }
@@ -12993,6 +16950,7 @@ export namespace Prisma {
     total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: StringFieldUpdateOperationsInput | string
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
   }
@@ -13277,6 +17235,8 @@ export namespace Prisma {
     totalPantallas: Decimal | DecimalJsLike | number | string
     totalCuentas: Decimal | DecimalJsLike | number | string
     ventasCantidad: number
+    pantallasVendidas?: number
+    cuentasVendidas?: number
     clientesActivos: number
     ranking: JsonNullValueInput | InputJsonValue
     ventasDias: JsonNullValueInput | InputJsonValue
@@ -13294,6 +17254,8 @@ export namespace Prisma {
     totalPantallas: Decimal | DecimalJsLike | number | string
     totalCuentas: Decimal | DecimalJsLike | number | string
     ventasCantidad: number
+    pantallasVendidas?: number
+    cuentasVendidas?: number
     clientesActivos: number
     ranking: JsonNullValueInput | InputJsonValue
     ventasDias: JsonNullValueInput | InputJsonValue
@@ -13310,6 +17272,8 @@ export namespace Prisma {
     totalPantallas?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalCuentas?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     ventasCantidad?: IntFieldUpdateOperationsInput | number
+    pantallasVendidas?: IntFieldUpdateOperationsInput | number
+    cuentasVendidas?: IntFieldUpdateOperationsInput | number
     clientesActivos?: IntFieldUpdateOperationsInput | number
     ranking?: JsonNullValueInput | InputJsonValue
     ventasDias?: JsonNullValueInput | InputJsonValue
@@ -13327,6 +17291,8 @@ export namespace Prisma {
     totalPantallas?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalCuentas?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     ventasCantidad?: IntFieldUpdateOperationsInput | number
+    pantallasVendidas?: IntFieldUpdateOperationsInput | number
+    cuentasVendidas?: IntFieldUpdateOperationsInput | number
     clientesActivos?: IntFieldUpdateOperationsInput | number
     ranking?: JsonNullValueInput | InputJsonValue
     ventasDias?: JsonNullValueInput | InputJsonValue
@@ -13344,6 +17310,8 @@ export namespace Prisma {
     totalPantallas: Decimal | DecimalJsLike | number | string
     totalCuentas: Decimal | DecimalJsLike | number | string
     ventasCantidad: number
+    pantallasVendidas?: number
+    cuentasVendidas?: number
     clientesActivos: number
     ranking: JsonNullValueInput | InputJsonValue
     ventasDias: JsonNullValueInput | InputJsonValue
@@ -13360,6 +17328,8 @@ export namespace Prisma {
     totalPantallas?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalCuentas?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     ventasCantidad?: IntFieldUpdateOperationsInput | number
+    pantallasVendidas?: IntFieldUpdateOperationsInput | number
+    cuentasVendidas?: IntFieldUpdateOperationsInput | number
     clientesActivos?: IntFieldUpdateOperationsInput | number
     ranking?: JsonNullValueInput | InputJsonValue
     ventasDias?: JsonNullValueInput | InputJsonValue
@@ -13377,6 +17347,8 @@ export namespace Prisma {
     totalPantallas?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     totalCuentas?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     ventasCantidad?: IntFieldUpdateOperationsInput | number
+    pantallasVendidas?: IntFieldUpdateOperationsInput | number
+    cuentasVendidas?: IntFieldUpdateOperationsInput | number
     clientesActivos?: IntFieldUpdateOperationsInput | number
     ranking?: JsonNullValueInput | InputJsonValue
     ventasDias?: JsonNullValueInput | InputJsonValue
@@ -13387,39 +17359,57 @@ export namespace Prisma {
 
   export type adminCreateInput = {
     usuario: string
+    email?: string | null
     contrasena: string
     creado_en?: Date | string
+    resetTokens?: adminPasswordResetTokenCreateNestedManyWithoutAdminInput
+    securityEvents?: adminSecurityEventCreateNestedManyWithoutAdminInput
+    deletionHistory?: deletedAccountHistoryCreateNestedManyWithoutEliminadoPorInput
   }
 
   export type adminUncheckedCreateInput = {
     id?: number
     usuario: string
+    email?: string | null
     contrasena: string
     creado_en?: Date | string
+    resetTokens?: adminPasswordResetTokenUncheckedCreateNestedManyWithoutAdminInput
+    securityEvents?: adminSecurityEventUncheckedCreateNestedManyWithoutAdminInput
+    deletionHistory?: deletedAccountHistoryUncheckedCreateNestedManyWithoutEliminadoPorInput
   }
 
   export type adminUpdateInput = {
     usuario?: StringFieldUpdateOperationsInput | string
+    email?: NullableStringFieldUpdateOperationsInput | string | null
     contrasena?: StringFieldUpdateOperationsInput | string
     creado_en?: DateTimeFieldUpdateOperationsInput | Date | string
+    resetTokens?: adminPasswordResetTokenUpdateManyWithoutAdminNestedInput
+    securityEvents?: adminSecurityEventUpdateManyWithoutAdminNestedInput
+    deletionHistory?: deletedAccountHistoryUpdateManyWithoutEliminadoPorNestedInput
   }
 
   export type adminUncheckedUpdateInput = {
     id?: IntFieldUpdateOperationsInput | number
     usuario?: StringFieldUpdateOperationsInput | string
+    email?: NullableStringFieldUpdateOperationsInput | string | null
     contrasena?: StringFieldUpdateOperationsInput | string
     creado_en?: DateTimeFieldUpdateOperationsInput | Date | string
+    resetTokens?: adminPasswordResetTokenUncheckedUpdateManyWithoutAdminNestedInput
+    securityEvents?: adminSecurityEventUncheckedUpdateManyWithoutAdminNestedInput
+    deletionHistory?: deletedAccountHistoryUncheckedUpdateManyWithoutEliminadoPorNestedInput
   }
 
   export type adminCreateManyInput = {
     id?: number
     usuario: string
+    email?: string | null
     contrasena: string
     creado_en?: Date | string
   }
 
   export type adminUpdateManyMutationInput = {
     usuario?: StringFieldUpdateOperationsInput | string
+    email?: NullableStringFieldUpdateOperationsInput | string | null
     contrasena?: StringFieldUpdateOperationsInput | string
     creado_en?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -13427,8 +17417,266 @@ export namespace Prisma {
   export type adminUncheckedUpdateManyInput = {
     id?: IntFieldUpdateOperationsInput | number
     usuario?: StringFieldUpdateOperationsInput | string
+    email?: NullableStringFieldUpdateOperationsInput | string | null
     contrasena?: StringFieldUpdateOperationsInput | string
     creado_en?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type deletedAccountHistoryCreateInput = {
+    id?: bigint | number
+    dedupeKey: string
+    plataformaId?: number | null
+    plataforma: string
+    correo: string
+    clave?: string | null
+    proveedor?: string | null
+    tipoRegistro: string
+    tipoEliminacion: string
+    identificadorOriginal?: string | null
+    datosRecuperacion?: NullableJsonNullValueInput | InputJsonValue
+    cantidadEliminaciones?: number
+    primeraEliminacion?: Date | string
+    ultimaEliminacion?: Date | string
+    eliminadoPor?: adminCreateNestedOneWithoutDeletionHistoryInput
+  }
+
+  export type deletedAccountHistoryUncheckedCreateInput = {
+    id?: bigint | number
+    dedupeKey: string
+    plataformaId?: number | null
+    plataforma: string
+    correo: string
+    clave?: string | null
+    proveedor?: string | null
+    tipoRegistro: string
+    tipoEliminacion: string
+    identificadorOriginal?: string | null
+    eliminadoPorAdminId?: number | null
+    datosRecuperacion?: NullableJsonNullValueInput | InputJsonValue
+    cantidadEliminaciones?: number
+    primeraEliminacion?: Date | string
+    ultimaEliminacion?: Date | string
+  }
+
+  export type deletedAccountHistoryUpdateInput = {
+    id?: BigIntFieldUpdateOperationsInput | bigint | number
+    dedupeKey?: StringFieldUpdateOperationsInput | string
+    plataformaId?: NullableIntFieldUpdateOperationsInput | number | null
+    plataforma?: StringFieldUpdateOperationsInput | string
+    correo?: StringFieldUpdateOperationsInput | string
+    clave?: NullableStringFieldUpdateOperationsInput | string | null
+    proveedor?: NullableStringFieldUpdateOperationsInput | string | null
+    tipoRegistro?: StringFieldUpdateOperationsInput | string
+    tipoEliminacion?: StringFieldUpdateOperationsInput | string
+    identificadorOriginal?: NullableStringFieldUpdateOperationsInput | string | null
+    datosRecuperacion?: NullableJsonNullValueInput | InputJsonValue
+    cantidadEliminaciones?: IntFieldUpdateOperationsInput | number
+    primeraEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    ultimaEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    eliminadoPor?: adminUpdateOneWithoutDeletionHistoryNestedInput
+  }
+
+  export type deletedAccountHistoryUncheckedUpdateInput = {
+    id?: BigIntFieldUpdateOperationsInput | bigint | number
+    dedupeKey?: StringFieldUpdateOperationsInput | string
+    plataformaId?: NullableIntFieldUpdateOperationsInput | number | null
+    plataforma?: StringFieldUpdateOperationsInput | string
+    correo?: StringFieldUpdateOperationsInput | string
+    clave?: NullableStringFieldUpdateOperationsInput | string | null
+    proveedor?: NullableStringFieldUpdateOperationsInput | string | null
+    tipoRegistro?: StringFieldUpdateOperationsInput | string
+    tipoEliminacion?: StringFieldUpdateOperationsInput | string
+    identificadorOriginal?: NullableStringFieldUpdateOperationsInput | string | null
+    eliminadoPorAdminId?: NullableIntFieldUpdateOperationsInput | number | null
+    datosRecuperacion?: NullableJsonNullValueInput | InputJsonValue
+    cantidadEliminaciones?: IntFieldUpdateOperationsInput | number
+    primeraEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    ultimaEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type deletedAccountHistoryCreateManyInput = {
+    id?: bigint | number
+    dedupeKey: string
+    plataformaId?: number | null
+    plataforma: string
+    correo: string
+    clave?: string | null
+    proveedor?: string | null
+    tipoRegistro: string
+    tipoEliminacion: string
+    identificadorOriginal?: string | null
+    eliminadoPorAdminId?: number | null
+    datosRecuperacion?: NullableJsonNullValueInput | InputJsonValue
+    cantidadEliminaciones?: number
+    primeraEliminacion?: Date | string
+    ultimaEliminacion?: Date | string
+  }
+
+  export type deletedAccountHistoryUpdateManyMutationInput = {
+    id?: BigIntFieldUpdateOperationsInput | bigint | number
+    dedupeKey?: StringFieldUpdateOperationsInput | string
+    plataformaId?: NullableIntFieldUpdateOperationsInput | number | null
+    plataforma?: StringFieldUpdateOperationsInput | string
+    correo?: StringFieldUpdateOperationsInput | string
+    clave?: NullableStringFieldUpdateOperationsInput | string | null
+    proveedor?: NullableStringFieldUpdateOperationsInput | string | null
+    tipoRegistro?: StringFieldUpdateOperationsInput | string
+    tipoEliminacion?: StringFieldUpdateOperationsInput | string
+    identificadorOriginal?: NullableStringFieldUpdateOperationsInput | string | null
+    datosRecuperacion?: NullableJsonNullValueInput | InputJsonValue
+    cantidadEliminaciones?: IntFieldUpdateOperationsInput | number
+    primeraEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    ultimaEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type deletedAccountHistoryUncheckedUpdateManyInput = {
+    id?: BigIntFieldUpdateOperationsInput | bigint | number
+    dedupeKey?: StringFieldUpdateOperationsInput | string
+    plataformaId?: NullableIntFieldUpdateOperationsInput | number | null
+    plataforma?: StringFieldUpdateOperationsInput | string
+    correo?: StringFieldUpdateOperationsInput | string
+    clave?: NullableStringFieldUpdateOperationsInput | string | null
+    proveedor?: NullableStringFieldUpdateOperationsInput | string | null
+    tipoRegistro?: StringFieldUpdateOperationsInput | string
+    tipoEliminacion?: StringFieldUpdateOperationsInput | string
+    identificadorOriginal?: NullableStringFieldUpdateOperationsInput | string | null
+    eliminadoPorAdminId?: NullableIntFieldUpdateOperationsInput | number | null
+    datosRecuperacion?: NullableJsonNullValueInput | InputJsonValue
+    cantidadEliminaciones?: IntFieldUpdateOperationsInput | number
+    primeraEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    ultimaEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type adminPasswordResetTokenCreateInput = {
+    tokenHash: string
+    expiresAt: Date | string
+    usedAt?: Date | string | null
+    requestedIp?: string | null
+    createdAt?: Date | string
+    admin: adminCreateNestedOneWithoutResetTokensInput
+  }
+
+  export type adminPasswordResetTokenUncheckedCreateInput = {
+    id?: number
+    adminId: number
+    tokenHash: string
+    expiresAt: Date | string
+    usedAt?: Date | string | null
+    requestedIp?: string | null
+    createdAt?: Date | string
+  }
+
+  export type adminPasswordResetTokenUpdateInput = {
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    usedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    requestedIp?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    admin?: adminUpdateOneRequiredWithoutResetTokensNestedInput
+  }
+
+  export type adminPasswordResetTokenUncheckedUpdateInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    adminId?: IntFieldUpdateOperationsInput | number
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    usedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    requestedIp?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type adminPasswordResetTokenCreateManyInput = {
+    id?: number
+    adminId: number
+    tokenHash: string
+    expiresAt: Date | string
+    usedAt?: Date | string | null
+    requestedIp?: string | null
+    createdAt?: Date | string
+  }
+
+  export type adminPasswordResetTokenUpdateManyMutationInput = {
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    usedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    requestedIp?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type adminPasswordResetTokenUncheckedUpdateManyInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    adminId?: IntFieldUpdateOperationsInput | number
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    usedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    requestedIp?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type adminSecurityEventCreateInput = {
+    eventType: string
+    success: boolean
+    ip?: string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    admin?: adminCreateNestedOneWithoutSecurityEventsInput
+  }
+
+  export type adminSecurityEventUncheckedCreateInput = {
+    id?: number
+    adminId?: number | null
+    eventType: string
+    success: boolean
+    ip?: string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+  }
+
+  export type adminSecurityEventUpdateInput = {
+    eventType?: StringFieldUpdateOperationsInput | string
+    success?: BoolFieldUpdateOperationsInput | boolean
+    ip?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    admin?: adminUpdateOneWithoutSecurityEventsNestedInput
+  }
+
+  export type adminSecurityEventUncheckedUpdateInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    adminId?: NullableIntFieldUpdateOperationsInput | number | null
+    eventType?: StringFieldUpdateOperationsInput | string
+    success?: BoolFieldUpdateOperationsInput | boolean
+    ip?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type adminSecurityEventCreateManyInput = {
+    id?: number
+    adminId?: number | null
+    eventType: string
+    success: boolean
+    ip?: string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+  }
+
+  export type adminSecurityEventUpdateManyMutationInput = {
+    eventType?: StringFieldUpdateOperationsInput | string
+    success?: BoolFieldUpdateOperationsInput | boolean
+    ip?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type adminSecurityEventUncheckedUpdateManyInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    adminId?: NullableIntFieldUpdateOperationsInput | number | null
+    eventType?: StringFieldUpdateOperationsInput | string
+    success?: BoolFieldUpdateOperationsInput | boolean
+    ip?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type IntFilter<$PrismaModel = never> = {
@@ -13660,6 +17908,17 @@ export namespace Prisma {
     not?: NestedDecimalNullableFilter<$PrismaModel> | Decimal | DecimalJsLike | number | string | null
   }
 
+  export type DateTimeFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    in?: Date[] | string[]
+    notIn?: Date[] | string[]
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeFilter<$PrismaModel> | Date | string
+  }
+
   export type PlataformasScalarRelationFilter = {
     is?: plataformasWhereInput
     isNot?: plataformasWhereInput
@@ -13687,6 +17946,7 @@ export namespace Prisma {
     total_pagado_completa?: SortOrder
     estado?: SortOrder
     comentario?: SortOrder
+    updatedAt?: SortOrder
     contrasena?: SortOrder
     correo?: SortOrder
     total_ganado?: SortOrder
@@ -13713,6 +17973,7 @@ export namespace Prisma {
     total_pagado_completa?: SortOrder
     estado?: SortOrder
     comentario?: SortOrder
+    updatedAt?: SortOrder
     contrasena?: SortOrder
     correo?: SortOrder
     total_ganado?: SortOrder
@@ -13730,6 +17991,7 @@ export namespace Prisma {
     total_pagado_completa?: SortOrder
     estado?: SortOrder
     comentario?: SortOrder
+    updatedAt?: SortOrder
     contrasena?: SortOrder
     correo?: SortOrder
     total_ganado?: SortOrder
@@ -13791,7 +18053,7 @@ export namespace Prisma {
     _max?: NestedDecimalNullableFilter<$PrismaModel>
   }
 
-  export type DateTimeFilter<$PrismaModel = never> = {
+  export type DateTimeWithAggregatesFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     in?: Date[] | string[]
     notIn?: Date[] | string[]
@@ -13799,7 +18061,10 @@ export namespace Prisma {
     lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeFilter<$PrismaModel> | Date | string
+    not?: NestedDateTimeWithAggregatesFilter<$PrismaModel> | Date | string
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedDateTimeFilter<$PrismaModel>
+    _max?: NestedDateTimeFilter<$PrismaModel>
   }
 
   export type CuentascompartidasScalarRelationFilter = {
@@ -13824,6 +18089,7 @@ export namespace Prisma {
     total_pagado?: SortOrder
     estado?: SortOrder
     comentario?: SortOrder
+    updatedAt?: SortOrder
     total_ganado?: SortOrder
     total_pagado_proveedor?: SortOrder
   }
@@ -13848,6 +18114,7 @@ export namespace Prisma {
     total_pagado?: SortOrder
     estado?: SortOrder
     comentario?: SortOrder
+    updatedAt?: SortOrder
     total_ganado?: SortOrder
     total_pagado_proveedor?: SortOrder
   }
@@ -13863,6 +18130,7 @@ export namespace Prisma {
     total_pagado?: SortOrder
     estado?: SortOrder
     comentario?: SortOrder
+    updatedAt?: SortOrder
     total_ganado?: SortOrder
     total_pagado_proveedor?: SortOrder
   }
@@ -13874,20 +18142,6 @@ export namespace Prisma {
     total_pagado?: SortOrder
     total_ganado?: SortOrder
     total_pagado_proveedor?: SortOrder
-  }
-
-  export type DateTimeWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    in?: Date[] | string[]
-    notIn?: Date[] | string[]
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeWithAggregatesFilter<$PrismaModel> | Date | string
-    _count?: NestedIntFilter<$PrismaModel>
-    _min?: NestedDateTimeFilter<$PrismaModel>
-    _max?: NestedDateTimeFilter<$PrismaModel>
   }
 
   export type CuentascompartidasListRelationFilter = {
@@ -14209,6 +18463,8 @@ export namespace Prisma {
     totalPantallas?: SortOrder
     totalCuentas?: SortOrder
     ventasCantidad?: SortOrder
+    pantallasVendidas?: SortOrder
+    cuentasVendidas?: SortOrder
     clientesActivos?: SortOrder
     ranking?: SortOrder
     ventasDias?: SortOrder
@@ -14225,6 +18481,8 @@ export namespace Prisma {
     totalPantallas?: SortOrder
     totalCuentas?: SortOrder
     ventasCantidad?: SortOrder
+    pantallasVendidas?: SortOrder
+    cuentasVendidas?: SortOrder
     clientesActivos?: SortOrder
   }
 
@@ -14237,6 +18495,8 @@ export namespace Prisma {
     totalPantallas?: SortOrder
     totalCuentas?: SortOrder
     ventasCantidad?: SortOrder
+    pantallasVendidas?: SortOrder
+    cuentasVendidas?: SortOrder
     clientesActivos?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -14251,6 +18511,8 @@ export namespace Prisma {
     totalPantallas?: SortOrder
     totalCuentas?: SortOrder
     ventasCantidad?: SortOrder
+    pantallasVendidas?: SortOrder
+    cuentasVendidas?: SortOrder
     clientesActivos?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -14264,6 +18526,8 @@ export namespace Prisma {
     totalPantallas?: SortOrder
     totalCuentas?: SortOrder
     ventasCantidad?: SortOrder
+    pantallasVendidas?: SortOrder
+    cuentasVendidas?: SortOrder
     clientesActivos?: SortOrder
   }
 
@@ -14335,6 +18599,36 @@ export namespace Prisma {
     _max?: NestedJsonNullableFilter<$PrismaModel>
   }
 
+  export type AdminPasswordResetTokenListRelationFilter = {
+    every?: adminPasswordResetTokenWhereInput
+    some?: adminPasswordResetTokenWhereInput
+    none?: adminPasswordResetTokenWhereInput
+  }
+
+  export type AdminSecurityEventListRelationFilter = {
+    every?: adminSecurityEventWhereInput
+    some?: adminSecurityEventWhereInput
+    none?: adminSecurityEventWhereInput
+  }
+
+  export type DeletedAccountHistoryListRelationFilter = {
+    every?: deletedAccountHistoryWhereInput
+    some?: deletedAccountHistoryWhereInput
+    none?: deletedAccountHistoryWhereInput
+  }
+
+  export type adminPasswordResetTokenOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type adminSecurityEventOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type deletedAccountHistoryOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
   export type adminOrderByRelevanceInput = {
     fields: adminOrderByRelevanceFieldEnum | adminOrderByRelevanceFieldEnum[]
     sort: SortOrder
@@ -14344,6 +18638,7 @@ export namespace Prisma {
   export type adminCountOrderByAggregateInput = {
     id?: SortOrder
     usuario?: SortOrder
+    email?: SortOrder
     contrasena?: SortOrder
     creado_en?: SortOrder
   }
@@ -14355,6 +18650,7 @@ export namespace Prisma {
   export type adminMaxOrderByAggregateInput = {
     id?: SortOrder
     usuario?: SortOrder
+    email?: SortOrder
     contrasena?: SortOrder
     creado_en?: SortOrder
   }
@@ -14362,12 +18658,185 @@ export namespace Prisma {
   export type adminMinOrderByAggregateInput = {
     id?: SortOrder
     usuario?: SortOrder
+    email?: SortOrder
     contrasena?: SortOrder
     creado_en?: SortOrder
   }
 
   export type adminSumOrderByAggregateInput = {
     id?: SortOrder
+  }
+
+  export type AdminNullableScalarRelationFilter = {
+    is?: adminWhereInput | null
+    isNot?: adminWhereInput | null
+  }
+
+  export type deletedAccountHistoryOrderByRelevanceInput = {
+    fields: deletedAccountHistoryOrderByRelevanceFieldEnum | deletedAccountHistoryOrderByRelevanceFieldEnum[]
+    sort: SortOrder
+    search: string
+  }
+
+  export type deletedAccountHistoryCountOrderByAggregateInput = {
+    id?: SortOrder
+    dedupeKey?: SortOrder
+    plataformaId?: SortOrder
+    plataforma?: SortOrder
+    correo?: SortOrder
+    clave?: SortOrder
+    proveedor?: SortOrder
+    tipoRegistro?: SortOrder
+    tipoEliminacion?: SortOrder
+    identificadorOriginal?: SortOrder
+    eliminadoPorAdminId?: SortOrder
+    datosRecuperacion?: SortOrder
+    cantidadEliminaciones?: SortOrder
+    primeraEliminacion?: SortOrder
+    ultimaEliminacion?: SortOrder
+  }
+
+  export type deletedAccountHistoryAvgOrderByAggregateInput = {
+    id?: SortOrder
+    plataformaId?: SortOrder
+    eliminadoPorAdminId?: SortOrder
+    cantidadEliminaciones?: SortOrder
+  }
+
+  export type deletedAccountHistoryMaxOrderByAggregateInput = {
+    id?: SortOrder
+    dedupeKey?: SortOrder
+    plataformaId?: SortOrder
+    plataforma?: SortOrder
+    correo?: SortOrder
+    clave?: SortOrder
+    proveedor?: SortOrder
+    tipoRegistro?: SortOrder
+    tipoEliminacion?: SortOrder
+    identificadorOriginal?: SortOrder
+    eliminadoPorAdminId?: SortOrder
+    cantidadEliminaciones?: SortOrder
+    primeraEliminacion?: SortOrder
+    ultimaEliminacion?: SortOrder
+  }
+
+  export type deletedAccountHistoryMinOrderByAggregateInput = {
+    id?: SortOrder
+    dedupeKey?: SortOrder
+    plataformaId?: SortOrder
+    plataforma?: SortOrder
+    correo?: SortOrder
+    clave?: SortOrder
+    proveedor?: SortOrder
+    tipoRegistro?: SortOrder
+    tipoEliminacion?: SortOrder
+    identificadorOriginal?: SortOrder
+    eliminadoPorAdminId?: SortOrder
+    cantidadEliminaciones?: SortOrder
+    primeraEliminacion?: SortOrder
+    ultimaEliminacion?: SortOrder
+  }
+
+  export type deletedAccountHistorySumOrderByAggregateInput = {
+    id?: SortOrder
+    plataformaId?: SortOrder
+    eliminadoPorAdminId?: SortOrder
+    cantidadEliminaciones?: SortOrder
+  }
+
+  export type AdminScalarRelationFilter = {
+    is?: adminWhereInput
+    isNot?: adminWhereInput
+  }
+
+  export type adminPasswordResetTokenOrderByRelevanceInput = {
+    fields: adminPasswordResetTokenOrderByRelevanceFieldEnum | adminPasswordResetTokenOrderByRelevanceFieldEnum[]
+    sort: SortOrder
+    search: string
+  }
+
+  export type adminPasswordResetTokenCountOrderByAggregateInput = {
+    id?: SortOrder
+    adminId?: SortOrder
+    tokenHash?: SortOrder
+    expiresAt?: SortOrder
+    usedAt?: SortOrder
+    requestedIp?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type adminPasswordResetTokenAvgOrderByAggregateInput = {
+    id?: SortOrder
+    adminId?: SortOrder
+  }
+
+  export type adminPasswordResetTokenMaxOrderByAggregateInput = {
+    id?: SortOrder
+    adminId?: SortOrder
+    tokenHash?: SortOrder
+    expiresAt?: SortOrder
+    usedAt?: SortOrder
+    requestedIp?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type adminPasswordResetTokenMinOrderByAggregateInput = {
+    id?: SortOrder
+    adminId?: SortOrder
+    tokenHash?: SortOrder
+    expiresAt?: SortOrder
+    usedAt?: SortOrder
+    requestedIp?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type adminPasswordResetTokenSumOrderByAggregateInput = {
+    id?: SortOrder
+    adminId?: SortOrder
+  }
+
+  export type adminSecurityEventOrderByRelevanceInput = {
+    fields: adminSecurityEventOrderByRelevanceFieldEnum | adminSecurityEventOrderByRelevanceFieldEnum[]
+    sort: SortOrder
+    search: string
+  }
+
+  export type adminSecurityEventCountOrderByAggregateInput = {
+    id?: SortOrder
+    adminId?: SortOrder
+    eventType?: SortOrder
+    success?: SortOrder
+    ip?: SortOrder
+    metadata?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type adminSecurityEventAvgOrderByAggregateInput = {
+    id?: SortOrder
+    adminId?: SortOrder
+  }
+
+  export type adminSecurityEventMaxOrderByAggregateInput = {
+    id?: SortOrder
+    adminId?: SortOrder
+    eventType?: SortOrder
+    success?: SortOrder
+    ip?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type adminSecurityEventMinOrderByAggregateInput = {
+    id?: SortOrder
+    adminId?: SortOrder
+    eventType?: SortOrder
+    success?: SortOrder
+    ip?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type adminSecurityEventSumOrderByAggregateInput = {
+    id?: SortOrder
+    adminId?: SortOrder
   }
 
   export type plataformasCreateNestedOneWithoutCuentascompartidasInput = {
@@ -14488,6 +18957,10 @@ export namespace Prisma {
     divide?: Decimal | DecimalJsLike | number | string
   }
 
+  export type DateTimeFieldUpdateOperationsInput = {
+    set?: Date | string
+  }
+
   export type plataformasUpdateOneRequiredWithoutCuentascompletasNestedInput = {
     create?: XOR<plataformasCreateWithoutCuentascompletasInput, plataformasUncheckedCreateWithoutCuentascompletasInput>
     connectOrCreate?: plataformasCreateOrConnectWithoutCuentascompletasInput
@@ -14514,10 +18987,6 @@ export namespace Prisma {
     create?: XOR<cuentascompartidasCreateWithoutPantallasInput, cuentascompartidasUncheckedCreateWithoutPantallasInput>
     connectOrCreate?: cuentascompartidasCreateOrConnectWithoutPantallasInput
     connect?: cuentascompartidasWhereUniqueInput
-  }
-
-  export type DateTimeFieldUpdateOperationsInput = {
-    set?: Date | string
   }
 
   export type usuariosUpdateOneRequiredWithoutPantallasNestedInput = {
@@ -14772,6 +19241,178 @@ export namespace Prisma {
     divide?: Decimal | DecimalJsLike | number | string
   }
 
+  export type adminPasswordResetTokenCreateNestedManyWithoutAdminInput = {
+    create?: XOR<adminPasswordResetTokenCreateWithoutAdminInput, adminPasswordResetTokenUncheckedCreateWithoutAdminInput> | adminPasswordResetTokenCreateWithoutAdminInput[] | adminPasswordResetTokenUncheckedCreateWithoutAdminInput[]
+    connectOrCreate?: adminPasswordResetTokenCreateOrConnectWithoutAdminInput | adminPasswordResetTokenCreateOrConnectWithoutAdminInput[]
+    createMany?: adminPasswordResetTokenCreateManyAdminInputEnvelope
+    connect?: adminPasswordResetTokenWhereUniqueInput | adminPasswordResetTokenWhereUniqueInput[]
+  }
+
+  export type adminSecurityEventCreateNestedManyWithoutAdminInput = {
+    create?: XOR<adminSecurityEventCreateWithoutAdminInput, adminSecurityEventUncheckedCreateWithoutAdminInput> | adminSecurityEventCreateWithoutAdminInput[] | adminSecurityEventUncheckedCreateWithoutAdminInput[]
+    connectOrCreate?: adminSecurityEventCreateOrConnectWithoutAdminInput | adminSecurityEventCreateOrConnectWithoutAdminInput[]
+    createMany?: adminSecurityEventCreateManyAdminInputEnvelope
+    connect?: adminSecurityEventWhereUniqueInput | adminSecurityEventWhereUniqueInput[]
+  }
+
+  export type deletedAccountHistoryCreateNestedManyWithoutEliminadoPorInput = {
+    create?: XOR<deletedAccountHistoryCreateWithoutEliminadoPorInput, deletedAccountHistoryUncheckedCreateWithoutEliminadoPorInput> | deletedAccountHistoryCreateWithoutEliminadoPorInput[] | deletedAccountHistoryUncheckedCreateWithoutEliminadoPorInput[]
+    connectOrCreate?: deletedAccountHistoryCreateOrConnectWithoutEliminadoPorInput | deletedAccountHistoryCreateOrConnectWithoutEliminadoPorInput[]
+    createMany?: deletedAccountHistoryCreateManyEliminadoPorInputEnvelope
+    connect?: deletedAccountHistoryWhereUniqueInput | deletedAccountHistoryWhereUniqueInput[]
+  }
+
+  export type adminPasswordResetTokenUncheckedCreateNestedManyWithoutAdminInput = {
+    create?: XOR<adminPasswordResetTokenCreateWithoutAdminInput, adminPasswordResetTokenUncheckedCreateWithoutAdminInput> | adminPasswordResetTokenCreateWithoutAdminInput[] | adminPasswordResetTokenUncheckedCreateWithoutAdminInput[]
+    connectOrCreate?: adminPasswordResetTokenCreateOrConnectWithoutAdminInput | adminPasswordResetTokenCreateOrConnectWithoutAdminInput[]
+    createMany?: adminPasswordResetTokenCreateManyAdminInputEnvelope
+    connect?: adminPasswordResetTokenWhereUniqueInput | adminPasswordResetTokenWhereUniqueInput[]
+  }
+
+  export type adminSecurityEventUncheckedCreateNestedManyWithoutAdminInput = {
+    create?: XOR<adminSecurityEventCreateWithoutAdminInput, adminSecurityEventUncheckedCreateWithoutAdminInput> | adminSecurityEventCreateWithoutAdminInput[] | adminSecurityEventUncheckedCreateWithoutAdminInput[]
+    connectOrCreate?: adminSecurityEventCreateOrConnectWithoutAdminInput | adminSecurityEventCreateOrConnectWithoutAdminInput[]
+    createMany?: adminSecurityEventCreateManyAdminInputEnvelope
+    connect?: adminSecurityEventWhereUniqueInput | adminSecurityEventWhereUniqueInput[]
+  }
+
+  export type deletedAccountHistoryUncheckedCreateNestedManyWithoutEliminadoPorInput = {
+    create?: XOR<deletedAccountHistoryCreateWithoutEliminadoPorInput, deletedAccountHistoryUncheckedCreateWithoutEliminadoPorInput> | deletedAccountHistoryCreateWithoutEliminadoPorInput[] | deletedAccountHistoryUncheckedCreateWithoutEliminadoPorInput[]
+    connectOrCreate?: deletedAccountHistoryCreateOrConnectWithoutEliminadoPorInput | deletedAccountHistoryCreateOrConnectWithoutEliminadoPorInput[]
+    createMany?: deletedAccountHistoryCreateManyEliminadoPorInputEnvelope
+    connect?: deletedAccountHistoryWhereUniqueInput | deletedAccountHistoryWhereUniqueInput[]
+  }
+
+  export type adminPasswordResetTokenUpdateManyWithoutAdminNestedInput = {
+    create?: XOR<adminPasswordResetTokenCreateWithoutAdminInput, adminPasswordResetTokenUncheckedCreateWithoutAdminInput> | adminPasswordResetTokenCreateWithoutAdminInput[] | adminPasswordResetTokenUncheckedCreateWithoutAdminInput[]
+    connectOrCreate?: adminPasswordResetTokenCreateOrConnectWithoutAdminInput | adminPasswordResetTokenCreateOrConnectWithoutAdminInput[]
+    upsert?: adminPasswordResetTokenUpsertWithWhereUniqueWithoutAdminInput | adminPasswordResetTokenUpsertWithWhereUniqueWithoutAdminInput[]
+    createMany?: adminPasswordResetTokenCreateManyAdminInputEnvelope
+    set?: adminPasswordResetTokenWhereUniqueInput | adminPasswordResetTokenWhereUniqueInput[]
+    disconnect?: adminPasswordResetTokenWhereUniqueInput | adminPasswordResetTokenWhereUniqueInput[]
+    delete?: adminPasswordResetTokenWhereUniqueInput | adminPasswordResetTokenWhereUniqueInput[]
+    connect?: adminPasswordResetTokenWhereUniqueInput | adminPasswordResetTokenWhereUniqueInput[]
+    update?: adminPasswordResetTokenUpdateWithWhereUniqueWithoutAdminInput | adminPasswordResetTokenUpdateWithWhereUniqueWithoutAdminInput[]
+    updateMany?: adminPasswordResetTokenUpdateManyWithWhereWithoutAdminInput | adminPasswordResetTokenUpdateManyWithWhereWithoutAdminInput[]
+    deleteMany?: adminPasswordResetTokenScalarWhereInput | adminPasswordResetTokenScalarWhereInput[]
+  }
+
+  export type adminSecurityEventUpdateManyWithoutAdminNestedInput = {
+    create?: XOR<adminSecurityEventCreateWithoutAdminInput, adminSecurityEventUncheckedCreateWithoutAdminInput> | adminSecurityEventCreateWithoutAdminInput[] | adminSecurityEventUncheckedCreateWithoutAdminInput[]
+    connectOrCreate?: adminSecurityEventCreateOrConnectWithoutAdminInput | adminSecurityEventCreateOrConnectWithoutAdminInput[]
+    upsert?: adminSecurityEventUpsertWithWhereUniqueWithoutAdminInput | adminSecurityEventUpsertWithWhereUniqueWithoutAdminInput[]
+    createMany?: adminSecurityEventCreateManyAdminInputEnvelope
+    set?: adminSecurityEventWhereUniqueInput | adminSecurityEventWhereUniqueInput[]
+    disconnect?: adminSecurityEventWhereUniqueInput | adminSecurityEventWhereUniqueInput[]
+    delete?: adminSecurityEventWhereUniqueInput | adminSecurityEventWhereUniqueInput[]
+    connect?: adminSecurityEventWhereUniqueInput | adminSecurityEventWhereUniqueInput[]
+    update?: adminSecurityEventUpdateWithWhereUniqueWithoutAdminInput | adminSecurityEventUpdateWithWhereUniqueWithoutAdminInput[]
+    updateMany?: adminSecurityEventUpdateManyWithWhereWithoutAdminInput | adminSecurityEventUpdateManyWithWhereWithoutAdminInput[]
+    deleteMany?: adminSecurityEventScalarWhereInput | adminSecurityEventScalarWhereInput[]
+  }
+
+  export type deletedAccountHistoryUpdateManyWithoutEliminadoPorNestedInput = {
+    create?: XOR<deletedAccountHistoryCreateWithoutEliminadoPorInput, deletedAccountHistoryUncheckedCreateWithoutEliminadoPorInput> | deletedAccountHistoryCreateWithoutEliminadoPorInput[] | deletedAccountHistoryUncheckedCreateWithoutEliminadoPorInput[]
+    connectOrCreate?: deletedAccountHistoryCreateOrConnectWithoutEliminadoPorInput | deletedAccountHistoryCreateOrConnectWithoutEliminadoPorInput[]
+    upsert?: deletedAccountHistoryUpsertWithWhereUniqueWithoutEliminadoPorInput | deletedAccountHistoryUpsertWithWhereUniqueWithoutEliminadoPorInput[]
+    createMany?: deletedAccountHistoryCreateManyEliminadoPorInputEnvelope
+    set?: deletedAccountHistoryWhereUniqueInput | deletedAccountHistoryWhereUniqueInput[]
+    disconnect?: deletedAccountHistoryWhereUniqueInput | deletedAccountHistoryWhereUniqueInput[]
+    delete?: deletedAccountHistoryWhereUniqueInput | deletedAccountHistoryWhereUniqueInput[]
+    connect?: deletedAccountHistoryWhereUniqueInput | deletedAccountHistoryWhereUniqueInput[]
+    update?: deletedAccountHistoryUpdateWithWhereUniqueWithoutEliminadoPorInput | deletedAccountHistoryUpdateWithWhereUniqueWithoutEliminadoPorInput[]
+    updateMany?: deletedAccountHistoryUpdateManyWithWhereWithoutEliminadoPorInput | deletedAccountHistoryUpdateManyWithWhereWithoutEliminadoPorInput[]
+    deleteMany?: deletedAccountHistoryScalarWhereInput | deletedAccountHistoryScalarWhereInput[]
+  }
+
+  export type adminPasswordResetTokenUncheckedUpdateManyWithoutAdminNestedInput = {
+    create?: XOR<adminPasswordResetTokenCreateWithoutAdminInput, adminPasswordResetTokenUncheckedCreateWithoutAdminInput> | adminPasswordResetTokenCreateWithoutAdminInput[] | adminPasswordResetTokenUncheckedCreateWithoutAdminInput[]
+    connectOrCreate?: adminPasswordResetTokenCreateOrConnectWithoutAdminInput | adminPasswordResetTokenCreateOrConnectWithoutAdminInput[]
+    upsert?: adminPasswordResetTokenUpsertWithWhereUniqueWithoutAdminInput | adminPasswordResetTokenUpsertWithWhereUniqueWithoutAdminInput[]
+    createMany?: adminPasswordResetTokenCreateManyAdminInputEnvelope
+    set?: adminPasswordResetTokenWhereUniqueInput | adminPasswordResetTokenWhereUniqueInput[]
+    disconnect?: adminPasswordResetTokenWhereUniqueInput | adminPasswordResetTokenWhereUniqueInput[]
+    delete?: adminPasswordResetTokenWhereUniqueInput | adminPasswordResetTokenWhereUniqueInput[]
+    connect?: adminPasswordResetTokenWhereUniqueInput | adminPasswordResetTokenWhereUniqueInput[]
+    update?: adminPasswordResetTokenUpdateWithWhereUniqueWithoutAdminInput | adminPasswordResetTokenUpdateWithWhereUniqueWithoutAdminInput[]
+    updateMany?: adminPasswordResetTokenUpdateManyWithWhereWithoutAdminInput | adminPasswordResetTokenUpdateManyWithWhereWithoutAdminInput[]
+    deleteMany?: adminPasswordResetTokenScalarWhereInput | adminPasswordResetTokenScalarWhereInput[]
+  }
+
+  export type adminSecurityEventUncheckedUpdateManyWithoutAdminNestedInput = {
+    create?: XOR<adminSecurityEventCreateWithoutAdminInput, adminSecurityEventUncheckedCreateWithoutAdminInput> | adminSecurityEventCreateWithoutAdminInput[] | adminSecurityEventUncheckedCreateWithoutAdminInput[]
+    connectOrCreate?: adminSecurityEventCreateOrConnectWithoutAdminInput | adminSecurityEventCreateOrConnectWithoutAdminInput[]
+    upsert?: adminSecurityEventUpsertWithWhereUniqueWithoutAdminInput | adminSecurityEventUpsertWithWhereUniqueWithoutAdminInput[]
+    createMany?: adminSecurityEventCreateManyAdminInputEnvelope
+    set?: adminSecurityEventWhereUniqueInput | adminSecurityEventWhereUniqueInput[]
+    disconnect?: adminSecurityEventWhereUniqueInput | adminSecurityEventWhereUniqueInput[]
+    delete?: adminSecurityEventWhereUniqueInput | adminSecurityEventWhereUniqueInput[]
+    connect?: adminSecurityEventWhereUniqueInput | adminSecurityEventWhereUniqueInput[]
+    update?: adminSecurityEventUpdateWithWhereUniqueWithoutAdminInput | adminSecurityEventUpdateWithWhereUniqueWithoutAdminInput[]
+    updateMany?: adminSecurityEventUpdateManyWithWhereWithoutAdminInput | adminSecurityEventUpdateManyWithWhereWithoutAdminInput[]
+    deleteMany?: adminSecurityEventScalarWhereInput | adminSecurityEventScalarWhereInput[]
+  }
+
+  export type deletedAccountHistoryUncheckedUpdateManyWithoutEliminadoPorNestedInput = {
+    create?: XOR<deletedAccountHistoryCreateWithoutEliminadoPorInput, deletedAccountHistoryUncheckedCreateWithoutEliminadoPorInput> | deletedAccountHistoryCreateWithoutEliminadoPorInput[] | deletedAccountHistoryUncheckedCreateWithoutEliminadoPorInput[]
+    connectOrCreate?: deletedAccountHistoryCreateOrConnectWithoutEliminadoPorInput | deletedAccountHistoryCreateOrConnectWithoutEliminadoPorInput[]
+    upsert?: deletedAccountHistoryUpsertWithWhereUniqueWithoutEliminadoPorInput | deletedAccountHistoryUpsertWithWhereUniqueWithoutEliminadoPorInput[]
+    createMany?: deletedAccountHistoryCreateManyEliminadoPorInputEnvelope
+    set?: deletedAccountHistoryWhereUniqueInput | deletedAccountHistoryWhereUniqueInput[]
+    disconnect?: deletedAccountHistoryWhereUniqueInput | deletedAccountHistoryWhereUniqueInput[]
+    delete?: deletedAccountHistoryWhereUniqueInput | deletedAccountHistoryWhereUniqueInput[]
+    connect?: deletedAccountHistoryWhereUniqueInput | deletedAccountHistoryWhereUniqueInput[]
+    update?: deletedAccountHistoryUpdateWithWhereUniqueWithoutEliminadoPorInput | deletedAccountHistoryUpdateWithWhereUniqueWithoutEliminadoPorInput[]
+    updateMany?: deletedAccountHistoryUpdateManyWithWhereWithoutEliminadoPorInput | deletedAccountHistoryUpdateManyWithWhereWithoutEliminadoPorInput[]
+    deleteMany?: deletedAccountHistoryScalarWhereInput | deletedAccountHistoryScalarWhereInput[]
+  }
+
+  export type adminCreateNestedOneWithoutDeletionHistoryInput = {
+    create?: XOR<adminCreateWithoutDeletionHistoryInput, adminUncheckedCreateWithoutDeletionHistoryInput>
+    connectOrCreate?: adminCreateOrConnectWithoutDeletionHistoryInput
+    connect?: adminWhereUniqueInput
+  }
+
+  export type adminUpdateOneWithoutDeletionHistoryNestedInput = {
+    create?: XOR<adminCreateWithoutDeletionHistoryInput, adminUncheckedCreateWithoutDeletionHistoryInput>
+    connectOrCreate?: adminCreateOrConnectWithoutDeletionHistoryInput
+    upsert?: adminUpsertWithoutDeletionHistoryInput
+    disconnect?: adminWhereInput | boolean
+    delete?: adminWhereInput | boolean
+    connect?: adminWhereUniqueInput
+    update?: XOR<XOR<adminUpdateToOneWithWhereWithoutDeletionHistoryInput, adminUpdateWithoutDeletionHistoryInput>, adminUncheckedUpdateWithoutDeletionHistoryInput>
+  }
+
+  export type adminCreateNestedOneWithoutResetTokensInput = {
+    create?: XOR<adminCreateWithoutResetTokensInput, adminUncheckedCreateWithoutResetTokensInput>
+    connectOrCreate?: adminCreateOrConnectWithoutResetTokensInput
+    connect?: adminWhereUniqueInput
+  }
+
+  export type adminUpdateOneRequiredWithoutResetTokensNestedInput = {
+    create?: XOR<adminCreateWithoutResetTokensInput, adminUncheckedCreateWithoutResetTokensInput>
+    connectOrCreate?: adminCreateOrConnectWithoutResetTokensInput
+    upsert?: adminUpsertWithoutResetTokensInput
+    connect?: adminWhereUniqueInput
+    update?: XOR<XOR<adminUpdateToOneWithWhereWithoutResetTokensInput, adminUpdateWithoutResetTokensInput>, adminUncheckedUpdateWithoutResetTokensInput>
+  }
+
+  export type adminCreateNestedOneWithoutSecurityEventsInput = {
+    create?: XOR<adminCreateWithoutSecurityEventsInput, adminUncheckedCreateWithoutSecurityEventsInput>
+    connectOrCreate?: adminCreateOrConnectWithoutSecurityEventsInput
+    connect?: adminWhereUniqueInput
+  }
+
+  export type adminUpdateOneWithoutSecurityEventsNestedInput = {
+    create?: XOR<adminCreateWithoutSecurityEventsInput, adminUncheckedCreateWithoutSecurityEventsInput>
+    connectOrCreate?: adminCreateOrConnectWithoutSecurityEventsInput
+    upsert?: adminUpsertWithoutSecurityEventsInput
+    disconnect?: adminWhereInput | boolean
+    delete?: adminWhereInput | boolean
+    connect?: adminWhereUniqueInput
+    update?: XOR<XOR<adminUpdateToOneWithWhereWithoutSecurityEventsInput, adminUpdateWithoutSecurityEventsInput>, adminUncheckedUpdateWithoutSecurityEventsInput>
+  }
+
   export type NestedIntFilter<$PrismaModel = never> = {
     equals?: number | IntFieldRefInput<$PrismaModel>
     in?: number[]
@@ -14960,6 +19601,17 @@ export namespace Prisma {
     not?: NestedDecimalNullableFilter<$PrismaModel> | Decimal | DecimalJsLike | number | string | null
   }
 
+  export type NestedDateTimeFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    in?: Date[] | string[]
+    notIn?: Date[] | string[]
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeFilter<$PrismaModel> | Date | string
+  }
+
   export type NestedBigIntWithAggregatesFilter<$PrismaModel = never> = {
     equals?: bigint | number | BigIntFieldRefInput<$PrismaModel>
     in?: bigint[] | number[]
@@ -15004,17 +19656,6 @@ export namespace Prisma {
     _sum?: NestedDecimalNullableFilter<$PrismaModel>
     _min?: NestedDecimalNullableFilter<$PrismaModel>
     _max?: NestedDecimalNullableFilter<$PrismaModel>
-  }
-
-  export type NestedDateTimeFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    in?: Date[] | string[]
-    notIn?: Date[] | string[]
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeFilter<$PrismaModel> | Date | string
   }
 
   export type NestedDateTimeWithAggregatesFilter<$PrismaModel = never> = {
@@ -15157,6 +19798,7 @@ export namespace Prisma {
     total_pagado?: Decimal | DecimalJsLike | number | string | null
     estado: string
     comentario?: string | null
+    updatedAt?: Date | string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
     usuarios: usuariosCreateNestedOneWithoutPantallasInput
@@ -15172,6 +19814,7 @@ export namespace Prisma {
     total_pagado?: Decimal | DecimalJsLike | number | string | null
     estado: string
     comentario?: string | null
+    updatedAt?: Date | string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
   }
@@ -15250,6 +19893,7 @@ export namespace Prisma {
     total_pagado?: DecimalNullableFilter<"pantallas"> | Decimal | DecimalJsLike | number | string | null
     estado?: StringFilter<"pantallas"> | string
     comentario?: StringNullableFilter<"pantallas"> | string | null
+    updatedAt?: DateTimeFilter<"pantallas"> | Date | string
     total_ganado?: DecimalNullableFilter<"pantallas"> | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: DecimalNullableFilter<"pantallas"> | Decimal | DecimalJsLike | number | string | null
   }
@@ -15482,6 +20126,7 @@ export namespace Prisma {
     total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     estado?: string | null
     comentario?: string | null
+    updatedAt?: Date | string
     contrasena: string
     correo: string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
@@ -15499,6 +20144,7 @@ export namespace Prisma {
     total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     estado?: string | null
     comentario?: string | null
+    updatedAt?: Date | string
     contrasena: string
     correo: string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
@@ -15594,6 +20240,7 @@ export namespace Prisma {
     total_pagado_completa?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
     estado?: StringNullableFilter<"cuentascompletas"> | string | null
     comentario?: StringNullableFilter<"cuentascompletas"> | string | null
+    updatedAt?: DateTimeFilter<"cuentascompletas"> | Date | string
     contrasena?: StringFilter<"cuentascompletas"> | string
     correo?: StringFilter<"cuentascompletas"> | string
     total_ganado?: DecimalNullableFilter<"cuentascompletas"> | Decimal | DecimalJsLike | number | string | null
@@ -15635,6 +20282,7 @@ export namespace Prisma {
     total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     estado?: string | null
     comentario?: string | null
+    updatedAt?: Date | string
     contrasena: string
     correo: string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
@@ -15652,6 +20300,7 @@ export namespace Prisma {
     total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     estado?: string | null
     comentario?: string | null
+    updatedAt?: Date | string
     contrasena: string
     correo: string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
@@ -15676,6 +20325,7 @@ export namespace Prisma {
     total_pagado?: Decimal | DecimalJsLike | number | string | null
     estado: string
     comentario?: string | null
+    updatedAt?: Date | string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
     cuentascompartidas: cuentascompartidasCreateNestedOneWithoutPantallasInput
@@ -15691,6 +20341,7 @@ export namespace Prisma {
     total_pagado?: Decimal | DecimalJsLike | number | string | null
     estado: string
     comentario?: string | null
+    updatedAt?: Date | string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
   }
@@ -15799,6 +20450,361 @@ export namespace Prisma {
     cuentascompletas?: cuentascompletasUncheckedUpdateManyWithoutPlataformasNestedInput
   }
 
+  export type adminPasswordResetTokenCreateWithoutAdminInput = {
+    tokenHash: string
+    expiresAt: Date | string
+    usedAt?: Date | string | null
+    requestedIp?: string | null
+    createdAt?: Date | string
+  }
+
+  export type adminPasswordResetTokenUncheckedCreateWithoutAdminInput = {
+    id?: number
+    tokenHash: string
+    expiresAt: Date | string
+    usedAt?: Date | string | null
+    requestedIp?: string | null
+    createdAt?: Date | string
+  }
+
+  export type adminPasswordResetTokenCreateOrConnectWithoutAdminInput = {
+    where: adminPasswordResetTokenWhereUniqueInput
+    create: XOR<adminPasswordResetTokenCreateWithoutAdminInput, adminPasswordResetTokenUncheckedCreateWithoutAdminInput>
+  }
+
+  export type adminPasswordResetTokenCreateManyAdminInputEnvelope = {
+    data: adminPasswordResetTokenCreateManyAdminInput | adminPasswordResetTokenCreateManyAdminInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type adminSecurityEventCreateWithoutAdminInput = {
+    eventType: string
+    success: boolean
+    ip?: string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+  }
+
+  export type adminSecurityEventUncheckedCreateWithoutAdminInput = {
+    id?: number
+    eventType: string
+    success: boolean
+    ip?: string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+  }
+
+  export type adminSecurityEventCreateOrConnectWithoutAdminInput = {
+    where: adminSecurityEventWhereUniqueInput
+    create: XOR<adminSecurityEventCreateWithoutAdminInput, adminSecurityEventUncheckedCreateWithoutAdminInput>
+  }
+
+  export type adminSecurityEventCreateManyAdminInputEnvelope = {
+    data: adminSecurityEventCreateManyAdminInput | adminSecurityEventCreateManyAdminInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type deletedAccountHistoryCreateWithoutEliminadoPorInput = {
+    id?: bigint | number
+    dedupeKey: string
+    plataformaId?: number | null
+    plataforma: string
+    correo: string
+    clave?: string | null
+    proveedor?: string | null
+    tipoRegistro: string
+    tipoEliminacion: string
+    identificadorOriginal?: string | null
+    datosRecuperacion?: NullableJsonNullValueInput | InputJsonValue
+    cantidadEliminaciones?: number
+    primeraEliminacion?: Date | string
+    ultimaEliminacion?: Date | string
+  }
+
+  export type deletedAccountHistoryUncheckedCreateWithoutEliminadoPorInput = {
+    id?: bigint | number
+    dedupeKey: string
+    plataformaId?: number | null
+    plataforma: string
+    correo: string
+    clave?: string | null
+    proveedor?: string | null
+    tipoRegistro: string
+    tipoEliminacion: string
+    identificadorOriginal?: string | null
+    datosRecuperacion?: NullableJsonNullValueInput | InputJsonValue
+    cantidadEliminaciones?: number
+    primeraEliminacion?: Date | string
+    ultimaEliminacion?: Date | string
+  }
+
+  export type deletedAccountHistoryCreateOrConnectWithoutEliminadoPorInput = {
+    where: deletedAccountHistoryWhereUniqueInput
+    create: XOR<deletedAccountHistoryCreateWithoutEliminadoPorInput, deletedAccountHistoryUncheckedCreateWithoutEliminadoPorInput>
+  }
+
+  export type deletedAccountHistoryCreateManyEliminadoPorInputEnvelope = {
+    data: deletedAccountHistoryCreateManyEliminadoPorInput | deletedAccountHistoryCreateManyEliminadoPorInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type adminPasswordResetTokenUpsertWithWhereUniqueWithoutAdminInput = {
+    where: adminPasswordResetTokenWhereUniqueInput
+    update: XOR<adminPasswordResetTokenUpdateWithoutAdminInput, adminPasswordResetTokenUncheckedUpdateWithoutAdminInput>
+    create: XOR<adminPasswordResetTokenCreateWithoutAdminInput, adminPasswordResetTokenUncheckedCreateWithoutAdminInput>
+  }
+
+  export type adminPasswordResetTokenUpdateWithWhereUniqueWithoutAdminInput = {
+    where: adminPasswordResetTokenWhereUniqueInput
+    data: XOR<adminPasswordResetTokenUpdateWithoutAdminInput, adminPasswordResetTokenUncheckedUpdateWithoutAdminInput>
+  }
+
+  export type adminPasswordResetTokenUpdateManyWithWhereWithoutAdminInput = {
+    where: adminPasswordResetTokenScalarWhereInput
+    data: XOR<adminPasswordResetTokenUpdateManyMutationInput, adminPasswordResetTokenUncheckedUpdateManyWithoutAdminInput>
+  }
+
+  export type adminPasswordResetTokenScalarWhereInput = {
+    AND?: adminPasswordResetTokenScalarWhereInput | adminPasswordResetTokenScalarWhereInput[]
+    OR?: adminPasswordResetTokenScalarWhereInput[]
+    NOT?: adminPasswordResetTokenScalarWhereInput | adminPasswordResetTokenScalarWhereInput[]
+    id?: IntFilter<"adminPasswordResetToken"> | number
+    adminId?: IntFilter<"adminPasswordResetToken"> | number
+    tokenHash?: StringFilter<"adminPasswordResetToken"> | string
+    expiresAt?: DateTimeFilter<"adminPasswordResetToken"> | Date | string
+    usedAt?: DateTimeNullableFilter<"adminPasswordResetToken"> | Date | string | null
+    requestedIp?: StringNullableFilter<"adminPasswordResetToken"> | string | null
+    createdAt?: DateTimeFilter<"adminPasswordResetToken"> | Date | string
+  }
+
+  export type adminSecurityEventUpsertWithWhereUniqueWithoutAdminInput = {
+    where: adminSecurityEventWhereUniqueInput
+    update: XOR<adminSecurityEventUpdateWithoutAdminInput, adminSecurityEventUncheckedUpdateWithoutAdminInput>
+    create: XOR<adminSecurityEventCreateWithoutAdminInput, adminSecurityEventUncheckedCreateWithoutAdminInput>
+  }
+
+  export type adminSecurityEventUpdateWithWhereUniqueWithoutAdminInput = {
+    where: adminSecurityEventWhereUniqueInput
+    data: XOR<adminSecurityEventUpdateWithoutAdminInput, adminSecurityEventUncheckedUpdateWithoutAdminInput>
+  }
+
+  export type adminSecurityEventUpdateManyWithWhereWithoutAdminInput = {
+    where: adminSecurityEventScalarWhereInput
+    data: XOR<adminSecurityEventUpdateManyMutationInput, adminSecurityEventUncheckedUpdateManyWithoutAdminInput>
+  }
+
+  export type adminSecurityEventScalarWhereInput = {
+    AND?: adminSecurityEventScalarWhereInput | adminSecurityEventScalarWhereInput[]
+    OR?: adminSecurityEventScalarWhereInput[]
+    NOT?: adminSecurityEventScalarWhereInput | adminSecurityEventScalarWhereInput[]
+    id?: IntFilter<"adminSecurityEvent"> | number
+    adminId?: IntNullableFilter<"adminSecurityEvent"> | number | null
+    eventType?: StringFilter<"adminSecurityEvent"> | string
+    success?: BoolFilter<"adminSecurityEvent"> | boolean
+    ip?: StringNullableFilter<"adminSecurityEvent"> | string | null
+    metadata?: JsonNullableFilter<"adminSecurityEvent">
+    createdAt?: DateTimeFilter<"adminSecurityEvent"> | Date | string
+  }
+
+  export type deletedAccountHistoryUpsertWithWhereUniqueWithoutEliminadoPorInput = {
+    where: deletedAccountHistoryWhereUniqueInput
+    update: XOR<deletedAccountHistoryUpdateWithoutEliminadoPorInput, deletedAccountHistoryUncheckedUpdateWithoutEliminadoPorInput>
+    create: XOR<deletedAccountHistoryCreateWithoutEliminadoPorInput, deletedAccountHistoryUncheckedCreateWithoutEliminadoPorInput>
+  }
+
+  export type deletedAccountHistoryUpdateWithWhereUniqueWithoutEliminadoPorInput = {
+    where: deletedAccountHistoryWhereUniqueInput
+    data: XOR<deletedAccountHistoryUpdateWithoutEliminadoPorInput, deletedAccountHistoryUncheckedUpdateWithoutEliminadoPorInput>
+  }
+
+  export type deletedAccountHistoryUpdateManyWithWhereWithoutEliminadoPorInput = {
+    where: deletedAccountHistoryScalarWhereInput
+    data: XOR<deletedAccountHistoryUpdateManyMutationInput, deletedAccountHistoryUncheckedUpdateManyWithoutEliminadoPorInput>
+  }
+
+  export type deletedAccountHistoryScalarWhereInput = {
+    AND?: deletedAccountHistoryScalarWhereInput | deletedAccountHistoryScalarWhereInput[]
+    OR?: deletedAccountHistoryScalarWhereInput[]
+    NOT?: deletedAccountHistoryScalarWhereInput | deletedAccountHistoryScalarWhereInput[]
+    id?: BigIntFilter<"deletedAccountHistory"> | bigint | number
+    dedupeKey?: StringFilter<"deletedAccountHistory"> | string
+    plataformaId?: IntNullableFilter<"deletedAccountHistory"> | number | null
+    plataforma?: StringFilter<"deletedAccountHistory"> | string
+    correo?: StringFilter<"deletedAccountHistory"> | string
+    clave?: StringNullableFilter<"deletedAccountHistory"> | string | null
+    proveedor?: StringNullableFilter<"deletedAccountHistory"> | string | null
+    tipoRegistro?: StringFilter<"deletedAccountHistory"> | string
+    tipoEliminacion?: StringFilter<"deletedAccountHistory"> | string
+    identificadorOriginal?: StringNullableFilter<"deletedAccountHistory"> | string | null
+    eliminadoPorAdminId?: IntNullableFilter<"deletedAccountHistory"> | number | null
+    datosRecuperacion?: JsonNullableFilter<"deletedAccountHistory">
+    cantidadEliminaciones?: IntFilter<"deletedAccountHistory"> | number
+    primeraEliminacion?: DateTimeFilter<"deletedAccountHistory"> | Date | string
+    ultimaEliminacion?: DateTimeFilter<"deletedAccountHistory"> | Date | string
+  }
+
+  export type adminCreateWithoutDeletionHistoryInput = {
+    usuario: string
+    email?: string | null
+    contrasena: string
+    creado_en?: Date | string
+    resetTokens?: adminPasswordResetTokenCreateNestedManyWithoutAdminInput
+    securityEvents?: adminSecurityEventCreateNestedManyWithoutAdminInput
+  }
+
+  export type adminUncheckedCreateWithoutDeletionHistoryInput = {
+    id?: number
+    usuario: string
+    email?: string | null
+    contrasena: string
+    creado_en?: Date | string
+    resetTokens?: adminPasswordResetTokenUncheckedCreateNestedManyWithoutAdminInput
+    securityEvents?: adminSecurityEventUncheckedCreateNestedManyWithoutAdminInput
+  }
+
+  export type adminCreateOrConnectWithoutDeletionHistoryInput = {
+    where: adminWhereUniqueInput
+    create: XOR<adminCreateWithoutDeletionHistoryInput, adminUncheckedCreateWithoutDeletionHistoryInput>
+  }
+
+  export type adminUpsertWithoutDeletionHistoryInput = {
+    update: XOR<adminUpdateWithoutDeletionHistoryInput, adminUncheckedUpdateWithoutDeletionHistoryInput>
+    create: XOR<adminCreateWithoutDeletionHistoryInput, adminUncheckedCreateWithoutDeletionHistoryInput>
+    where?: adminWhereInput
+  }
+
+  export type adminUpdateToOneWithWhereWithoutDeletionHistoryInput = {
+    where?: adminWhereInput
+    data: XOR<adminUpdateWithoutDeletionHistoryInput, adminUncheckedUpdateWithoutDeletionHistoryInput>
+  }
+
+  export type adminUpdateWithoutDeletionHistoryInput = {
+    usuario?: StringFieldUpdateOperationsInput | string
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    contrasena?: StringFieldUpdateOperationsInput | string
+    creado_en?: DateTimeFieldUpdateOperationsInput | Date | string
+    resetTokens?: adminPasswordResetTokenUpdateManyWithoutAdminNestedInput
+    securityEvents?: adminSecurityEventUpdateManyWithoutAdminNestedInput
+  }
+
+  export type adminUncheckedUpdateWithoutDeletionHistoryInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    usuario?: StringFieldUpdateOperationsInput | string
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    contrasena?: StringFieldUpdateOperationsInput | string
+    creado_en?: DateTimeFieldUpdateOperationsInput | Date | string
+    resetTokens?: adminPasswordResetTokenUncheckedUpdateManyWithoutAdminNestedInput
+    securityEvents?: adminSecurityEventUncheckedUpdateManyWithoutAdminNestedInput
+  }
+
+  export type adminCreateWithoutResetTokensInput = {
+    usuario: string
+    email?: string | null
+    contrasena: string
+    creado_en?: Date | string
+    securityEvents?: adminSecurityEventCreateNestedManyWithoutAdminInput
+    deletionHistory?: deletedAccountHistoryCreateNestedManyWithoutEliminadoPorInput
+  }
+
+  export type adminUncheckedCreateWithoutResetTokensInput = {
+    id?: number
+    usuario: string
+    email?: string | null
+    contrasena: string
+    creado_en?: Date | string
+    securityEvents?: adminSecurityEventUncheckedCreateNestedManyWithoutAdminInput
+    deletionHistory?: deletedAccountHistoryUncheckedCreateNestedManyWithoutEliminadoPorInput
+  }
+
+  export type adminCreateOrConnectWithoutResetTokensInput = {
+    where: adminWhereUniqueInput
+    create: XOR<adminCreateWithoutResetTokensInput, adminUncheckedCreateWithoutResetTokensInput>
+  }
+
+  export type adminUpsertWithoutResetTokensInput = {
+    update: XOR<adminUpdateWithoutResetTokensInput, adminUncheckedUpdateWithoutResetTokensInput>
+    create: XOR<adminCreateWithoutResetTokensInput, adminUncheckedCreateWithoutResetTokensInput>
+    where?: adminWhereInput
+  }
+
+  export type adminUpdateToOneWithWhereWithoutResetTokensInput = {
+    where?: adminWhereInput
+    data: XOR<adminUpdateWithoutResetTokensInput, adminUncheckedUpdateWithoutResetTokensInput>
+  }
+
+  export type adminUpdateWithoutResetTokensInput = {
+    usuario?: StringFieldUpdateOperationsInput | string
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    contrasena?: StringFieldUpdateOperationsInput | string
+    creado_en?: DateTimeFieldUpdateOperationsInput | Date | string
+    securityEvents?: adminSecurityEventUpdateManyWithoutAdminNestedInput
+    deletionHistory?: deletedAccountHistoryUpdateManyWithoutEliminadoPorNestedInput
+  }
+
+  export type adminUncheckedUpdateWithoutResetTokensInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    usuario?: StringFieldUpdateOperationsInput | string
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    contrasena?: StringFieldUpdateOperationsInput | string
+    creado_en?: DateTimeFieldUpdateOperationsInput | Date | string
+    securityEvents?: adminSecurityEventUncheckedUpdateManyWithoutAdminNestedInput
+    deletionHistory?: deletedAccountHistoryUncheckedUpdateManyWithoutEliminadoPorNestedInput
+  }
+
+  export type adminCreateWithoutSecurityEventsInput = {
+    usuario: string
+    email?: string | null
+    contrasena: string
+    creado_en?: Date | string
+    resetTokens?: adminPasswordResetTokenCreateNestedManyWithoutAdminInput
+    deletionHistory?: deletedAccountHistoryCreateNestedManyWithoutEliminadoPorInput
+  }
+
+  export type adminUncheckedCreateWithoutSecurityEventsInput = {
+    id?: number
+    usuario: string
+    email?: string | null
+    contrasena: string
+    creado_en?: Date | string
+    resetTokens?: adminPasswordResetTokenUncheckedCreateNestedManyWithoutAdminInput
+    deletionHistory?: deletedAccountHistoryUncheckedCreateNestedManyWithoutEliminadoPorInput
+  }
+
+  export type adminCreateOrConnectWithoutSecurityEventsInput = {
+    where: adminWhereUniqueInput
+    create: XOR<adminCreateWithoutSecurityEventsInput, adminUncheckedCreateWithoutSecurityEventsInput>
+  }
+
+  export type adminUpsertWithoutSecurityEventsInput = {
+    update: XOR<adminUpdateWithoutSecurityEventsInput, adminUncheckedUpdateWithoutSecurityEventsInput>
+    create: XOR<adminCreateWithoutSecurityEventsInput, adminUncheckedCreateWithoutSecurityEventsInput>
+    where?: adminWhereInput
+  }
+
+  export type adminUpdateToOneWithWhereWithoutSecurityEventsInput = {
+    where?: adminWhereInput
+    data: XOR<adminUpdateWithoutSecurityEventsInput, adminUncheckedUpdateWithoutSecurityEventsInput>
+  }
+
+  export type adminUpdateWithoutSecurityEventsInput = {
+    usuario?: StringFieldUpdateOperationsInput | string
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    contrasena?: StringFieldUpdateOperationsInput | string
+    creado_en?: DateTimeFieldUpdateOperationsInput | Date | string
+    resetTokens?: adminPasswordResetTokenUpdateManyWithoutAdminNestedInput
+    deletionHistory?: deletedAccountHistoryUpdateManyWithoutEliminadoPorNestedInput
+  }
+
+  export type adminUncheckedUpdateWithoutSecurityEventsInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    usuario?: StringFieldUpdateOperationsInput | string
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    contrasena?: StringFieldUpdateOperationsInput | string
+    creado_en?: DateTimeFieldUpdateOperationsInput | Date | string
+    resetTokens?: adminPasswordResetTokenUncheckedUpdateManyWithoutAdminNestedInput
+    deletionHistory?: deletedAccountHistoryUncheckedUpdateManyWithoutEliminadoPorNestedInput
+  }
+
   export type pantallasCreateManyCuentascompartidasInput = {
     id?: number
     contacto: string
@@ -15809,6 +20815,7 @@ export namespace Prisma {
     total_pagado?: Decimal | DecimalJsLike | number | string | null
     estado: string
     comentario?: string | null
+    updatedAt?: Date | string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
   }
@@ -15821,6 +20828,7 @@ export namespace Prisma {
     total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: StringFieldUpdateOperationsInput | string
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     usuarios?: usuariosUpdateOneRequiredWithoutPantallasNestedInput
@@ -15836,6 +20844,7 @@ export namespace Prisma {
     total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: StringFieldUpdateOperationsInput | string
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
   }
@@ -15850,6 +20859,7 @@ export namespace Prisma {
     total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: StringFieldUpdateOperationsInput | string
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
   }
@@ -15872,6 +20882,7 @@ export namespace Prisma {
     total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     estado?: string | null
     comentario?: string | null
+    updatedAt?: Date | string
     contrasena: string
     correo: string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
@@ -15918,6 +20929,7 @@ export namespace Prisma {
     total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: NullableStringFieldUpdateOperationsInput | string | null
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     contrasena?: StringFieldUpdateOperationsInput | string
     correo?: StringFieldUpdateOperationsInput | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
@@ -15935,6 +20947,7 @@ export namespace Prisma {
     total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: NullableStringFieldUpdateOperationsInput | string | null
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     contrasena?: StringFieldUpdateOperationsInput | string
     correo?: StringFieldUpdateOperationsInput | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
@@ -15951,6 +20964,7 @@ export namespace Prisma {
     total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: NullableStringFieldUpdateOperationsInput | string | null
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     contrasena?: StringFieldUpdateOperationsInput | string
     correo?: StringFieldUpdateOperationsInput | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
@@ -15984,6 +20998,7 @@ export namespace Prisma {
     total_pagado_completa?: Decimal | DecimalJsLike | number | string | null
     estado?: string | null
     comentario?: string | null
+    updatedAt?: Date | string
     contrasena: string
     correo: string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
@@ -16000,6 +21015,7 @@ export namespace Prisma {
     total_pagado?: Decimal | DecimalJsLike | number | string | null
     estado: string
     comentario?: string | null
+    updatedAt?: Date | string
     total_ganado?: Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: Decimal | DecimalJsLike | number | string | null
   }
@@ -16013,6 +21029,7 @@ export namespace Prisma {
     total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: NullableStringFieldUpdateOperationsInput | string | null
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     contrasena?: StringFieldUpdateOperationsInput | string
     correo?: StringFieldUpdateOperationsInput | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
@@ -16030,6 +21047,7 @@ export namespace Prisma {
     total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: NullableStringFieldUpdateOperationsInput | string | null
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     contrasena?: StringFieldUpdateOperationsInput | string
     correo?: StringFieldUpdateOperationsInput | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
@@ -16046,6 +21064,7 @@ export namespace Prisma {
     total_pagado_completa?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: NullableStringFieldUpdateOperationsInput | string | null
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     contrasena?: StringFieldUpdateOperationsInput | string
     correo?: StringFieldUpdateOperationsInput | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
@@ -16060,6 +21079,7 @@ export namespace Prisma {
     total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: StringFieldUpdateOperationsInput | string
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     cuentascompartidas?: cuentascompartidasUpdateOneRequiredWithoutPantallasNestedInput
@@ -16075,6 +21095,7 @@ export namespace Prisma {
     total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: StringFieldUpdateOperationsInput | string
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
   }
@@ -16089,8 +21110,147 @@ export namespace Prisma {
     total_pagado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     estado?: StringFieldUpdateOperationsInput | string
     comentario?: NullableStringFieldUpdateOperationsInput | string | null
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     total_ganado?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
     total_pagado_proveedor?: NullableDecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string | null
+  }
+
+  export type adminPasswordResetTokenCreateManyAdminInput = {
+    id?: number
+    tokenHash: string
+    expiresAt: Date | string
+    usedAt?: Date | string | null
+    requestedIp?: string | null
+    createdAt?: Date | string
+  }
+
+  export type adminSecurityEventCreateManyAdminInput = {
+    id?: number
+    eventType: string
+    success: boolean
+    ip?: string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+  }
+
+  export type deletedAccountHistoryCreateManyEliminadoPorInput = {
+    id?: bigint | number
+    dedupeKey: string
+    plataformaId?: number | null
+    plataforma: string
+    correo: string
+    clave?: string | null
+    proveedor?: string | null
+    tipoRegistro: string
+    tipoEliminacion: string
+    identificadorOriginal?: string | null
+    datosRecuperacion?: NullableJsonNullValueInput | InputJsonValue
+    cantidadEliminaciones?: number
+    primeraEliminacion?: Date | string
+    ultimaEliminacion?: Date | string
+  }
+
+  export type adminPasswordResetTokenUpdateWithoutAdminInput = {
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    usedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    requestedIp?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type adminPasswordResetTokenUncheckedUpdateWithoutAdminInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    usedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    requestedIp?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type adminPasswordResetTokenUncheckedUpdateManyWithoutAdminInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    tokenHash?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    usedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    requestedIp?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type adminSecurityEventUpdateWithoutAdminInput = {
+    eventType?: StringFieldUpdateOperationsInput | string
+    success?: BoolFieldUpdateOperationsInput | boolean
+    ip?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type adminSecurityEventUncheckedUpdateWithoutAdminInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    eventType?: StringFieldUpdateOperationsInput | string
+    success?: BoolFieldUpdateOperationsInput | boolean
+    ip?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type adminSecurityEventUncheckedUpdateManyWithoutAdminInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    eventType?: StringFieldUpdateOperationsInput | string
+    success?: BoolFieldUpdateOperationsInput | boolean
+    ip?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type deletedAccountHistoryUpdateWithoutEliminadoPorInput = {
+    id?: BigIntFieldUpdateOperationsInput | bigint | number
+    dedupeKey?: StringFieldUpdateOperationsInput | string
+    plataformaId?: NullableIntFieldUpdateOperationsInput | number | null
+    plataforma?: StringFieldUpdateOperationsInput | string
+    correo?: StringFieldUpdateOperationsInput | string
+    clave?: NullableStringFieldUpdateOperationsInput | string | null
+    proveedor?: NullableStringFieldUpdateOperationsInput | string | null
+    tipoRegistro?: StringFieldUpdateOperationsInput | string
+    tipoEliminacion?: StringFieldUpdateOperationsInput | string
+    identificadorOriginal?: NullableStringFieldUpdateOperationsInput | string | null
+    datosRecuperacion?: NullableJsonNullValueInput | InputJsonValue
+    cantidadEliminaciones?: IntFieldUpdateOperationsInput | number
+    primeraEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    ultimaEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type deletedAccountHistoryUncheckedUpdateWithoutEliminadoPorInput = {
+    id?: BigIntFieldUpdateOperationsInput | bigint | number
+    dedupeKey?: StringFieldUpdateOperationsInput | string
+    plataformaId?: NullableIntFieldUpdateOperationsInput | number | null
+    plataforma?: StringFieldUpdateOperationsInput | string
+    correo?: StringFieldUpdateOperationsInput | string
+    clave?: NullableStringFieldUpdateOperationsInput | string | null
+    proveedor?: NullableStringFieldUpdateOperationsInput | string | null
+    tipoRegistro?: StringFieldUpdateOperationsInput | string
+    tipoEliminacion?: StringFieldUpdateOperationsInput | string
+    identificadorOriginal?: NullableStringFieldUpdateOperationsInput | string | null
+    datosRecuperacion?: NullableJsonNullValueInput | InputJsonValue
+    cantidadEliminaciones?: IntFieldUpdateOperationsInput | number
+    primeraEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    ultimaEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type deletedAccountHistoryUncheckedUpdateManyWithoutEliminadoPorInput = {
+    id?: BigIntFieldUpdateOperationsInput | bigint | number
+    dedupeKey?: StringFieldUpdateOperationsInput | string
+    plataformaId?: NullableIntFieldUpdateOperationsInput | number | null
+    plataforma?: StringFieldUpdateOperationsInput | string
+    correo?: StringFieldUpdateOperationsInput | string
+    clave?: NullableStringFieldUpdateOperationsInput | string | null
+    proveedor?: NullableStringFieldUpdateOperationsInput | string | null
+    tipoRegistro?: StringFieldUpdateOperationsInput | string
+    tipoEliminacion?: StringFieldUpdateOperationsInput | string
+    identificadorOriginal?: NullableStringFieldUpdateOperationsInput | string | null
+    datosRecuperacion?: NullableJsonNullValueInput | InputJsonValue
+    cantidadEliminaciones?: IntFieldUpdateOperationsInput | number
+    primeraEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    ultimaEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
 

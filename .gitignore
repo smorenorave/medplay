@@ -20,3 +20,5 @@ pnpm-debug.log*
 
 # Sistema
 .DS_Store
+.next-verify/
+.next/

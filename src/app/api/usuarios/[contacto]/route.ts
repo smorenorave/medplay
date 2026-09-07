@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db';
 import { z } from 'zod';
 
 const UsuarioUpdate = z.object({
-  contacto: z.string().min(5).optional(),
+  contacto: z.string().trim().min(3).max(191).optional(),
   nombre: z.string().min(1).optional(), // si quieres permitir vacío/null, cambia aquí
 });
 
@@ -13,16 +13,11 @@ function decodeContacto(raw: string) {
   return decodeURIComponent(raw);
 }
 
-async function getParams<T extends Record<string, any>>(
-  ctx: { params: T } | { params: Promise<T> }
-): Promise<T> {
-
-  return typeof ctx.params?.then === 'function' ? ctx.params : Promise.resolve(ctx.params);
-}
+type RouteContext = { params: Promise<{ contacto: string }> };
 
 /* ================= GET ================= */
-export async function GET(_req: Request, ctx: { params: { contacto: string } } | { params: Promise<{ contacto: string }> }) {
-  const p = await getParams(ctx);
+export async function GET(_req: Request, ctx: RouteContext) {
+  const p = await ctx.params;
   const contacto = decodeContacto(p.contacto);
 
   const row = await prisma.usuarios.findUnique({ where: { contacto } });
@@ -32,8 +27,8 @@ export async function GET(_req: Request, ctx: { params: { contacto: string } } |
 }
 
 /* ===== lógica común de update ===== */
-async function applyUpdate(req: Request, ctx: { params: { contacto: string } } | { params: Promise<{ contacto: string }> }) {
-  const p = await getParams(ctx);
+async function applyUpdate(req: Request, ctx: RouteContext) {
+  const p = await ctx.params;
   const contactoKey = decodeContacto(p.contacto);
 
   const body = await req.json().catch(() => ({}));
@@ -60,13 +55,13 @@ async function applyUpdate(req: Request, ctx: { params: { contacto: string } } |
 }
 
 /* ================= PUT/PATCH ================= */
-export async function PUT(req: Request, ctx: any)   { return applyUpdate(req, ctx); }
-export async function PATCH(req: Request, ctx: any) { return applyUpdate(req, ctx); }
+export async function PUT(req: Request, ctx: RouteContext)   { return applyUpdate(req, ctx); }
+export async function PATCH(req: Request, ctx: RouteContext) { return applyUpdate(req, ctx); }
 
 /* ================= DELETE ================= */
-export async function DELETE(_req: Request, ctx: { params: { contacto: string } } | { params: Promise<{ contacto: string }> }) {
+export async function DELETE(_req: Request, ctx: RouteContext) {
   try {
-    const p = 'then' in (ctx as any).params ? await (ctx as any).params : (ctx as any).params;
+    const p = await ctx.params;
     const contacto = decodeURIComponent(p.contacto);
 
     const [pantallas, cuentas] = await prisma.$transaction([

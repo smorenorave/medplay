@@ -3,6 +3,8 @@ export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
+import { getAuthenticatedAdminId } from '@/lib/adminSession';
+import { archiveDeletedAccount } from '@/lib/deletionHistory';
 
 const Patch = z.object({
   plataforma_id: z.coerce.number().int().positive().optional(),
@@ -13,10 +15,11 @@ const Patch = z.object({
 /* ---------- PATCH: editar ---------- */
 export async function PATCH(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = Number(params.id);
+    const { id: rawId } = await params;
+    const id = Number(rawId);
     const raw = await _req.json();
     const parsed = Patch.safeParse(raw);
     if (!parsed.success) {
@@ -66,8 +69,26 @@ export async function DELETE(
       return NextResponse.json({ error: "validation", detail: "id inválido" }, { status: 400 });
     }
 
-    // 👇 IMPORTANTÍSIMO: no revienta si ya se borró antes
-    await prisma.inventario.deleteMany({ where: { id: idNum } });
+    const adminId = await getAuthenticatedAdminId(req);
+    await prisma.$transaction(async (tx) => {
+      const row = await tx.inventario.findUnique({
+        where: { id: idNum },
+        include: { plataformas: { select: { nombre: true } } },
+      });
+      if (!row) return;
+
+      await archiveDeletedAccount(tx, {
+        plataformaId: row.plataforma_id,
+        plataforma: row.plataformas.nombre,
+        correo: row.correo,
+        clave: row.clave,
+        tipoRegistro: 'INVENTARIO',
+        tipoEliminacion: 'INVENTARIO',
+        identificadorOriginal: row.id,
+        eliminadoPorAdminId: adminId,
+      });
+      await tx.inventario.delete({ where: { id: idNum } });
+    });
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (e: any) {

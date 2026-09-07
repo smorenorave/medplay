@@ -5,6 +5,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { z } from 'zod';
 import { normalizeContacto } from '@/lib/strings';
+import { getAuthenticatedAdminId } from '@/lib/adminSession';
+import { archiveDeletedAccount } from '@/lib/deletionHistory';
 
 /* ============ Tipos / Ctx (params es asíncrono) ============ */
 type RouteCtx = { params: Promise<{ id: string }> };
@@ -336,10 +338,15 @@ export async function DELETE(req: Request, ctx: RouteCtx) {
     const { id: idStr } = await ctx.params;
     const id = parseId(idStr);
 
-    // Traer contacto del usuario relacionado ANTES de borrar
+    const adminId = await getAuthenticatedAdminId(req);
+
+    // Traer los datos recuperables ANTES de borrar.
     const row = await prisma.cuentascompletas.findUnique({
       where: { id },
-      include: { usuarios: { select: { contacto: true } } },
+      include: {
+        usuarios: { select: { contacto: true } },
+        plataformas: { select: { id: true, nombre: true } },
+      },
     });
     if (!row) {
       return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
@@ -353,7 +360,24 @@ export async function DELETE(req: Request, ctx: RouteCtx) {
     const meta: Record<string, any> = {};
 
     await prisma.$transaction(async (tx) => {
-      // 1) Borrar la cuenta completa
+      await archiveDeletedAccount(tx, {
+        plataformaId: row.plataformas.id,
+        plataforma: row.plataformas.nombre,
+        correo: row.correo,
+        clave: row.contrasena,
+        proveedor: row.proveedor,
+        tipoRegistro: 'CUENTA_COMPLETA',
+        tipoEliminacion: cascade ? 'CUENTA_COMPLETA_CON_LIMPIEZA' : 'CUENTA_COMPLETA',
+        identificadorOriginal: row.id,
+        eliminadoPorAdminId: adminId,
+        datosRecuperacion: {
+          contacto: row.contacto,
+          fechaCompra: row.fecha_compra?.toISOString().slice(0, 10) ?? null,
+          fechaVencimiento: row.fecha_vencimiento?.toISOString().slice(0, 10) ?? null,
+        },
+      });
+
+      // 1) Borrar la cuenta completa después de crear/actualizar el respaldo.
       await tx.cuentascompletas.delete({ where: { id } });
 
       if (!cascade || !rawContacto) return;

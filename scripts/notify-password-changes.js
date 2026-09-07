@@ -7,6 +7,7 @@ require('dotenv').config({
 });
 
 const mysql = require('mysql2/promise');
+const { parseWhatsAppContact, buildWhatsAppChatUrls } = require('./whatsapp-contact');
 const http = require('http');
 const { spawn } = require('child_process');
 const { chromium } = require('playwright');
@@ -22,7 +23,7 @@ const LOG_DIR = path.join(ROOT_DIR, '.logs');
 
 try {
   fs.mkdirSync(LOG_DIR, { recursive: true });
-} catch {}
+} catch { }
 
 const LOG_FILE = path.join(
   LOG_DIR,
@@ -35,7 +36,7 @@ function flog(...args) {
 
   try {
     fs.appendFileSync(LOG_FILE, line);
-  } catch {}
+  } catch { }
 
   console.log(...args);
 }
@@ -121,7 +122,7 @@ function acquireLock() {
         fs.unlinkSync(
           LOCK_FILE
         );
-      } catch {}
+      } catch { }
     }
 
 
@@ -150,7 +151,7 @@ function releaseLock() {
     fs.unlinkSync(
       LOCK_FILE
     );
-  } catch {}
+  } catch { }
 }
 
 
@@ -242,7 +243,7 @@ function isDebuggerLive(
 
           try {
             req.destroy();
-          } catch {}
+          } catch { }
 
           resolve(false);
         }
@@ -316,50 +317,50 @@ async function launchBrowserScript() {
     IS_WIN
 
       ? spawn(
-          'cmd.exe',
-          [
-            '/c',
-            START_SCRIPT_RESOLVED
-          ],
-          {
-            stdio:
-              'ignore',
+        'cmd.exe',
+        [
+          '/c',
+          START_SCRIPT_RESOLVED
+        ],
+        {
+          stdio:
+            'ignore',
 
-            env:
-              process.env,
+          env:
+            process.env,
 
-            cwd:
-              path.dirname(
-                START_SCRIPT_RESOLVED
-              ),
+          cwd:
+            path.dirname(
+              START_SCRIPT_RESOLVED
+            ),
 
-            detached:
-              true
-          }
-        )
+          detached:
+            true
+        }
+      )
 
       : spawn(
-          'bash',
-          [
-            '-lc',
-            START_SCRIPT_RESOLVED
-          ],
-          {
-            stdio:
-              'ignore',
+        'bash',
+        [
+          '-lc',
+          START_SCRIPT_RESOLVED
+        ],
+        {
+          stdio:
+            'ignore',
 
-            env:
-              process.env,
+          env:
+            process.env,
 
-            cwd:
-              path.dirname(
-                START_SCRIPT_RESOLVED
-              ),
+          cwd:
+            path.dirname(
+              START_SCRIPT_RESOLVED
+            ),
 
-            detached:
-              true
-          }
-        );
+          detached:
+            true
+        }
+      );
 
 
   child.on(
@@ -557,7 +558,7 @@ async function connectToExistingEdge() {
   for (
     let attempt = 1;
     attempt <=
-      EDGE_PAGE_CREATE_RETRIES;
+    EDGE_PAGE_CREATE_RETRIES;
     attempt++
   ) {
 
@@ -733,7 +734,7 @@ async function resolveUseHereModal(
               3000
           })
           .catch(
-            () => {}
+            () => { }
           );
 
 
@@ -750,7 +751,7 @@ async function resolveUseHereModal(
         return true;
       }
 
-    } catch {}
+    } catch { }
   }
 
 
@@ -828,9 +829,9 @@ async function waitForNetworkQuiet(
       ev,
       fn
     ]
-      of Object.entries(
-        handlers
-      )
+    of Object.entries(
+      handlers
+    )
   ) {
 
     client.on(
@@ -853,7 +854,7 @@ async function waitForNetworkQuiet(
 
       if (
         Date.now() -
-          lastActivity >=
+        lastActivity >=
         quietMs
       ) {
 
@@ -876,9 +877,9 @@ async function waitForNetworkQuiet(
         ev,
         fn
       ]
-        of Object.entries(
-          handlers
-        )
+      of Object.entries(
+        handlers
+      )
     ) {
 
       client.off(
@@ -890,7 +891,7 @@ async function waitForNetworkQuiet(
 
     try {
       await client.detach();
-    } catch {}
+    } catch { }
   }
 }
 
@@ -1008,7 +1009,7 @@ async function waitForWhatsAppReady(
         }
       )
       .catch(
-        () => {}
+        () => { }
       );
 
 
@@ -1021,7 +1022,7 @@ async function waitForWhatsAppReady(
         }
       )
       .catch(
-        () => {}
+        () => { }
       );
 
 
@@ -1033,7 +1034,7 @@ async function waitForWhatsAppReady(
       await resolveUseHereModal(
         page
       ).catch(
-        () => {}
+        () => { }
       );
 
 
@@ -1078,7 +1079,7 @@ async function waitForWhatsAppReady(
 
     try {
       await client.detach();
-    } catch {}
+    } catch { }
   }
 }
 
@@ -1120,7 +1121,7 @@ async function waitForSWControlled(
         return true;
       }
 
-    } catch {}
+    } catch { }
 
 
     await sleep(
@@ -1181,119 +1182,171 @@ async function resolveActivePage(
  * PREPARAR WHATSAPP
  * ========================================================= */
 
-async function prepareWhatsApp(
-  browser,
-  page
-) {
+async function prepareWhatsApp(browser, page) {
 
   flog(
     '[STEP 6.3] Preparando WhatsApp Web…'
   );
 
-
-  page =
-    await resolveActivePage(
-      browser,
-      page
-    );
-
-
+  /*
+   * 1. Primero intentamos usar la pestaña que ya tenemos.
+   */
   try {
+    if (
+      page &&
+      !page.isClosed()
+    ) {
+      const currentUrl = page.url() || '';
 
-    await page.goto(
-      'https://web.whatsapp.com/',
-      {
-        waitUntil:
-          'domcontentloaded',
+      if (
+        /https:\/\/web\.whatsapp\.com/i.test(currentUrl)
+      ) {
+        flog(
+          `[STEP 6.3] ✅ WhatsApp ya está abierto. Reutilizando pestaña: ${currentUrl}`
+        );
+      } else {
+        flog(
+          `[STEP 6.3] ℹ️ La pestaña actual no es WhatsApp: ${currentUrl || 'about:blank'}`
+        );
 
-        timeout:
-          60000
+        await page.goto(
+          'https://web.whatsapp.com/',
+          {
+            waitUntil: 'domcontentloaded',
+            timeout: 60000
+          }
+        );
       }
-    );
+    } else {
+      /*
+       * 2. Si no tenemos página válida, buscamos una existente.
+       */
+      flog(
+        '[STEP 6.3] 🔎 No hay página válida; buscando pestaña existente…'
+      );
 
+      page = await resolveActivePage(
+        browser,
+        null
+      );
+
+      const currentUrl = page.url() || '';
+
+      if (
+        /https:\/\/web\.whatsapp\.com/i.test(currentUrl)
+      ) {
+        flog(
+          `[STEP 6.3] ✅ WhatsApp encontrado. Reutilizando pestaña: ${currentUrl}`
+        );
+      } else {
+        flog(
+          `[STEP 6.3] 🌐 Pestaña encontrada pero no es WhatsApp. Abriendo WhatsApp…`
+        );
+
+        await page.goto(
+          'https://web.whatsapp.com/',
+          {
+            waitUntil: 'domcontentloaded',
+            timeout: 60000
+          }
+        );
+      }
+    }
   } catch (err) {
 
     flog(
-      `⚠️ goto WhatsApp: ${err?.message || err}`
+      `[STEP 6.3] ⚠️ Error preparando/navegando WhatsApp: ${err?.message || err}`
+    );
+
+    /*
+     * Si el goto dio ERR_ABORTED, no asumimos inmediatamente
+     * que WhatsApp murió. Intentamos recuperar la pestaña.
+     */
+  }
+
+  /*
+   * 3. Después de la navegación, comprobamos si la página
+   * sigue viva. Solo buscamos otra si realmente se perdió.
+   */
+  try {
+
+    await page.evaluate(
+      () => true
+    );
+
+  } catch {
+
+    flog(
+      '[STEP 6.3] ⚠️ La pestaña perdió el contexto. Buscando otra pestaña…'
+    );
+
+    page = await resolveActivePage(
+      browser,
+      null
     );
   }
 
-
   /*
-   * IMPORTANTE:
-   *
-   * Después de goto volvemos a resolver
-   * la página porque Edge puede cambiar
-   * el contexto.
+   * 4. Resolver "Usar aquí" si aparece.
    */
-
-  page =
-    await resolveActivePage(
-      browser,
-      page
-    );
-
-
   await resolveUseHereModal(
     page
   ).catch(
-    () => {}
+    () => { }
   );
 
-
+  /*
+   * 5. Esperar a que WhatsApp esté listo.
+   */
   let ready =
     await waitForWhatsAppReady(
       page,
       {
-        timeout:
-          60000,
-
-        quietMs:
-          1500,
-
-        requireWsTraffic:
-          false
+        timeout: 60000,
+        quietMs: 1500,
+        requireWsTraffic: false
       }
     );
 
-
+  /*
+   * 6. Segundo intento.
+   */
   if (!ready) {
 
     flog(
       '[STEP 6.3] ⚠️ WhatsApp aún no confirmado. Reintentando…'
     );
 
+    try {
 
-    page =
-      await resolveActivePage(
-        browser,
-        page
+      await page.evaluate(
+        () => true
       );
 
+    } catch {
+
+      page = await resolveActivePage(
+        browser,
+        null
+      );
+    }
 
     await resolveUseHereModal(
       page
     ).catch(
-      () => {}
+      () => { }
     );
-
 
     ready =
       await waitForWhatsAppReady(
         page,
         {
-          timeout:
-            45000,
-
-          quietMs:
-            1200,
-
-          requireWsTraffic:
-            false
+          timeout: 45000,
+          quietMs: 1200,
+          requireWsTraffic: false
         }
       );
   }
-
 
   if (!ready) {
 
@@ -1301,7 +1354,6 @@ async function prepareWhatsApp(
       'WhatsApp Web no quedó listo después de los reintentos.'
     );
   }
-
 
   const swOk =
     await waitForSWControlled(
@@ -1311,7 +1363,6 @@ async function prepareWhatsApp(
       () => false
     );
 
-
   if (!swOk) {
 
     flog(
@@ -1319,15 +1370,12 @@ async function prepareWhatsApp(
     );
   }
 
-
   flog(
     '[STEP 6.3] ✅ WhatsApp Web listo.'
   );
 
-
   return page;
 }
-
 
 /* =========================================================
  * EDITOR
@@ -1355,7 +1403,7 @@ async function findEditorWithRetry(
 
     for (
       const selector
-        of selectors
+      of selectors
     ) {
 
       const loc =
@@ -1403,7 +1451,7 @@ async function focusEditorAtEnd(
   try {
     await editor
       .scrollIntoViewIfNeeded();
-  } catch {}
+  } catch { }
 
 
   try {
@@ -1413,7 +1461,7 @@ async function focusEditorAtEnd(
         20
     });
 
-  } catch {}
+  } catch { }
 
 
   try {
@@ -1454,7 +1502,7 @@ async function focusEditorAtEnd(
       }
     );
 
-  } catch {}
+  } catch { }
 
 
   try {
@@ -1464,7 +1512,7 @@ async function focusEditorAtEnd(
         'ControlOrMeta+End'
       )
       .catch(
-        () => {}
+        () => { }
       );
 
 
@@ -1473,7 +1521,7 @@ async function focusEditorAtEnd(
         'End'
       )
       .catch(
-        () => {}
+        () => { }
       );
 
 
@@ -1482,10 +1530,10 @@ async function focusEditorAtEnd(
         'ArrowRight'
       )
       .catch(
-        () => {}
+        () => { }
       );
 
-  } catch {}
+  } catch { }
 }
 
 
@@ -1499,20 +1547,15 @@ async function ensureChatReady(
   textEncoded
 ) {
 
-  const variants = [
+  const variants = buildWhatsAppChatUrls(phone, textEncoded);
 
-    `https://web.whatsapp.com/send?phone=${encodeURIComponent(phone)}&text=${textEncoded}`,
-
-    `https://web.whatsapp.com/send/?phone=${encodeURIComponent(phone)}&text=${textEncoded}`,
-
-    `https://web.whatsapp.com/send?phone=${encodeURIComponent(phone)}&text=${textEncoded}&app_absent=0`
-  ];
+  if (!variants.length) return false;
 
 
   for (
     let attempt = 1;
     attempt <=
-      CHAT_RETRIES;
+    CHAT_RETRIES;
     attempt++
   ) {
 
@@ -1530,10 +1573,10 @@ async function ensureChatReady(
 
     const urlToOpen =
       variants[
-        (
-          attempt - 1
-        ) %
-        variants.length
+      (
+        attempt - 1
+      ) %
+      variants.length
       ];
 
 
@@ -1594,7 +1637,7 @@ async function ensureChatReady(
     await resolveUseHereModal(
       page
     ).catch(
-      () => {}
+      () => { }
     );
 
 
@@ -1639,7 +1682,7 @@ async function ensureChatReady(
       await resolveUseHereModal(
         page
       ).catch(
-        () => {}
+        () => { }
       );
 
 
@@ -1703,14 +1746,14 @@ async function ensureChatReady(
           PRE_SEND_TIMEOUT_MS
       }
     ).catch(
-      () => {}
+      () => { }
     );
 
 
     await resolveUseHereModal(
       page
     ).catch(
-      () => {}
+      () => { }
     );
 
 
@@ -1857,8 +1900,8 @@ async function readPayload() {
             resolve(
               data
                 ? JSON.parse(
-                    data
-                  )
+                  data
+                )
                 : {}
             );
           }
@@ -2119,8 +2162,8 @@ function buildMessage(
     (
       nombre
         ? nombre
-            .trim()
-            .split(/\s+/)[0]
+          .trim()
+          .split(/\s+/)[0]
         : null
     ) || '!';
 
@@ -2131,7 +2174,7 @@ function buildMessage(
 
   const extra =
     item.servicio === 'Pantalla' &&
-    item.nro_pantalla
+      item.nro_pantalla
 
       ? ` | *Pantalla ${item.nro_pantalla}*`
 
@@ -2513,16 +2556,18 @@ ${tips}
       const r of rows
     ) {
 
-      const phone =
-        toE164(
+      const parsedContact =
+        parseWhatsAppContact(
           r.contacto
         );
 
 
+      const phone =
+        parsedContact?.value;
+
+
       if (
-        !/^\d{8,15}$/.test(
-          phone
-        )
+        !parsedContact
       ) {
 
         skippedPhone++;
@@ -2662,9 +2707,9 @@ ${tips}
           a.plataforma_id -
           b.plataforma_id
         ) ||
-        a.phone.localeCompare(
-          b.phone
-        );
+          a.phone.localeCompare(
+            b.phone
+          );
       }
     );
 
@@ -2674,7 +2719,7 @@ ${tips}
         key,
         value
       ]
-        of perCorreoPlat.entries()
+      of perCorreoPlat.entries()
     ) {
 
       const [
@@ -2776,7 +2821,7 @@ ${tips}
     await resolveUseHereModal(
       page
     ).catch(
-      () => {}
+      () => { }
     );
 
 
@@ -2790,7 +2835,7 @@ ${tips}
           10000
       }
     ).catch(
-      () => {}
+      () => { }
     );
 
 
@@ -3000,7 +3045,7 @@ ${tips}
         await conn.end();
       }
 
-    } catch {}
+    } catch { }
 
 
     releaseLock();

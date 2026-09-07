@@ -32,7 +32,7 @@ type EditState = Partial<Cuenta> & { id: number };
 const REFETCH_ON_FOCUS = false;
 const STALE_AFTER_MS = 5 * 60_000;
 const STAMP_TTL_MS = 5 * 30_000;
-let dateEl: HTMLInputElement | null = null;
+const dateEl: HTMLInputElement | null = null;
 /* =========================================================
  * Cache y sync
  * ======================================================= */
@@ -77,22 +77,15 @@ function normalizeRow(r: any): Cuenta {
   };
 }
 
+let memoryCache: CacheShape | null = null;
+
 function readCache(): CacheShape | null {
-  if (!hasWindow()) return null;
-  try {
-    const raw = localStorage.getItem(LS_CACHE_KEY);
-    return raw ? (JSON.parse(raw) as CacheShape) : null;
-  } catch {
-    return null;
-  }
+  return memoryCache;
 }
 function writeCache(rows: Cuenta[], remoteStamp?: number) {
+  memoryCache = { rows, ts: Date.now() };
   if (!hasWindow()) return;
   try {
-    localStorage.setItem(
-      LS_CACHE_KEY,
-      JSON.stringify({ rows, ts: Date.now() })
-    );
     if (typeof remoteStamp === "number") {
       localStorage.setItem(LS_REMOTE_STAMP, String(remoteStamp));
     }
@@ -299,6 +292,9 @@ export default function CuentasCompletasViewer() {
 
   const [q, setQ] = useState("");
   const [platFilter, setPlatFilter] = useState<number | "all">("all");
+  const [quickFilter, setQuickFilter] = useState<
+    "all" | "active" | "expiring" | "expired" | "notes"
+  >("all");
 
   // edición
   const [edit, setEdit] = useState<EditState | null>(null);
@@ -309,7 +305,7 @@ export default function CuentasCompletasViewer() {
   const [loadingEmails, setLoadingEmails] = useState(false);
   // ↓ NUEVO: control del dropdown de correos (mismo estilo que el form)
   const [emailDropdownOpen, setEmailDropdownOpen] = useState(false);
-  const emailDropdownRef = useRef<HTMLDivElement | null>(null);
+  const emailDropdownRef = useRef<HTMLLabelElement | null>(null);
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
@@ -540,11 +536,19 @@ export default function CuentasCompletasViewer() {
   const filtered = useMemo(() => {
     const term = normSearch(q);
     const pid: number | null = platFilter === "all" ? null : Number(platFilter);
-
-    if (!term && pid === null) return rows;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const warning = new Date(today);
+    warning.setDate(warning.getDate() + 7);
 
     return rows.filter((r) => {
       if (pid !== null && r.plataforma_id !== pid) return false;
+      const expires = r.fecha_vencimiento ? new Date(`${r.fecha_vencimiento}T00:00:00`) : null;
+      const status = normSearch(r.estado);
+      if (quickFilter === "notes" && !r.comentario?.trim()) return false;
+      if (quickFilter === "expired" && (!expires || expires >= today)) return false;
+      if (quickFilter === "expiring" && (!expires || expires < today || expires > warning)) return false;
+      if (quickFilter === "active" && ((expires && expires < today) || status.includes("venc"))) return false;
       if (!term) return true;
 
       const hay =
@@ -557,7 +561,25 @@ export default function CuentasCompletasViewer() {
 
       return hay;
     });
-  }, [rows, q, platFilter]);
+  }, [rows, q, platFilter, quickFilter]);
+
+  const overview = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const warning = new Date(today);
+    warning.setDate(warning.getDate() + 7);
+    return rows.reduce(
+      (acc, row) => {
+        const expires = row.fecha_vencimiento ? new Date(`${row.fecha_vencimiento}T00:00:00`) : null;
+        if (expires && expires < today) acc.expired += 1;
+        else if (expires && expires <= warning) acc.expiring += 1;
+        else acc.active += 1;
+        if (row.comentario?.trim()) acc.notes += 1;
+        return acc;
+      },
+      { active: 0, expiring: 0, expired: 0, notes: 0 },
+    );
+  }, [rows]);
 
   /* =========================================================
    * Editar / Guardar
@@ -823,7 +845,7 @@ export default function CuentasCompletasViewer() {
     setDeleteErr(null);
     setDeleteAction(archive ? "archive" : "purge");
     try {
-      let victim = rows.find((r) => r.id === deleteTarget.id) || null;
+      const victim = rows.find((r) => r.id === deleteTarget.id) || null;
       let victimPlataforma = victim?.plataforma_id ?? null;
       let victimCorreo = victim?.correo ?? null;
       let victimClave = victim?.contrasena ?? null;
@@ -968,7 +990,6 @@ export default function CuentasCompletasViewer() {
     }
   };
   const openBulkSelected = () => openBulk(Array.from(selectedIds));
-  const openBulkAllView = () => openBulk(filtered.map((r) => r.id));
 
   const runBulk = async (preferArchive: boolean) => {
     if (!bulkOpen || bulkItems.length === 0) return;
@@ -1038,16 +1059,39 @@ export default function CuentasCompletasViewer() {
 
   return (
     <div className="p-4">
-      <h2 className="text-xl font-semibold text-neutral-100 mb-3">
-        Ver/Editar Cuentas Completas
-      </h2>
+      <div className="mb-5 flex flex-col gap-1">
+        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-400">Centro de operaciones</span>
+        <h2 className="text-2xl font-semibold text-neutral-100">Gestión de cuentas completas</h2>
+        <p className="text-sm text-neutral-400">Busca, prioriza y actualiza cuentas sin perder el contexto de la operación.</p>
+      </div>
+
+      <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+        {([
+          ["active", "Activas", overview.active, "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"],
+          ["expiring", "Vencen en 7 días", overview.expiring, "border-amber-500/30 bg-amber-500/10 text-amber-100"],
+          ["expired", "Vencidas", overview.expired, "border-rose-500/30 bg-rose-500/10 text-rose-100"],
+          ["notes", "Con anotaciones", overview.notes, "border-sky-500/30 bg-sky-500/10 text-sky-100"],
+        ] as const).map(([key, label, value, tone]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setQuickFilter((current) => current === key ? "all" : key)}
+            aria-pressed={quickFilter === key}
+            className={`rounded-xl border p-3 text-left transition hover:-translate-y-0.5 ${tone} ${quickFilter === key ? "ring-2 ring-white/30" : ""}`}
+          >
+            <span className="block text-2xl font-semibold tabular-nums">{value}</span>
+            <span className="text-xs font-medium">{label}</span>
+          </button>
+        ))}
+      </div>
 
       {/* Filtros */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center mb-3">
+      <div className="z-20 mb-3 flex flex-col gap-3 rounded-xl border border-neutral-800 bg-neutral-950/95 p-3 shadow-xl backdrop-blur sm:flex-row sm:items-center lg:sticky lg:top-0">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por nombre, contacto, correo, proveedor, estado, comentario"
+          placeholder="Buscar contacto, correo, plataforma o anotación…"
+          aria-label="Buscar cuentas"
           className="flex-1 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
         />
         <select
@@ -1055,15 +1099,25 @@ export default function CuentasCompletasViewer() {
           onChange={(e) =>
             setPlatFilter(e.target.value ? Number(e.target.value) : "all")
           }
-          className="w-64 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
+          className="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-neutral-100 outline-none focus:ring-2 focus:ring-sky-500 sm:w-64 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
         >
-          <option value="">Todas</option>
+          <option value="">Todas las plataformas</option>
           {plataformas.map((p) => (
             <option key={p.id} value={p.id}>
               {p.nombre}
             </option>
           ))}
         </select>
+
+        {(q || platFilter !== "all" || quickFilter !== "all") && (
+          <button
+            type="button"
+            onClick={() => { setQ(""); setPlatFilter("all"); setQuickFilter("all"); }}
+            className="px-3 py-2 text-sm text-neutral-300 hover:text-white"
+          >
+            Limpiar filtros
+          </button>
+        )}
 
         <button
           onClick={forceRefresh}
@@ -1079,7 +1133,7 @@ export default function CuentasCompletasViewer() {
         <div className="text-sm text-neutral-300">
           Seleccionados: <span className="font-semibold">{selectedCount}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
           <button
             type="button"
             onClick={openBulkSelected}
@@ -1088,14 +1142,6 @@ export default function CuentasCompletasViewer() {
             title="Si es la última relación por correo+plataforma → inventario; si no → eliminar"
           >
             Eliminar seleccionados
-          </button>
-          <button
-            type="button"
-            onClick={openBulkAllView}
-            disabled={filtered.length === 0 || loading}
-            className="rounded-lg border border-red-700 bg-red-800/40 px-3 py-1.5 text-red-100 hover:bg-red-800/60 disabled:opacity-50"
-          >
-            Eliminar todo (vista)
           </button>
           <button
             type="button"
@@ -1108,8 +1154,23 @@ export default function CuentasCompletasViewer() {
         </div>
       </div>
 
+      {/* Vista móvil optimizada: reemplaza la tabla ancha por tarjetas. */}
+      <div className="grid gap-3 md:hidden">
+        {filtered.map((r) => {
+          const isExpired = Boolean(r.fecha_vencimiento && r.fecha_vencimiento <= todayYMDLocal());
+          const platform = plataformas.find((p) => Number(p.id) === Number(r.plataforma_id))?.nombre ?? "Sin plataforma";
+          return <article key={`mobile-${r.id}`} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="rounded-lg bg-violet-500/10 px-2 py-1 text-xs font-semibold text-violet-200">{platform}</span><span className={`rounded-lg px-2 py-1 text-xs font-semibold ${isExpired ? "bg-rose-500/10 text-rose-200" : "bg-emerald-500/10 text-emerald-200"}`}>{isExpired ? "Vencida" : "Activa"}</span></div><h3 className="mt-3 truncate font-semibold text-white">{r.nombre || r.contacto || "Cliente sin nombre"}</h3><p className="mt-1 truncate text-sm text-neutral-400">{r.correo || "Sin correo"}</p></div><input type="checkbox" className="size-5 shrink-0 accent-sky-500" aria-label={`Seleccionar cuenta ${r.id}`} checked={isRowSelected(r.id)} onChange={(event) => toggleRow(r.id, event.target.checked)} /></div>
+            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-neutral-500">Contacto</dt><dd className="mt-0.5 truncate font-medium text-neutral-200">{r.contacto || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Vencimiento</dt><dd className="mt-0.5 font-medium text-neutral-200">{r.fecha_vencimiento || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Total</dt><dd className="mt-0.5 font-medium text-neutral-200">{money(r.total_pagado_completa)}</dd></div><div><dt className="text-xs text-neutral-500">Proveedor</dt><dd className="mt-0.5 truncate font-medium text-neutral-200">{r.proveedor || "—"}</dd></div></dl>
+            {r.comentario && <p className="mt-4 line-clamp-2 rounded-xl bg-white/[0.035] p-3 text-xs leading-5 text-neutral-400">{r.comentario}</p>}
+            <div className="mt-4 grid grid-cols-2 gap-2"><button type="button" onClick={() => openEdit(r)} className="min-h-11 rounded-xl bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98]">Editar</button><button type="button" onClick={() => openDelete(r.id, r.correo ?? undefined)} className="min-h-11 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm font-semibold text-rose-100 transition active:scale-[0.98]">Eliminar</button></div>
+          </article>;
+        })}
+        {!filtered.length && <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-neutral-400">{loading ? "Cargando…" : "No se encontraron resultados."}</div>}
+      </div>
+
       {/* Tabla */}
-      <div className="overflow-auto rounded-xl border border-neutral-800">
+      <div className="hidden overflow-auto rounded-xl border border-neutral-800 md:block">
         <table className="min-w-[1200px] w-full text-sm text-neutral-100">
           <thead className="bg-neutral-900/70 border-b border-neutral-800 sticky top-0 z-10">
             <tr>
@@ -1205,6 +1266,17 @@ export default function CuentasCompletasViewer() {
                         <path d="M10 11v6" />
                         <path d="M14 11v6" />
                         <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      title={r.comentario ? "Ver o editar anotación" : "Agregar anotación"}
+                      onClick={() => openEdit(r)}
+                      className={`inline-flex rounded-md p-1 hover:bg-sky-900/30 ${r.comentario ? "text-sky-300" : "text-neutral-500 hover:text-sky-200"}`}
+                      aria-label={r.comentario ? "Ver o editar anotación" : "Agregar anotación"}
+                    >
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
                       </svg>
                     </button>
                   </div>

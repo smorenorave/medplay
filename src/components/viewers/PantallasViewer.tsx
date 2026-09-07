@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePlataformas } from "@/hooks/usePlataformas";
 import { buildDisponibilidadCorreos } from "@/lib/cuentasDisponibles";
+import { addDaysYMD, todayYMDBogota } from "@/lib/bogotaDate";
 import {
   resolveCapacidadPantallas,
   computeUsedByEmailPlatform,
@@ -50,6 +51,11 @@ type EditState = Partial<Pantalla> & {
   id: number;
   __applyCorreoToCuenta?: boolean; // ✅ nuevo
 };
+type AvailableEmail = {
+  email: string;
+  password: string | null;
+  cuentaId: number | null;
+};
 
 /* =========================================================
  * Config
@@ -64,13 +70,7 @@ const STAMP_TTL_MS = 5 * 30_000;
 
 const LS_REMOTE_STAMP = "__pantallas_remote_stamp";
 
-const todayYMDLocal = () => {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
-};
+const todayYMDLocal = todayYMDBogota;
 
 type CacheShape = { rows: Pantalla[]; ts: number };
 
@@ -104,22 +104,15 @@ function normalizeRow(r: any): Pantalla {
   };
 }
 
+let memoryCache: CacheShape | null = null;
+
 function readCache(): CacheShape | null {
-  if (!hasWindow()) return null;
-  try {
-    const raw = localStorage.getItem(LS_CACHE_KEY);
-    return raw ? (JSON.parse(raw) as CacheShape) : null;
-  } catch {
-    return null;
-  }
+  return memoryCache;
 }
 function writeCache(rows: Pantalla[], remoteStamp?: number) {
+  memoryCache = { rows, ts: Date.now() };
   if (!hasWindow()) return;
   try {
-    localStorage.setItem(
-      LS_CACHE_KEY,
-      JSON.stringify({ rows, ts: Date.now() }),
-    );
     if (typeof remoteStamp === "number") {
       localStorage.setItem(LS_REMOTE_STAMP, String(remoteStamp));
     }
@@ -329,6 +322,7 @@ export default function PantallasViewer() {
 
   const [q, setQ] = useState("");
   const [platFilter, setPlatFilter] = useState<number | "all">("all");
+  const [quickFilter, setQuickFilter] = useState<"all" | "active" | "soon" | "expired" | "notes">("all");
 
   // Capacidad por plataforma (desde usePlataformas)
   const capacityByPlatform = useMemo(() => {
@@ -349,7 +343,7 @@ export default function PantallasViewer() {
   // edición
   const [edit, setEdit] = useState<EditState | null>(null);
   // ↓ NUEVO: correos disponibles (inventario + cuentas compartidas) por plataforma
-  const [availableEmails, setAvailableEmails] = useState<string[]>([]);
+  const [availableEmails, setAvailableEmails] = useState<AvailableEmail[]>([]);
   const [loadingEmails, setLoadingEmails] = useState(false);
   // ↓ NUEVO: cupos disponibles por correo (igual que en el form) -> key: email, value: cupos libres
   const [emailFreeMap, setEmailFreeMap] = useState<Record<string, number>>({});
@@ -391,7 +385,7 @@ export default function PantallasViewer() {
   // 👇 NUEVO: lista filtrada según lo escrito + excluyendo cuentas caídas + solo con cupos disponibles
   const visibleAvailableEmails = useMemo(() => {
     const term = (edit?.correo ?? "").trim().toLowerCase();
-    return availableEmails.filter((em) => !term || em.includes(term));
+    return availableEmails.filter((item) => !term || item.email.includes(term));
   }, [availableEmails, edit?.correo]);
   // 👇 NUEVO: cupos efectivos a mostrar junto a cada correo en el dropdown
   const effectiveFreeForEmail = (email: string) => emailFreeMap[email] ?? 0;
@@ -481,7 +475,13 @@ export default function PantallasViewer() {
         });
 
         if (!cancelled) {
-          setAvailableEmails(disponibilidad.emails);
+          setAvailableEmails(disponibilidad.options.map((option) => ({
+            email: option.email,
+            cuentaId: option.cuentaId,
+            password: option.source === "acct"
+              ? disponibilidad.acctPassMap[option.email] ?? null
+              : disponibilidad.invPassMap[option.email] ?? null,
+          })));
           const free: Record<string, number> = {};
           for (const o of disponibilidad.options) {
             free[o.email] =
@@ -763,10 +763,15 @@ export default function PantallasViewer() {
     const term = normSearch(q);
     const pid: number | null = platFilter === "all" ? null : Number(platFilter);
 
-    if (!term && pid === null) return rows;
-
     return rows.filter((r) => {
       if (pid !== null && r.plataforma_id !== pid) return false;
+      const today = todayYMDBogota();
+      const soonYmd = addDaysYMD(today, 7);
+      const due = r.fecha_vencimiento ?? "";
+      if (quickFilter === "active" && !(due > today)) return false;
+      if (quickFilter === "soon" && !(due > today && due <= soonYmd)) return false;
+      if (quickFilter === "expired" && !(due && due <= today)) return false;
+      if (quickFilter === "notes" && !r.comentario?.trim()) return false;
       if (!term) return true;
 
       const hay =
@@ -780,7 +785,18 @@ export default function PantallasViewer() {
 
       return hay;
     });
-  }, [rows, q, platFilter]);
+  }, [rows, q, platFilter, quickFilter]);
+
+  const overview = useMemo(() => {
+    const today = todayYMDBogota();
+    const endYmd = addDaysYMD(today, 7);
+    return {
+      active: rows.filter((r) => (r.fecha_vencimiento ?? "") > today).length,
+      soon: rows.filter((r) => (r.fecha_vencimiento ?? "") > today && (r.fecha_vencimiento ?? "") <= endYmd).length,
+      expired: rows.filter((r) => Boolean(r.fecha_vencimiento && r.fecha_vencimiento <= today)).length,
+      notes: rows.filter((r) => Boolean(r.comentario?.trim())).length,
+    };
+  }, [rows]);
 
   // 🔸 justo después de const filtered = useMemo(...)
 
@@ -1344,7 +1360,7 @@ export default function PantallasViewer() {
     setDeleteErr(null);
     setDeleteAction(archive ? "archive" : "purge");
     try {
-      let victim = rows.find((r) => r.id === deleteTarget.id) || null;
+      const victim = rows.find((r) => r.id === deleteTarget.id) || null;
       let victimPlataforma = victim?.plataforma_id ?? null;
       let victimCorreo = victim?.correo ?? null;
       let victimClave = victim?.contrasena ?? null;
@@ -1491,7 +1507,6 @@ export default function PantallasViewer() {
     }
   };
   const openBulkSelected = () => openBulk(Array.from(selectedIds));
-  const openBulkAllView = () => openBulk(filtered.map((r) => r.id));
 
   const runBulk = async (preferArchive: boolean) => {
     if (!bulkOpen || bulkItems.length === 0) return;
@@ -1561,9 +1576,24 @@ export default function PantallasViewer() {
 
   return (
     <div className="p-4">
-      <h2 className="text-xl font-semibold text-neutral-100 mb-3">
-        Ver/Editar Pantallas
-      </h2>
+      <div className="mb-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-400">Centro de operaciones</p>
+        <h2 className="mt-1 text-2xl font-semibold text-neutral-100">Gestión de pantallas</h2>
+        <p className="mt-1 text-sm text-neutral-400">Busca, prioriza y actualiza pantallas sin perder el contexto de la operación.</p>
+      </div>
+      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {([
+          ["active", "Activas", overview.active],
+          ["soon", "Vencen en 7 días", overview.soon],
+          ["expired", "Vencidas", overview.expired],
+          ["notes", "Con anotaciones", overview.notes],
+        ] as const).map(([key, label, value]) => (
+          <button key={key} type="button" onClick={() => setQuickFilter(quickFilter === key ? "all" : key)} className={`rounded-xl border p-4 text-left transition ${quickFilter === key ? "border-sky-400 bg-sky-500/15" : "border-neutral-800 bg-neutral-900/70 hover:border-neutral-600"}`}>
+            <span className="block text-2xl font-bold text-white">{value}</span>
+            <span className="text-sm text-neutral-400">{label}</span>
+          </button>
+        ))}
+      </div>
 
       {/* Filtros */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center mb-3">
@@ -1578,7 +1608,7 @@ export default function PantallasViewer() {
           onChange={(e) =>
             setPlatFilter(e.target.value ? Number(e.target.value) : "all")
           }
-          className="w-64 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
+          className="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2.5 text-neutral-100 outline-none focus:ring-2 focus:ring-sky-500 sm:w-64 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
         >
           <option value="">Todas</option>
           {plataformas.map((p) => (
@@ -1602,7 +1632,7 @@ export default function PantallasViewer() {
         <div className="text-sm text-neutral-300">
           Seleccionados: <span className="font-semibold">{selectedCount}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
           <button
             type="button"
             onClick={openBulkSelected}
@@ -1611,14 +1641,6 @@ export default function PantallasViewer() {
             title="Si es última relación por correo+plataforma → inventario; si no → eliminar"
           >
             Eliminar seleccionados
-          </button>
-          <button
-            type="button"
-            onClick={openBulkAllView}
-            disabled={filtered.length === 0 || loading}
-            className="rounded-lg border border-red-700 bg-red-800/40 px-3 py-1.5 text-red-100 hover:bg-red-800/60 disabled:opacity-50"
-          >
-            Eliminar todo (vista)
           </button>
           <button
             type="button"
@@ -1631,8 +1653,26 @@ export default function PantallasViewer() {
         </div>
       </div>
 
+      {/* Vista móvil: la información crítica se presenta como tarjetas táctiles. */}
+      <div className="grid gap-3 md:hidden">
+        {filtered.map((r) => {
+          const isExpired = Boolean(r.fecha_vencimiento && r.fecha_vencimiento <= todayYMDBogota());
+          const platform = plataformas.find((p) => Number(p.id) === Number(r.plataforma_id))?.nombre ?? "Sin plataforma";
+          return <article key={`mobile-${r.id}`} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="rounded-lg bg-sky-500/10 px-2 py-1 text-xs font-semibold text-sky-200">{platform}</span><span className={`rounded-lg px-2 py-1 text-xs font-semibold ${isExpired ? "bg-rose-500/10 text-rose-200" : "bg-emerald-500/10 text-emerald-200"}`}>{isExpired ? "Vencida" : "Activa"}</span></div><h3 className="mt-3 truncate font-semibold text-white">{r.nombre || r.contacto || "Cliente sin nombre"}</h3><p className="mt-1 truncate text-sm text-neutral-400">{r.correo || "Sin correo"}</p></div>
+              <input type="checkbox" className="size-5 shrink-0 accent-sky-500" aria-label={`Seleccionar pantalla ${r.id}`} checked={isRowSelected(r.id)} onChange={(event) => toggleRow(r.id, event.target.checked)} />
+            </div>
+            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-neutral-500">Pantalla</dt><dd className="mt-0.5 font-medium text-neutral-200">{r.nro_pantalla || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Vencimiento</dt><dd className="mt-0.5 font-medium text-neutral-200">{r.fecha_vencimiento || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Contacto</dt><dd className="mt-0.5 truncate font-medium text-neutral-200">{r.contacto || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Total</dt><dd className="mt-0.5 font-medium text-neutral-200">{money(r.total_pagado)}</dd></div></dl>
+            {r.comentario && <p className="mt-4 line-clamp-2 rounded-xl bg-white/[0.035] p-3 text-xs leading-5 text-neutral-400">{r.comentario}</p>}
+            <div className="mt-4 grid grid-cols-2 gap-2"><button type="button" onClick={() => openEdit(r)} className="min-h-11 rounded-xl bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98]">Editar</button><button type="button" onClick={() => openDelete(r.id, `${r.correo ?? ""} / ${r.nro_pantalla ?? ""}`)} className="min-h-11 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm font-semibold text-rose-100 transition active:scale-[0.98]">Eliminar</button></div>
+          </article>;
+        })}
+        {!filtered.length && <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-neutral-400">{loading ? "Cargando…" : "No se encontraron resultados."}</div>}
+      </div>
+
       {/* Tabla */}
-      <div className="overflow-auto rounded-xl border border-neutral-800">
+      <div className="hidden overflow-auto rounded-xl border border-neutral-800 md:block">
         <table className="min-w-[1200px] w-full text-sm text-neutral-100">
           <thead className="bg-neutral-900/70 border-b border-neutral-800 sticky top-0 z-10">
             <tr>
@@ -2064,6 +2104,7 @@ export default function PantallasViewer() {
                         setEdit((s) => ({
                           ...(s as EditState),
                           correo: e.target.value,
+                          contrasena: null,
                         }));
                         setEmailDropdownOpen(true);
                       }}
@@ -2087,22 +2128,24 @@ export default function PantallasViewer() {
                                 Sin correos con cupos disponibles
                               </li>
                             )}
-                            {visibleAvailableEmails.map((em) => (
-                              <li key={em}>
+                            {visibleAvailableEmails.map((item) => (
+                              <li key={`${item.cuentaId ?? "inv"}-${item.email}`}>
                                 <button
                                   type="button"
                                   onMouseDown={(e) => e.preventDefault()}
                                   onClick={() => {
                                     setEdit((s) => ({
                                       ...(s as EditState),
-                                      correo: em,
+                                      correo: item.email,
+                                      contrasena: item.password,
+                                      ...(item.cuentaId ? { cuenta_id: item.cuentaId } : {}),
                                     }));
                                     setEmailDropdownOpen(false);
                                   }}
                                   className="flex w-full items-center justify-between gap-2 text-left px-3 py-2 hover:bg-neutral-800"
                                 >
-                                  <span className="truncate">{em}</span>
-                                  <span className="text-xs opacity-70 shrink-0">{`cupos: ${effectiveFreeForEmail(em)}`}</span>
+                                  <span className="truncate">{item.email}</span>
+                                  <span className="text-xs opacity-70 shrink-0">{`cupos: ${effectiveFreeForEmail(item.email)}`}</span>
                                 </button>
                               </li>
                             ))}
@@ -2132,15 +2175,12 @@ export default function PantallasViewer() {
                   <label className="grid gap-1">
                     <span className="text-sm text-neutral-300">Contraseña</span>
                     <input
-                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
+                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-300"
                       value={edit.contrasena ?? ""}
-                      onChange={(e) =>
-                        setEdit((s) => ({
-                          ...(s as EditState),
-                          contrasena: e.target.value,
-                        }))
-                      }
+                      readOnly
+                      title="La clave se obtiene automáticamente del correo seleccionado"
                     />
+                    <span className="text-xs text-neutral-500">Se sincroniza automáticamente con el correo seleccionado.</span>
                   </label>
 
                   <label className="grid gap-1">

@@ -4,6 +4,9 @@ import { useState, Suspense, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import FloatingTimer from "@/components/FloatingTimer";
 import WorkTimers from "@/components/WorkTimers";
+import RecoveryEmailSettings from "@/components/RecoveryEmailSettings";
+import OperationsDashboard from "@/components/OperationsDashboard";
+import { Boxes, ChevronRight, CirclePlus, Clock3, LayoutDashboard, LogOut, Monitor, PackagePlus, Rows3, TriangleAlert } from "lucide-react";
 
 /* ===== Lazy components ===== */
 const CuentasCompletasViewer = dynamic(
@@ -39,7 +42,7 @@ const CuentasVencidasViewer = dynamic(
 
 /* ===== Tipos ===== */
 type Vista =
-  | "none"
+  | "dashboard"
   | "registrar-cc"
   | "registrar-pantalla"
   | "ver-cuentas-vencidas"
@@ -55,6 +58,10 @@ export default function Page() {
   const [error, setError] = useState("");
   const [loadingLogin, setLoadingLogin] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [recoveryMessage, setRecoveryMessage] = useState("");
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
 
   useEffect(() => {
     const check = async () => {
@@ -99,7 +106,32 @@ export default function Page() {
     try {
       await fetch("/api/admin/logout", { method: "POST" });
     } catch {}
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+        const key = localStorage.key(i);
+        if (key && /^(cuentas|pantallas|medplay):/i.test(key)) localStorage.removeItem(key);
+      }
+    } catch {}
     setAutenticado(false);
+  };
+
+  const handleRecovery = async () => {
+    setError("");
+    setRecoveryMessage("");
+    setRecoveryLoading(true);
+    try {
+      const response = await fetch("/api/admin/password-recovery/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: recoveryEmail }),
+      });
+      const data = await response.json();
+      setRecoveryMessage(data?.message || "Si el correo está registrado, recibirás instrucciones para recuperar el acceso.");
+    } catch {
+      setRecoveryMessage("Si el correo está registrado, recibirás instrucciones para recuperar el acceso.");
+    } finally {
+      setRecoveryLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -152,11 +184,35 @@ export default function Page() {
     return (
       <main className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
         <form
-          onSubmit={handleLogin}
+          onSubmit={(event) => {
+            if (showRecovery) {
+              event.preventDefault();
+              void handleRecovery();
+            } else {
+              void handleLogin(event);
+            }
+          }}
           className="bg-white/10 border border-white/20 backdrop-blur-md rounded-2xl p-6 shadow-xl w-full max-w-sm text-center"
         >
-          <h1 className="text-3xl font-bold mb-4 text-white">Iniciar sesión</h1>
+          <h1 className="text-3xl font-bold mb-2 text-white">{showRecovery ? "Recuperar acceso" : "Iniciar sesión"}</h1>
+          <p className="mb-5 text-sm text-gray-400">{showRecovery ? "Te enviaremos un enlace seguro si el correo está registrado." : "Accede al centro de operaciones Medplay."}</p>
 
+          {showRecovery ? <>
+            <input
+              type="email"
+              placeholder="Correo registrado"
+              value={recoveryEmail}
+              onChange={(e) => setRecoveryEmail(e.target.value)}
+              className="w-full mb-3 px-3 py-2 rounded-lg border border-gray-700 bg-gray-900 text-white outline-none focus:ring-2 focus:ring-sky-500"
+              autoComplete="email"
+              required
+            />
+            {recoveryMessage && <p className="mb-3 rounded-lg bg-sky-500/10 p-3 text-left text-sm text-sky-200">{recoveryMessage}</p>}
+            <button type="button" onClick={handleRecovery} disabled={recoveryLoading || !recoveryEmail.trim()} className="w-full rounded-lg bg-sky-600 hover:bg-sky-700 px-4 py-2 text-white font-medium transition disabled:opacity-60">
+              {recoveryLoading ? "Enviando…" : "Enviar enlace de recuperación"}
+            </button>
+            <button type="button" onClick={() => { setShowRecovery(false); setRecoveryMessage(""); setError(""); }} className="mt-3 text-sm text-gray-300 hover:text-white">Volver al inicio de sesión</button>
+          </> : <>
           <input
             type="text"
             placeholder="Usuario"
@@ -181,6 +237,10 @@ export default function Page() {
           >
             {loadingLogin ? "Validando..." : "Entrar"}
           </button>
+          <button type="button" onClick={() => { setShowRecovery(true); setError(""); }} className="mt-3 text-sm font-medium text-sky-300 hover:text-sky-200">
+            ¿Olvidaste tu clave?
+          </button>
+          </>}
         </form>
       </main>
     );
@@ -204,7 +264,7 @@ function readMsFromStorage(key: string) {
 
 /* ========================================================= */
 function DashboardApp({ onLogout }: { onLogout: () => void }) {
-  const [vista, setVista] = useState<Vista>("none");
+  const [vista, setVista] = useState<Vista>("dashboard");
   const [contacto] = useState("");
   const [nombre] = useState("");
   const panelRef = useRef<HTMLElement | null>(null);
@@ -228,67 +288,73 @@ function DashboardApp({ onLogout }: { onLogout: () => void }) {
   };
 
   return (
-    <main className="relative mx-auto max-w-screen-2xl px-3 md:px-6 py-6 space-y-6">
+    <main className="relative mx-auto max-w-[1700px] space-y-4 px-3 py-4 sm:px-4 md:px-6 md:py-6">
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_60%_at_50%_-20%,rgba(56,189,248,0.25),transparent_60%),radial-gradient(40%_40%_at_80%_10%,rgba(139,92,246,0.25),transparent_60%)] dark:opacity-80" />
 
-      <header className="mb-2 flex items-center justify-between">
+      <header className="mb-2 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight">MEDPLAY</h1>
+          <h1 className="text-3xl font-extrabold tracking-[-0.04em] text-white md:text-4xl">MEDPLAY</h1>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Elige una acción:</p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="discreet-scroll flex max-w-full items-center gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
+          <RecoveryEmailSettings />
           <button
             onClick={() => setTimerOpen(true)}
-            className="rounded-xl px-4 py-2 text-sm font-medium bg-white/60 dark:bg-white/10 text-gray-900 dark:text-gray-100 ring-1 ring-inset ring-black/10 dark:ring-white/10 hover:bg-white/80 dark:hover:bg-white/15"
+            className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-neutral-100 transition hover:border-white/20 hover:bg-white/10 sm:px-4"
           >
-            Abrir cronómetro
+            <Clock3 size={17} /> Cronómetro
           </button>
 
           <button
             onClick={onLogout}
-            className="rounded-xl px-4 py-2 text-sm font-medium bg-white/60 dark:bg-white/10 text-gray-900 dark:text-gray-100 ring-1 ring-inset ring-black/10 dark:ring-white/10 hover:bg-white/80 dark:hover:bg-white/15"
+            className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-neutral-100 transition hover:border-rose-400/30 hover:bg-rose-500/10 hover:text-rose-100 sm:px-4"
           >
-            Cerrar sesión
+            <LogOut size={17} /> Salir
           </button>
         </div>
       </header>
 
-      <section className="rounded-2xl border border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-md shadow-sm p-5">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <Btn onClick={() => handleSetVista("registrar-cc")} full>
-            Registrar Cuenta Completa Vendida
+      <div className="grid items-start gap-4 lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-5">
+      <aside className="sticky top-0 z-30 -mx-3 border-y border-white/10 bg-neutral-950/90 px-3 py-2 shadow-xl backdrop-blur-xl sm:-mx-4 sm:px-4 lg:mx-0 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto lg:rounded-2xl lg:border lg:bg-white/[0.045] lg:p-3">
+        <nav className="discreet-scroll grid auto-cols-[minmax(165px,72vw)] grid-flow-col gap-2 overflow-x-auto pb-1 lg:grid-flow-row lg:grid-cols-1 lg:auto-cols-auto lg:overflow-x-visible lg:pb-0" aria-label="Navegación principal">
+          <Btn icon={<LayoutDashboard size={18} />} active={vista === "dashboard"} onClick={() => handleSetVista("dashboard")} full>Resumen</Btn>
+          <Btn icon={<CirclePlus size={18} />} active={vista === "registrar-cc"} onClick={() => handleSetVista("registrar-cc")} full>
+            Nueva cuenta completa
           </Btn>
-          <Btn onClick={() => handleSetVista("registrar-pantalla")} full>
-            Registrar Pantalla Vendida
+          <Btn icon={<PackagePlus size={18} />} active={vista === "registrar-pantalla"} onClick={() => handleSetVista("registrar-pantalla")} full>
+            Nueva pantalla
           </Btn>
-          <Btn onClick={() => handleSetVista("ver-usuarios-plataformas")} full>
-            Usuarios/Plataformas/Inventario
+          <Btn icon={<Boxes size={18} />} active={vista === "ver-usuarios-plataformas"} onClick={() => handleSetVista("ver-usuarios-plataformas")} full>
+            Catálogos e inventario
           </Btn>
-          <Btn onClick={() => handleSetVista("ver-cc")} full>
-            Ver/Editar Cuentas Completas
+          <Btn icon={<Rows3 size={18} />} active={vista === "ver-cc"} onClick={() => handleSetVista("ver-cc")} full>
+            Cuentas completas
           </Btn>
-          <Btn onClick={() => handleSetVista("ver-pantalla")} full>
-            Ver/Editar Pantallas
+          <Btn icon={<Monitor size={18} />} active={vista === "ver-pantalla"} onClick={() => handleSetVista("ver-pantalla")} full>
+            Pantallas
           </Btn>
-          <Btn onClick={() => handleSetVista("ver-cuentas-vencidas")} full>
-            Cuentas Vencidas
+          <Btn icon={<TriangleAlert size={18} />} active={vista === "ver-cuentas-vencidas"} onClick={() => handleSetVista("ver-cuentas-vencidas")} full>
+            Vencimientos
           </Btn>
-        </div>
-      </section>
+        </nav>
+      </aside>
 
       <section
         ref={panelRef}
         id="action-panel"
         tabIndex={-1}
         aria-label="Panel de acción"
-        className="rounded-2xl border border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-md shadow-sm p-3 md:p-5 overflow-hidden outline-none focus:ring-2 focus:ring-sky-400/50"
+        className="min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] p-2 shadow-sm outline-none backdrop-blur-md focus:ring-2 focus:ring-sky-400/50 sm:p-3 md:p-5"
       >
         <Suspense fallback={<SkeletonForm />}>
-          {vista === "none" && (
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+          {vista === "dashboard" && (
+            <div>
+              <OperationsDashboard onNavigate={handleSetVista} />
+              <p className="hidden">
               Selecciona una opción para ver el contenido aquí debajo.
-            </p>
+              </p>
+            </div>
           )}
 
           {vista === "registrar-cc" && (
@@ -342,6 +408,7 @@ function DashboardApp({ onLogout }: { onLogout: () => void }) {
           )}
         </Suspense>
       </section>
+      </div>
 
       {/* POPUP DEL CRONÓMETRO */}
       <FloatingTimer
@@ -368,25 +435,32 @@ function Btn({
   onClick,
   variant = "primary",
   full = false,
+  icon,
+  active = false,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   variant?: "primary" | "secondary";
   full?: boolean;
+  icon?: React.ReactNode;
+  active?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
       className={[
-        "inline-flex items-center justify-center rounded-xl text-sm md:text-base font-medium transition whitespace-nowrap ring-1 ring-inset",
-        full ? "w-full h-20 md:h-24 px-5" : "px-4 py-2",
-        variant === "primary"
-          ? "bg-gradient-to-r from-indigo-500 to-sky-500 text-white ring-transparent shadow hover:scale-[1.02] hover:shadow-md active:scale-[0.99]"
+        "group inline-flex min-h-12 items-center gap-3 rounded-xl border text-left text-sm font-semibold leading-snug transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400",
+        full ? "w-full px-3.5 py-3" : "px-4 py-2.5",
+        active
+          ? "border-sky-400/40 bg-gradient-to-r from-sky-500/25 to-indigo-500/15 text-white shadow-[0_8px_30px_rgba(14,165,233,0.12)]"
+          : variant === "primary"
+          ? "border-white/10 bg-white/[0.045] text-neutral-200 hover:border-white/20 hover:bg-white/[0.09] hover:text-white"
           : "bg-white/60 dark:bg-white/10 text-gray-900 dark:text-gray-100 ring-black/10 dark:ring-white/10 hover:bg-white/80 dark:hover:bg-white/15",
       ].join(" ")}
     >
-      {children}
-      <span className="ml-2 opacity-60">↗</span>
+      <span className={`shrink-0 ${active ? "text-sky-300" : "text-neutral-500 group-hover:text-sky-300"}`}>{icon}</span>
+      <span className="min-w-0 flex-1 whitespace-normal break-words">{children}</span>
+      <ChevronRight size={15} className={`shrink-0 transition group-hover:translate-x-0.5 ${active ? "text-sky-300" : "text-neutral-600"}`} />
     </button>
   );
 }

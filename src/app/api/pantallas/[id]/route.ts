@@ -5,6 +5,8 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
+import { getAuthenticatedAdminId } from "@/lib/adminSession";
+import { archiveDeletedAccount } from "@/lib/deletionHistory";
 
 /* ===================== Utils generales ===================== */
 function parseId(v: string) {
@@ -346,7 +348,7 @@ export async function PATCH(
       c.contrasena !== undefined
     ) {
       const normalized = toEmptyOrString(c.contrasena);
-      const cuentaId = updated.cuentascompartidas?.id!;
+      const cuentaId = updated.cuentascompartidas?.id;
       if (normalized !== undefined && cuentaId) {
         await prisma.cuentascompartidas.update({
           where: { id: cuentaId },
@@ -545,17 +547,33 @@ export async function PUT(
 
 /* ===================== DELETE ===================== */
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const { id } = await params;
     const pid = parseId(id);
+    const adminId = await getAuthenticatedAdminId(req);
 
     const result = await prisma.$transaction(async (tx) => {
       const before = await tx.pantallas.findUnique({
         where: { id: pid },
-        select: { id: true, cuenta_id: true, contacto: true },
+        select: {
+          id: true,
+          cuenta_id: true,
+          contacto: true,
+          nro_pantalla: true,
+          cuentascompartidas: {
+            select: {
+              id: true,
+              correo: true,
+              contrasena: true,
+              proveedor: true,
+              plataforma_id: true,
+              plataformas: { select: { nombre: true } },
+            },
+          },
+        },
       });
       if (!before) {
         return {
@@ -568,6 +586,23 @@ export async function DELETE(
       const cuentaId = before.cuenta_id ?? null;
       const contactoRaw = before.contacto ?? "";
       const contactoNorm = normalizeContactoServer(contactoRaw);
+
+      await archiveDeletedAccount(tx, {
+        plataformaId: before.cuentascompartidas.plataforma_id,
+        plataforma: before.cuentascompartidas.plataformas?.nombre,
+        correo: before.cuentascompartidas.correo,
+        clave: before.cuentascompartidas.contrasena,
+        proveedor: before.cuentascompartidas.proveedor,
+        tipoRegistro: 'PANTALLA',
+        tipoEliminacion: 'PANTALLA',
+        identificadorOriginal: before.id,
+        eliminadoPorAdminId: adminId,
+        datosRecuperacion: {
+          cuentaId: before.cuentascompartidas.id,
+          numeroPantalla: before.nro_pantalla,
+          contacto: before.contacto,
+        },
+      });
 
       await tx.pantallas.delete({ where: { id: pid } });
 
