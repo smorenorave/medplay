@@ -9,6 +9,7 @@ export type Pantalla = {
   correo?: string | null;
   contrasena?: string | null;
   nro_pantalla?: string | null;
+  pin?: string | null;
   fecha_compra?: string | null;
   fecha_vencimiento?: string | null;
   meses_pagados?: number | null;
@@ -47,6 +48,7 @@ const normalizeRow = (r: any): Pantalla => {
     correo: r.correo ?? null,
     contrasena: r.contrasena ?? null,
     nro_pantalla: r.nro_pantalla ?? null,
+    pin: r.pin ?? null,
     fecha_compra: r.fecha_compra ?? null,
     fecha_vencimiento: r.fecha_vencimiento ?? null,
     meses_pagados: n(r.meses_pagados),

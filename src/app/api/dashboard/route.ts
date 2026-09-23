@@ -14,8 +14,16 @@ export async function GET() {
     const [pantallasMonth, completasMonth, pantallasToday, completasToday, activeScreens, pantallasSoon, completasSoon, pantallasExpired, completasExpired, inventory, platforms] = await Promise.all([
       prisma.pantallas.findMany({ where: { fecha_compra: { gte: monthStart } }, select: { total_pagado: true, total_ganado: true, cuentascompartidas: { select: { plataforma_id: true } } } }),
       prisma.cuentascompletas.findMany({ where: { fecha_compra: { gte: monthStart } }, select: { total_pagado_completa: true, total_ganado: true, plataforma_id: true } }),
-      prisma.pantallas.count({ where: { fecha_compra: { gte: today, lt: tomorrow } } }),
-      prisma.cuentascompletas.count({ where: { fecha_compra: { gte: today, lt: tomorrow } } }),
+      prisma.pantallas.aggregate({
+        where: { fecha_compra: { gte: today, lt: tomorrow } },
+        _count: { _all: true },
+        _sum: { total_ganado: true },
+      }),
+      prisma.cuentascompletas.aggregate({
+        where: { fecha_compra: { gte: today, lt: tomorrow } },
+        _count: { _all: true },
+        _sum: { total_ganado: true },
+      }),
       prisma.pantallas.count({ where: { fecha_vencimiento: { gte: tomorrow } } }),
       prisma.pantallas.count({ where: { fecha_vencimiento: { gte: tomorrow, lte: inSevenDays } } }),
       prisma.cuentascompletas.count({ where: { fecha_vencimiento: { gte: tomorrow, lte: inSevenDays } } }),
@@ -30,6 +38,7 @@ export async function GET() {
     completasMonth.forEach((r) => ranking.set(r.plataforma_id, (ranking.get(r.plataforma_id) ?? 0) + 1));
     const money = [...pantallasMonth.map((r) => Number(r.total_pagado ?? 0)), ...completasMonth.map((r) => Number(r.total_pagado_completa ?? 0))].reduce((a, b) => a + b, 0);
     const profit = [...pantallasMonth.map((r) => Number(r.total_ganado ?? 0)), ...completasMonth.map((r) => Number(r.total_ganado ?? 0))].reduce((a, b) => a + b, 0);
+    const profitToday = Number(pantallasToday._sum.total_ganado ?? 0) + Number(completasToday._sum.total_ganado ?? 0);
     const stockRotation = inventory
       .filter((item) => item._count._all > 0)
       .map((item) => {
@@ -43,7 +52,8 @@ export async function GET() {
       })
       .sort((a, b) => a.sales - b.sales || b.stock - a.stock);
     return NextResponse.json({
-      salesToday: pantallasToday + completasToday,
+      salesToday: pantallasToday._count._all + completasToday._count._all,
+      profitToday,
       salesMonth: pantallasMonth.length + completasMonth.length,
       revenueMonth: money,
       profitMonth: profit,

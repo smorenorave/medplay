@@ -1,9 +1,9 @@
 import { NextResponse, NextRequest } from "next/server";
 import { jwtVerify } from "jose";
+import { isSessionInactive } from "../lib/sessionPolicy";
 
 const TOKEN_COOKIE = "authToken";
 const ACTIVITY_COOKIE = "lastActivity";
-const INACTIVITY_MS = 60 * 60 * 1000; // 1 hora
 
 function getSecret() {
   const secret = process.env.AUTH_SECRET;
@@ -63,9 +63,8 @@ export async function middleware(req: NextRequest) {
 
   // Chequear inactividad
   const raw = req.cookies.get(ACTIVITY_COOKIE)?.value;
-  const last = raw ? Number(raw) : 0;
   const now = Date.now();
-  const inactive = !last || now - last > INACTIVITY_MS;
+  const inactive = isSessionInactive(raw, now);
 
   if (inactive) {
     const res = unauthorized(req, "inactive");
@@ -74,16 +73,8 @@ export async function middleware(req: NextRequest) {
     return res;
   }
 
-  // Si todo ok, AVANZA y refresca lastActivity para navegación del lado del servidor
-  const res = NextResponse.next();
-  res.cookies.set(ACTIVITY_COOKIE, String(now), {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 8,
-  });
-  return res;
+  // Las consultas automáticas no cuentan como actividad del usuario.
+  return NextResponse.next();
 }
 
 export const config = {

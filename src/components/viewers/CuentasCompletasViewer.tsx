@@ -1,8 +1,11 @@
 "use client";
+import { recordPasswordChange } from "@/lib/passwordChanges";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePlataformas } from "@/hooks/usePlataformas";
+import { useCredentialAutofill } from "@/hooks/useCredentialAutofill";
+import CopyDataUpdateButton from "@/components/CopyDataUpdateButton";
 
 /* =========================================================
  * Tipos
@@ -298,6 +301,19 @@ export default function CuentasCompletasViewer() {
 
   // edición
   const [edit, setEdit] = useState<EditState | null>(null);
+  const {
+    acceptKnownCredential,
+    loadingCredential,
+    markPasswordManuallyEdited,
+  } = useCredentialAutofill({
+    recordId: edit?.id,
+    plataformaId: edit?.plataforma_id,
+    correo: edit?.correo,
+    onResolved: (contrasena) =>
+      setEdit((current) =>
+        current ? { ...current, contrasena } : current,
+      ),
+  });
   // ↓ correos disponibles EN INVENTARIO por plataforma (misma lógica que FormCuentaCompletas)
   const [availableEmails, setAvailableEmails] = useState<
     { email: string; invId: number | null; invClave: string | null }[]
@@ -695,6 +711,15 @@ export default function CuentasCompletasViewer() {
         edit.total_pagado_proveedor_completa
       );
 
+      const oldCorreo = normEmail(row.correo);
+      const newCorreo = normEmail(edit.correo);
+      const oldPid = row.plataforma_id == null ? null : Number(row.plataforma_id);
+      const newPid = edit.plataforma_id == null ? oldPid : Number(edit.plataforma_id);
+      const credentialScopeChanged =
+        oldCorreo !== newCorreo || oldPid !== newPid;
+      const passwordChanged =
+        (edit.contrasena ?? "") !== (row.contrasena ?? "");
+
       const payload: Record<string, unknown> = {
         contacto: edit.contacto ?? "",
         nombre: (edit.nombre ?? "") === "" ? null : edit.nombre ?? "",
@@ -711,18 +736,16 @@ export default function CuentasCompletasViewer() {
         correo: (edit.correo ?? null) as string | null,
       };
 
+      if (credentialScopeChanged || passwordChanged) {
+        payload.contrasena = String(edit.contrasena ?? "");
+      }
+
       // 👉 plataforma_id: solo si cambió y es número válido
       if (
         typeof edit.plataforma_id === "number" &&
         edit.plataforma_id !== row.plataforma_id
       ) {
         payload.plataforma_id = edit.plataforma_id;
-      }
-
-      // contraseña: enviar si cambió (permitir limpiar => null)
-      if ((edit.contrasena ?? "") !== (row.contrasena ?? "")) {
-        const raw = (edit.contrasena ?? "").toString();
-        payload.contrasena = raw.trim() === "" ? null : raw;
       }
 
       const res = await fetch(`/api/cuentascompletas/${edit.id}`, {
@@ -742,6 +765,9 @@ export default function CuentasCompletasViewer() {
       const nextCache = mergeIntoCache(updated);
       setRows(nextCache);
       broadcastInvalidate();
+      if ((updated.contrasena ?? "") !== (row.contrasena ?? "") && updated.correo) {
+        recordPasswordChange(updated.correo, updated.contrasena ?? "", updated.plataforma_id ?? undefined);
+      }
       setEdit(null);
     } catch (e: any) {
       setErr(e?.message ?? "Error guardando");
@@ -1405,6 +1431,7 @@ export default function CuentasCompletasViewer() {
                         setEdit((s) => ({
                           ...(s as EditState),
                           plataforma_id: newPid,
+                          contrasena: "",
                         }));
 
                         // ✅ Autorellenar total_pagado_completa /
@@ -1516,6 +1543,7 @@ export default function CuentasCompletasViewer() {
                         setEdit((s) => ({
                           ...(s as EditState),
                           correo: e.target.value,
+                          contrasena: "",
                         }));
                         setEmailDropdownOpen(true);
                       }}
@@ -1545,15 +1573,15 @@ export default function CuentasCompletasViewer() {
                                   type="button"
                                   onMouseDown={(e) => e.preventDefault()}
                                   onClick={() => {
+                                    acceptKnownCredential(
+                                      edit.plataforma_id,
+                                      opt.email,
+                                      opt.invClave,
+                                    );
                                     setEdit((s) => ({
                                       ...(s as EditState),
                                       correo: opt.email,
-                                      // Autocompleta la clave del inventario si el campo está vacío
-                                      contrasena:
-                                        opt.invClave &&
-                                        !(s as EditState)?.contrasena
-                                          ? opt.invClave
-                                          : (s as EditState)?.contrasena,
+                                      contrasena: opt.invClave ?? "",
                                     }));
                                     setEmailDropdownOpen(false);
                                   }}
@@ -1570,17 +1598,28 @@ export default function CuentasCompletasViewer() {
                     )}
                   </label>
                   <label className="grid gap-1">
-                    <span className="text-sm text-neutral-300">Contraseña</span>
+                    <span className="flex items-center gap-2 text-sm text-neutral-300">
+                      Contraseña
+                      {loadingCredential && (
+                        <span className="text-xs text-sky-400">
+                          buscando clave…
+                        </span>
+                      )}
+                    </span>
                     <input
                       className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
                       value={edit.contrasena ?? ""}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        markPasswordManuallyEdited();
                         setEdit((s) => ({
                           ...(s as EditState),
                           contrasena: e.target.value,
-                        }))
-                      }
+                        }));
+                      }}
                     />
+                    <span className="text-xs text-neutral-500">
+                      Se carga desde el correo seleccionado, pero puedes modificarla.
+                    </span>
                   </label>
                   <label className="grid gap-1">
                     <span className="text-sm text-neutral-300">
@@ -1772,7 +1811,19 @@ export default function CuentasCompletasViewer() {
                   </label>
                 </div>
 
-                <div className="px-5 py-3 border-t border-neutral-800 flex items-center justify-end gap-2 sticky bottom-0 bg-neutral-900 rounded-b-2xl">
+                <div className="px-5 py-3 border-t border-neutral-800 flex flex-wrap items-center justify-end gap-2 sticky bottom-0 bg-neutral-900 rounded-b-2xl">
+                  <CopyDataUpdateButton
+                    tipo="cuenta"
+                    correo={edit.correo}
+                    contrasena={edit.contrasena}
+                    fechaVencimiento={edit.fecha_vencimiento}
+                    servicio={
+                      plataformas.find(
+                        (p) => Number(p.id) === Number(edit.plataforma_id),
+                      )?.nombre ?? "Sin plataforma"
+                    }
+                    className="mr-auto"
+                  />
                   <button
                     className="px-3 py-2 rounded-lg border border-neutral-600 hover:bg-neutral-800"
                     onClick={() => setEdit(null)}
@@ -1783,9 +1834,13 @@ export default function CuentasCompletasViewer() {
                   <button
                     className="px-3 py-2 rounded-lg border border-emerald-700 bg-emerald-800/40 hover:bg-emerald-800/60 disabled:opacity-60"
                     onClick={saveEdit}
-                    disabled={saving}
+                    disabled={saving || loadingCredential}
                   >
-                    {saving ? "Guardando…" : "Guardar cambios"}
+                    {saving
+                      ? "Guardando…"
+                      : loadingCredential
+                        ? "Cargando clave…"
+                        : "Guardar cambios"}
                   </button>
                 </div>
               </div>

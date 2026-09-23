@@ -62,6 +62,7 @@ function buildPedidoResumenText(
     lineas.push(`• COMPRA #${i + 1}`);
     lineas.push(`Plataforma: ${platName}`);
     lineas.push(`Pantalla: ${p?.nro_pantalla ?? "—"}`);
+    if (p?.pin?.trim()) lineas.push(`PIN: ${p.pin.trim()}`);
     lineas.push(`Correo: ${p?.correo ?? "—"}`);
     lineas.push(`Clave: ${p?.contrasena ?? "—"}`);
     lineas.push(`Fecha de compra: ${fmtDateHuman(order?.fecha_compra)}`);
@@ -485,6 +486,7 @@ export default function FormPantallas() {
     plataforma_id: pid || 0,
     cuenta_id: null,
     nro_pantalla: "",
+    pin: "",
     correo: "",
     contrasena: "",
     proveedor: "",
@@ -1325,6 +1327,7 @@ export default function FormPantallas() {
       nombre: (user.nombre ?? "").trim() || null,
 
       nro_pantalla: String(o.nro_pantalla ?? "").trim() || null,
+      pin: o.pin?.trim() || null,
       plataforma_id: o.plataforma_id,
       correo: o.correo.trim().toLowerCase() || null,
       contrasena: o.contrasena || null,
@@ -2058,6 +2061,18 @@ export default function FormPantallas() {
                           </option>
                         ))}
                       </select>
+                      <FieldPantallas
+                        className="mt-3"
+                        label="PIN"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={50}
+                        value={o.pin ?? ""}
+                        onChange={(value) => {
+                          if (/^\d*$/.test(value)) setOrder(idx, { pin: value });
+                        }}
+                      />
                     </div>
 
                     {/* Fechas */}

@@ -4194,6 +4194,7 @@ export namespace Prisma {
     cuenta_id: number | null
     contacto: string | null
     nro_pantalla: string | null
+    pin: string | null
     fecha_compra: Date | null
     fecha_vencimiento: Date | null
     meses_pagados: number | null
@@ -4210,6 +4211,7 @@ export namespace Prisma {
     cuenta_id: number | null
     contacto: string | null
     nro_pantalla: string | null
+    pin: string | null
     fecha_compra: Date | null
     fecha_vencimiento: Date | null
     meses_pagados: number | null
@@ -4226,6 +4228,7 @@ export namespace Prisma {
     cuenta_id: number
     contacto: number
     nro_pantalla: number
+    pin: number
     fecha_compra: number
     fecha_vencimiento: number
     meses_pagados: number
@@ -4262,6 +4265,7 @@ export namespace Prisma {
     cuenta_id?: true
     contacto?: true
     nro_pantalla?: true
+    pin?: true
     fecha_compra?: true
     fecha_vencimiento?: true
     meses_pagados?: true
@@ -4278,6 +4282,7 @@ export namespace Prisma {
     cuenta_id?: true
     contacto?: true
     nro_pantalla?: true
+    pin?: true
     fecha_compra?: true
     fecha_vencimiento?: true
     meses_pagados?: true
@@ -4294,6 +4299,7 @@ export namespace Prisma {
     cuenta_id?: true
     contacto?: true
     nro_pantalla?: true
+    pin?: true
     fecha_compra?: true
     fecha_vencimiento?: true
     meses_pagados?: true
@@ -4397,6 +4403,7 @@ export namespace Prisma {
     cuenta_id: number
     contacto: string
     nro_pantalla: string
+    pin: string | null
     fecha_compra: Date
     fecha_vencimiento: Date
     meses_pagados: number | null
@@ -4432,6 +4439,7 @@ export namespace Prisma {
     cuenta_id?: boolean
     contacto?: boolean
     nro_pantalla?: boolean
+    pin?: boolean
     fecha_compra?: boolean
     fecha_vencimiento?: boolean
     meses_pagados?: boolean
@@ -4452,6 +4460,7 @@ export namespace Prisma {
     cuenta_id?: boolean
     contacto?: boolean
     nro_pantalla?: boolean
+    pin?: boolean
     fecha_compra?: boolean
     fecha_vencimiento?: boolean
     meses_pagados?: boolean
@@ -4463,7 +4472,7 @@ export namespace Prisma {
     total_pagado_proveedor?: boolean
   }
 
-  export type pantallasOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "cuenta_id" | "contacto" | "nro_pantalla" | "fecha_compra" | "fecha_vencimiento" | "meses_pagados" | "total_pagado" | "estado" | "comentario" | "updatedAt" | "total_ganado" | "total_pagado_proveedor", ExtArgs["result"]["pantallas"]>
+  export type pantallasOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "cuenta_id" | "contacto" | "nro_pantalla" | "pin" | "fecha_compra" | "fecha_vencimiento" | "meses_pagados" | "total_pagado" | "estado" | "comentario" | "updatedAt" | "total_ganado" | "total_pagado_proveedor", ExtArgs["result"]["pantallas"]>
   export type pantallasInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     usuarios?: boolean | usuariosDefaultArgs<ExtArgs>
     cuentascompartidas?: boolean | cuentascompartidasDefaultArgs<ExtArgs>
@@ -4480,6 +4489,7 @@ export namespace Prisma {
       cuenta_id: number
       contacto: string
       nro_pantalla: string
+      pin: string | null
       fecha_compra: Date
       fecha_vencimiento: Date
       meses_pagados: number | null
@@ -4864,6 +4874,7 @@ export namespace Prisma {
     readonly cuenta_id: FieldRef<"pantallas", 'Int'>
     readonly contacto: FieldRef<"pantallas", 'String'>
     readonly nro_pantalla: FieldRef<"pantallas", 'String'>
+    readonly pin: FieldRef<"pantallas", 'String'>
     readonly fecha_compra: FieldRef<"pantallas", 'DateTime'>
     readonly fecha_vencimiento: FieldRef<"pantallas", 'DateTime'>
     readonly meses_pagados: FieldRef<"pantallas", 'Int'>
@@ -15299,6 +15310,7 @@ export namespace Prisma {
     cuenta_id: 'cuenta_id',
     contacto: 'contacto',
     nro_pantalla: 'nro_pantalla',
+    pin: 'pin',
     fecha_compra: 'fecha_compra',
     fecha_vencimiento: 'fecha_vencimiento',
     meses_pagados: 'meses_pagados',
@@ -15500,6 +15512,7 @@ export namespace Prisma {
   export const pantallasOrderByRelevanceFieldEnum: {
     contacto: 'contacto',
     nro_pantalla: 'nro_pantalla',
+    pin: 'pin',
     estado: 'estado',
     comentario: 'comentario'
   };
@@ -15871,6 +15884,7 @@ export namespace Prisma {
     cuenta_id?: IntFilter<"pantallas"> | number
     contacto?: StringFilter<"pantallas"> | string
     nro_pantalla?: StringFilter<"pantallas"> | string
+    pin?: StringNullableFilter<"pantallas"> | string | null
     fecha_compra?: DateTimeFilter<"pantallas"> | Date | string
     fecha_vencimiento?: DateTimeFilter<"pantallas"> | Date | string
     meses_pagados?: IntNullableFilter<"pantallas"> | number | null
@@ -15889,6 +15903,7 @@ export namespace Prisma {
     cuenta_id?: SortOrder
     contacto?: SortOrder
     nro_pantalla?: SortOrder
+    pin?: SortOrderInput | SortOrder
     fecha_compra?: SortOrder
     fecha_vencimiento?: SortOrder
     meses_pagados?: SortOrderInput | SortOrder
@@ -15911,6 +15926,7 @@ export namespace Prisma {
     cuenta_id?: IntFilter<"pantallas"> | number
     contacto?: StringFilter<"pantallas"> | string
     nro_pantalla?: StringFilter<"pantallas"> | string
+    pin?: StringNullableFilter<"pantallas"> | string | null
     fecha_compra?: DateTimeFilter<"pantallas"> | Date | string
     fecha_vencimiento?: DateTimeFilter<"pantallas"> | Date | string
     meses_pagados?: IntNullableFilter<"pantallas"> | number | null
@@ -15929,6 +15945,7 @@ export namespace Prisma {
     cuenta_id?: SortOrder
     contacto?: SortOrder
     nro_pantalla?: SortOrder
+    pin?: SortOrderInput | SortOrder
     fecha_compra?: SortOrder
     fecha_vencimiento?: SortOrder
     meses_pagados?: SortOrderInput | SortOrder
@@ -15953,6 +15970,7 @@ export namespace Prisma {
     cuenta_id?: IntWithAggregatesFilter<"pantallas"> | number
     contacto?: StringWithAggregatesFilter<"pantallas"> | string
     nro_pantalla?: StringWithAggregatesFilter<"pantallas"> | string
+    pin?: StringNullableWithAggregatesFilter<"pantallas"> | string | null
     fecha_compra?: DateTimeWithAggregatesFilter<"pantallas"> | Date | string
     fecha_vencimiento?: DateTimeWithAggregatesFilter<"pantallas"> | Date | string
     meses_pagados?: IntNullableWithAggregatesFilter<"pantallas"> | number | null
@@ -16850,6 +16868,7 @@ export namespace Prisma {
 
   export type pantallasCreateInput = {
     nro_pantalla: string
+    pin?: string | null
     fecha_compra: Date | string
     fecha_vencimiento: Date | string
     meses_pagados?: number | null
@@ -16868,6 +16887,7 @@ export namespace Prisma {
     cuenta_id: number
     contacto: string
     nro_pantalla: string
+    pin?: string | null
     fecha_compra: Date | string
     fecha_vencimiento: Date | string
     meses_pagados?: number | null
@@ -16881,6 +16901,7 @@ export namespace Prisma {
 
   export type pantallasUpdateInput = {
     nro_pantalla?: StringFieldUpdateOperationsInput | string
+    pin?: NullableStringFieldUpdateOperationsInput | string | null
     fecha_compra?: DateTimeFieldUpdateOperationsInput | Date | string
     fecha_vencimiento?: DateTimeFieldUpdateOperationsInput | Date | string
     meses_pagados?: NullableIntFieldUpdateOperationsInput | number | null
@@ -16899,6 +16920,7 @@ export namespace Prisma {
     cuenta_id?: IntFieldUpdateOperationsInput | number
     contacto?: StringFieldUpdateOperationsInput | string
     nro_pantalla?: StringFieldUpdateOperationsInput | string
+    pin?: NullableStringFieldUpdateOperationsInput | string | null
     fecha_compra?: DateTimeFieldUpdateOperationsInput | Date | string
     fecha_vencimiento?: DateTimeFieldUpdateOperationsInput | Date | string
     meses_pagados?: NullableIntFieldUpdateOperationsInput | number | null
@@ -16915,6 +16937,7 @@ export namespace Prisma {
     cuenta_id: number
     contacto: string
     nro_pantalla: string
+    pin?: string | null
     fecha_compra: Date | string
     fecha_vencimiento: Date | string
     meses_pagados?: number | null
@@ -16928,6 +16951,7 @@ export namespace Prisma {
 
   export type pantallasUpdateManyMutationInput = {
     nro_pantalla?: StringFieldUpdateOperationsInput | string
+    pin?: NullableStringFieldUpdateOperationsInput | string | null
     fecha_compra?: DateTimeFieldUpdateOperationsInput | Date | string
     fecha_vencimiento?: DateTimeFieldUpdateOperationsInput | Date | string
     meses_pagados?: NullableIntFieldUpdateOperationsInput | number | null
@@ -16944,6 +16968,7 @@ export namespace Prisma {
     cuenta_id?: IntFieldUpdateOperationsInput | number
     contacto?: StringFieldUpdateOperationsInput | string
     nro_pantalla?: StringFieldUpdateOperationsInput | string
+    pin?: NullableStringFieldUpdateOperationsInput | string | null
     fecha_compra?: DateTimeFieldUpdateOperationsInput | Date | string
     fecha_vencimiento?: DateTimeFieldUpdateOperationsInput | Date | string
     meses_pagados?: NullableIntFieldUpdateOperationsInput | number | null
@@ -18083,6 +18108,7 @@ export namespace Prisma {
     cuenta_id?: SortOrder
     contacto?: SortOrder
     nro_pantalla?: SortOrder
+    pin?: SortOrder
     fecha_compra?: SortOrder
     fecha_vencimiento?: SortOrder
     meses_pagados?: SortOrder
@@ -18108,6 +18134,7 @@ export namespace Prisma {
     cuenta_id?: SortOrder
     contacto?: SortOrder
     nro_pantalla?: SortOrder
+    pin?: SortOrder
     fecha_compra?: SortOrder
     fecha_vencimiento?: SortOrder
     meses_pagados?: SortOrder
@@ -18124,6 +18151,7 @@ export namespace Prisma {
     cuenta_id?: SortOrder
     contacto?: SortOrder
     nro_pantalla?: SortOrder
+    pin?: SortOrder
     fecha_compra?: SortOrder
     fecha_vencimiento?: SortOrder
     meses_pagados?: SortOrder
@@ -19792,6 +19820,7 @@ export namespace Prisma {
 
   export type pantallasCreateWithoutCuentascompartidasInput = {
     nro_pantalla: string
+    pin?: string | null
     fecha_compra: Date | string
     fecha_vencimiento: Date | string
     meses_pagados?: number | null
@@ -19808,6 +19837,7 @@ export namespace Prisma {
     id?: number
     contacto: string
     nro_pantalla: string
+    pin?: string | null
     fecha_compra: Date | string
     fecha_vencimiento: Date | string
     meses_pagados?: number | null
@@ -19887,6 +19917,7 @@ export namespace Prisma {
     cuenta_id?: IntFilter<"pantallas"> | number
     contacto?: StringFilter<"pantallas"> | string
     nro_pantalla?: StringFilter<"pantallas"> | string
+    pin?: StringNullableFilter<"pantallas"> | string | null
     fecha_compra?: DateTimeFilter<"pantallas"> | Date | string
     fecha_vencimiento?: DateTimeFilter<"pantallas"> | Date | string
     meses_pagados?: IntNullableFilter<"pantallas"> | number | null
@@ -20319,6 +20350,7 @@ export namespace Prisma {
 
   export type pantallasCreateWithoutUsuariosInput = {
     nro_pantalla: string
+    pin?: string | null
     fecha_compra: Date | string
     fecha_vencimiento: Date | string
     meses_pagados?: number | null
@@ -20335,6 +20367,7 @@ export namespace Prisma {
     id?: number
     cuenta_id: number
     nro_pantalla: string
+    pin?: string | null
     fecha_compra: Date | string
     fecha_vencimiento: Date | string
     meses_pagados?: number | null
@@ -20809,6 +20842,7 @@ export namespace Prisma {
     id?: number
     contacto: string
     nro_pantalla: string
+    pin?: string | null
     fecha_compra: Date | string
     fecha_vencimiento: Date | string
     meses_pagados?: number | null
@@ -20822,6 +20856,7 @@ export namespace Prisma {
 
   export type pantallasUpdateWithoutCuentascompartidasInput = {
     nro_pantalla?: StringFieldUpdateOperationsInput | string
+    pin?: NullableStringFieldUpdateOperationsInput | string | null
     fecha_compra?: DateTimeFieldUpdateOperationsInput | Date | string
     fecha_vencimiento?: DateTimeFieldUpdateOperationsInput | Date | string
     meses_pagados?: NullableIntFieldUpdateOperationsInput | number | null
@@ -20838,6 +20873,7 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     contacto?: StringFieldUpdateOperationsInput | string
     nro_pantalla?: StringFieldUpdateOperationsInput | string
+    pin?: NullableStringFieldUpdateOperationsInput | string | null
     fecha_compra?: DateTimeFieldUpdateOperationsInput | Date | string
     fecha_vencimiento?: DateTimeFieldUpdateOperationsInput | Date | string
     meses_pagados?: NullableIntFieldUpdateOperationsInput | number | null
@@ -20853,6 +20889,7 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     contacto?: StringFieldUpdateOperationsInput | string
     nro_pantalla?: StringFieldUpdateOperationsInput | string
+    pin?: NullableStringFieldUpdateOperationsInput | string | null
     fecha_compra?: DateTimeFieldUpdateOperationsInput | Date | string
     fecha_vencimiento?: DateTimeFieldUpdateOperationsInput | Date | string
     meses_pagados?: NullableIntFieldUpdateOperationsInput | number | null
@@ -21009,6 +21046,7 @@ export namespace Prisma {
     id?: number
     cuenta_id: number
     nro_pantalla: string
+    pin?: string | null
     fecha_compra: Date | string
     fecha_vencimiento: Date | string
     meses_pagados?: number | null
@@ -21073,6 +21111,7 @@ export namespace Prisma {
 
   export type pantallasUpdateWithoutUsuariosInput = {
     nro_pantalla?: StringFieldUpdateOperationsInput | string
+    pin?: NullableStringFieldUpdateOperationsInput | string | null
     fecha_compra?: DateTimeFieldUpdateOperationsInput | Date | string
     fecha_vencimiento?: DateTimeFieldUpdateOperationsInput | Date | string
     meses_pagados?: NullableIntFieldUpdateOperationsInput | number | null
@@ -21089,6 +21128,7 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     cuenta_id?: IntFieldUpdateOperationsInput | number
     nro_pantalla?: StringFieldUpdateOperationsInput | string
+    pin?: NullableStringFieldUpdateOperationsInput | string | null
     fecha_compra?: DateTimeFieldUpdateOperationsInput | Date | string
     fecha_vencimiento?: DateTimeFieldUpdateOperationsInput | Date | string
     meses_pagados?: NullableIntFieldUpdateOperationsInput | number | null
@@ -21104,6 +21144,7 @@ export namespace Prisma {
     id?: IntFieldUpdateOperationsInput | number
     cuenta_id?: IntFieldUpdateOperationsInput | number
     nro_pantalla?: StringFieldUpdateOperationsInput | string
+    pin?: NullableStringFieldUpdateOperationsInput | string | null
     fecha_compra?: DateTimeFieldUpdateOperationsInput | Date | string
     fecha_vencimiento?: DateTimeFieldUpdateOperationsInput | Date | string
     meses_pagados?: NullableIntFieldUpdateOperationsInput | number | null

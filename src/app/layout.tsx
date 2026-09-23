@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import SessionGuard from "@/components/SessionGuard";
 
 export const metadata: Metadata = {
   title: "MEDPLAY VENTAS",
@@ -17,6 +18,7 @@ export default function RootLayout({
         className="antialiased"
         suppressHydrationWarning
       >
+        <SessionGuard />
         {children}
       </body>
     </html>

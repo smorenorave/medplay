@@ -1,0 +1,1 @@
+ALTER TABLE `pantallas` ADD COLUMN `pin` VARCHAR(50) NULL;

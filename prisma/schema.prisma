@@ -53,6 +53,7 @@ model pantallas {
   cuenta_id              Int
   contacto               String             @db.VarChar(191)
   nro_pantalla           String             @db.VarChar(50)
+  pin                    String?            @db.VarChar(50)
   fecha_compra           DateTime           @db.Date
   fecha_vencimiento      DateTime           @db.Date
   meses_pagados          Int?               @default(0)

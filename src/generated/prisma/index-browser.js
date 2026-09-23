@@ -153,6 +153,7 @@ exports.Prisma.PantallasScalarFieldEnum = {
   cuenta_id: 'cuenta_id',
   contacto: 'contacto',
   nro_pantalla: 'nro_pantalla',
+  pin: 'pin',
   fecha_compra: 'fecha_compra',
   fecha_vencimiento: 'fecha_vencimiento',
   meses_pagados: 'meses_pagados',
@@ -303,6 +304,7 @@ exports.Prisma.cuentascompletasOrderByRelevanceFieldEnum = {
 exports.Prisma.pantallasOrderByRelevanceFieldEnum = {
   contacto: 'contacto',
   nro_pantalla: 'nro_pantalla',
+  pin: 'pin',
   estado: 'estado',
   comentario: 'comentario'
 };

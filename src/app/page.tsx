@@ -134,43 +134,6 @@ export default function Page() {
     }
   };
 
-  useEffect(() => {
-    if (!autenticado) return;
-
-    let timeout: ReturnType<typeof setTimeout> | null = null;
-    const debounce = 500;
-
-    const ping = () => {
-      if (timeout) clearTimeout(timeout);
-      timeout = setTimeout(() => {
-        fetch("/api/session/ping", { method: "POST" }).catch(() => {});
-      }, debounce);
-    };
-
-    const events = [
-      "click",
-      "keydown",
-      "mousemove",
-      "scroll",
-      "touchstart",
-      "visibilitychange",
-    ] as const;
-
-    events.forEach((ev) => window.addEventListener(ev, ping));
-    ping();
-
-    const heartbeat = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        fetch("/api/session/ping", { method: "POST" }).catch(() => {});
-      }
-    }, 10 * 60 * 1000);
-
-    return () => {
-      if (timeout) clearTimeout(timeout);
-      clearInterval(heartbeat);
-      events.forEach((ev) => window.removeEventListener(ev, ping));
-    };
-  }, [autenticado]);
 
   if (checkingSession) {
     return (

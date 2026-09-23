@@ -14,6 +14,7 @@ nombre: string;
 plataforma_id: number;
 cuenta_id: number | null; // oculto en UI, pero se envía
 nro_pantalla: string;
+pin?: string;
 correo: string;
 contrasena: string; // para correo nuevo o actualizar
 proveedor: string;

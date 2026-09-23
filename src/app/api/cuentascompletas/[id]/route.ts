@@ -7,6 +7,10 @@ import { z } from 'zod';
 import { normalizeContacto } from '@/lib/strings';
 import { getAuthenticatedAdminId } from '@/lib/adminSession';
 import { archiveDeletedAccount } from '@/lib/deletionHistory';
+import {
+  normalizeCredentialEmail,
+  syncCredentialByPlatformEmail,
+} from '@/lib/accountCredentials';
 
 /* ============ Tipos / Ctx (params es asíncrono) ============ */
 type RouteCtx = { params: Promise<{ id: string }> };
@@ -68,7 +72,7 @@ function normalizeUpdateBody(raw: any) {
     correoNormalized = null;
   } else if (typeof raw?.correo === 'string') {
     const t = raw.correo.trim();
-    correoNormalized = t === '' ? undefined : t;
+    correoNormalized = t === '' ? undefined : normalizeCredentialEmail(t);
   }
 
   return {
@@ -77,7 +81,12 @@ function normalizeUpdateBody(raw: any) {
     plataforma_id: raw?.plataforma_id !== undefined ? Number(raw.plataforma_id) : undefined,
 
     correo: correoNormalized, // <- ver regla arriba
-    contrasena: typeof raw?.contrasena === 'string' && raw.contrasena.trim() === '' ? null : raw?.contrasena,
+    contrasena:
+      raw?.contrasena === null
+        ? ''
+        : typeof raw?.contrasena === 'string'
+          ? raw.contrasena
+          : raw?.contrasena,
     proveedor: raw?.proveedor ?? null,
     fecha_compra: raw?.fecha_compra ?? null,
     fecha_vencimiento: raw?.fecha_vencimiento ?? null,
@@ -100,7 +109,7 @@ const CCUpdatePartial = z.object({
   plataforma_id: z.coerce.number().int().positive().optional(),
 
   correo: z.string().email().nullable().optional(),
-  contrasena: z.string().nullable().optional(),
+  contrasena: z.string().max(100).optional(),
   proveedor: z.string().nullable().optional(),
   fecha_compra: DateLike,
   fecha_vencimiento: DateLike,
@@ -183,6 +192,12 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
     }
     const c = parsed.data;
 
+    const credentialPlatformId =
+      c.plataforma_id ?? current.plataforma_id;
+    const credentialEmail = normalizeCredentialEmail(
+      c.correo !== undefined ? c.correo : current.correo,
+    );
+
     // Validación de plataforma si se envía (aquí SÍ se cambia la plataforma de la MISMA cuenta)
     if (c.plataforma_id !== undefined) {
       const plat = await prisma.plataformas.findUnique({ where: { id: c.plataforma_id } });
@@ -253,6 +268,13 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
             data: { nombre: c.nombre },
           });
         }
+        if (c.contrasena !== undefined && credentialEmail) {
+          await syncCredentialByPlatformEmail(tx, {
+            plataformaId: credentialPlatformId,
+            correo: credentialEmail,
+            contrasena: c.contrasena,
+          });
+        }
       });
 
       const fresh = await prisma.cuentascompletas.findUnique({
@@ -286,6 +308,13 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
         if (Object.keys(scalarData).length > 0) {
           await tx.cuentascompletas.update({ where: { id }, data: scalarData });
         }
+        if (c.contrasena !== undefined && credentialEmail) {
+          await syncCredentialByPlatformEmail(tx, {
+            plataformaId: credentialPlatformId,
+            correo: credentialEmail,
+            contrasena: c.contrasena,
+          });
+        }
       });
     } else {
       // conectar a usuario existente o crear uno nuevo
@@ -309,6 +338,13 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
         });
         if (remaining === 0 && oldContacto) {
           await tx.usuarios.delete({ where: { contacto: oldContacto } }).catch(() => {});
+        }
+        if (c.contrasena !== undefined && credentialEmail) {
+          await syncCredentialByPlatformEmail(tx, {
+            plataformaId: credentialPlatformId,
+            correo: credentialEmail,
+            contrasena: c.contrasena,
+          });
         }
       });
     }

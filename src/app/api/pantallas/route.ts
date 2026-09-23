@@ -3,6 +3,7 @@ export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { pantallaPinSchema } from '@/lib/pantallaPin';
 
 /* ===================== Utils de fechas (sin desfases) ===================== */
 function sleep(ms: number) {
@@ -205,6 +206,7 @@ export async function GET(req: Request) {
       cuenta_id: r.cuenta_id == null ? null : Number(r.cuenta_id),
       contacto: r.contacto,
       nro_pantalla: String(r.nro_pantalla ?? ''),
+      pin: r.pin ?? null,
       fecha_compra: toYMDUTC(r.fecha_compra ?? null),
       fecha_vencimiento: toYMDUTC(r.fecha_vencimiento ?? null),
       meses_pagados: r.meses_pagados == null ? null : Number(r.meses_pagados),
@@ -240,6 +242,10 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    const parsedPin = pantallaPinSchema.safeParse(body?.pin);
+    if (!parsedPin.success) {
+      return NextResponse.json({ error: 'validation', detail: 'El PIN debe contener solo dígitos (máximo 50).' }, { status: 400 });
+    }
 
     const {
       contacto,
@@ -408,6 +414,7 @@ const created = await withTxRetry(() =>
           cuenta_id: cuentaIdFinal,
           contacto: contactoNorm,
           nro_pantalla: String(nro_pantalla ?? '').trim(),
+          pin: parsedPin.data ?? null,
           fecha_compra: fechaCompraDate,
           fecha_vencimiento: fechaVenceDate,
           meses_pagados: mesesPagadosVal,
@@ -447,6 +454,7 @@ const created = await withTxRetry(() =>
       cuenta_id: created.cuenta_id == null ? null : Number(created.cuenta_id),
       contacto: created.contacto,
       nro_pantalla: String(created.nro_pantalla ?? ''),
+      pin: created.pin ?? null,
       fecha_compra: toYMDUTC(created.fecha_compra),
       fecha_vencimiento: toYMDUTC(created.fecha_vencimiento),
       meses_pagados: created.meses_pagados == null ? null : Number(created.meses_pagados),

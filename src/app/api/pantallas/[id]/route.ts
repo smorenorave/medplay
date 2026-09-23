@@ -5,8 +5,10 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
+import { pantallaPinSchema } from "@/lib/pantallaPin";
 import { getAuthenticatedAdminId } from "@/lib/adminSession";
 import { archiveDeletedAccount } from "@/lib/deletionHistory";
+import { syncCredentialByPlatformEmail } from "@/lib/accountCredentials";
 
 /* ===================== Utils generales ===================== */
 function parseId(v: string) {
@@ -83,6 +85,7 @@ const PatchSchema = z.object({
   cuenta_id: z.number().int().nullable().optional(),
 
   nro_pantalla: z.string().optional(),
+  pin: pantallaPinSchema,
   fecha_compra: z.string().nullable().optional(),
   fecha_vencimiento: z.string().nullable().optional(),
   meses_pagados: z.number().int().nullable().optional(),
@@ -103,7 +106,7 @@ const PatchSchema = z.object({
   correo: z.string().nullable().optional(),
 
   // Sí permitimos cambiar la clave de la cuenta compartida
-  contrasena: z.string().nullable().optional(),
+  contrasena: z.string().max(100).nullable().optional(),
 
   /** nombre se persiste en `usuarios.nombre` */
   nombre: z.string().nullable().optional(),
@@ -226,6 +229,7 @@ export async function PATCH(
 
     // Escalares locales (fechas UTC-safe) SOLO en pantallas
     if (c.nro_pantalla !== undefined) data.nro_pantalla = c.nro_pantalla;
+    if (c.pin !== undefined) data.pin = c.pin;
     if (c.fecha_compra !== undefined)
       data.fecha_compra = toUTCDateOrNull(c.fecha_compra);
     if (c.fecha_vencimiento !== undefined)
@@ -485,6 +489,34 @@ export async function PATCH(
           where: { contacto: usuarioContacto },
           data: { nombre: newNombre },
         });
+      }
+    }
+
+    // La clave pertenece al par plataforma + correo, no a una pantalla.
+    // Sincroniza todas las fuentes relacionadas en una única transacción.
+    if (c.contrasena !== undefined) {
+      const credentialTarget = await prisma.pantallas.findUnique({
+        where: { id: pid },
+        select: {
+          cuentascompartidas: {
+            select: {
+              correo: true,
+              plataforma_id: true,
+            },
+          },
+        },
+      });
+
+      const account = credentialTarget?.cuentascompartidas;
+      if (account?.correo && account.plataforma_id != null) {
+        const credentialPlatformId = account.plataforma_id;
+        await prisma.$transaction((tx) =>
+          syncCredentialByPlatformEmail(tx, {
+            plataformaId: credentialPlatformId,
+            correo: account.correo,
+            contrasena: toEmptyOrString(c.contrasena) ?? "",
+          }),
+        );
       }
     }
 

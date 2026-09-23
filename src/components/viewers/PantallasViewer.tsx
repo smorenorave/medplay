@@ -1,8 +1,11 @@
 "use client";
+import { recordPasswordChange } from "@/lib/passwordChanges";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePlataformas } from "@/hooks/usePlataformas";
+import { useCredentialAutofill } from "@/hooks/useCredentialAutofill";
+import CopyDataUpdateButton from "@/components/CopyDataUpdateButton";
 import { buildDisponibilidadCorreos } from "@/lib/cuentasDisponibles";
 import { addDaysYMD, todayYMDBogota } from "@/lib/bogotaDate";
 import {
@@ -36,6 +39,7 @@ type Pantalla = {
   correo: string | null;
   contrasena: string | null;
   nro_pantalla: string | null;
+  pin?: string | null;
   fecha_compra: string | null; // YYYY-MM-DD
   fecha_vencimiento: string | null; // YYYY-MM-DD (auto)
   meses_pagados: number | null;
@@ -89,6 +93,7 @@ function normalizeRow(r: any): Pantalla {
     correo: r.correo ?? null,
     contrasena: r.contrasena ?? null,
     nro_pantalla: r.nro_pantalla ?? null,
+    pin: r.pin ?? null,
     fecha_compra: r.fecha_compra ?? null,
     fecha_vencimiento: r.fecha_vencimiento ?? null,
     meses_pagados: n(r.meses_pagados),
@@ -342,6 +347,19 @@ export default function PantallasViewer() {
 
   // edición
   const [edit, setEdit] = useState<EditState | null>(null);
+  const {
+    acceptKnownCredential,
+    loadingCredential,
+    markPasswordManuallyEdited,
+  } = useCredentialAutofill({
+    recordId: edit?.id,
+    plataformaId: edit?.plataforma_id,
+    correo: edit?.correo,
+    onResolved: (contrasena) =>
+      setEdit((current) =>
+        current ? { ...current, contrasena } : current,
+      ),
+  });
   // ↓ NUEVO: correos disponibles (inventario + cuentas compartidas) por plataforma
   const [availableEmails, setAvailableEmails] = useState<AvailableEmail[]>([]);
   const [loadingEmails, setLoadingEmails] = useState(false);
@@ -902,6 +920,7 @@ export default function PantallasViewer() {
       correo: row.correo ?? "",
       contrasena: row.contrasena ?? "",
       nro_pantalla: row.nro_pantalla ?? "",
+      pin: row.pin ?? "",
       fecha_compra: row.fecha_compra ?? "",
       fecha_vencimiento: row.fecha_vencimiento ?? "",
       estado: row.estado ?? "",
@@ -1015,6 +1034,12 @@ export default function PantallasViewer() {
         row.plataforma_id == null ? null : Number(row.plataforma_id);
       const newPid: number | null =
         edit.plataforma_id == null ? oldPid : Number(edit.plataforma_id);
+      const credentialScopeChanged =
+        newCorreo !== oldCorreo || newPid !== oldPid;
+      const passwordChanged =
+        (edit.contrasena ?? "") !== (row.contrasena ?? "");
+      const shouldSubmitCredential =
+        credentialScopeChanged || passwordChanged;
 
       // ===== Derivados =====
       let finalVence = edit.fecha_vencimiento ?? null;
@@ -1031,6 +1056,7 @@ export default function PantallasViewer() {
         contacto: edit.contacto ?? "",
         nombre: (edit.nombre ?? "") === "" ? null : (edit.nombre ?? ""),
         nro_pantalla: edit.nro_pantalla ?? "",
+        pin: edit.pin?.trim() || null,
         fecha_compra: edit.fecha_compra ?? null,
         fecha_vencimiento: finalVence,
         meses_pagados:
@@ -1041,6 +1067,10 @@ export default function PantallasViewer() {
         estado: edit.estado ?? "",
         comentario: (edit.comentario ?? null) as string | null,
       };
+
+      if (shouldSubmitCredential) {
+        payloadPant.contrasena = String(edit.contrasena ?? "");
+      }
 
       // Si NO aplicamos a todas, sí permitimos cambiar plataforma en pantallas
       if (!applyCorreoCuenta) {
@@ -1061,12 +1091,6 @@ export default function PantallasViewer() {
         const bodyCuenta: any = {};
         if (newCorreo && newCorreo !== oldCorreo) bodyCuenta.correo = newCorreo;
         if (newPid !== oldPid) bodyCuenta.plataforma_id = newPid;
-
-        const hasNewPass =
-          typeof edit.contrasena === "string" &&
-          edit.contrasena.trim() !== "" &&
-          edit.contrasena !== row.contrasena;
-        if (hasNewPass) bodyCuenta.contrasena = edit.contrasena;
 
         if (Object.keys(bodyCuenta).length > 0) {
           const resC = await fetch(`/api/cuentascompartidas/${row.cuenta_id}`, {
@@ -1107,7 +1131,7 @@ export default function PantallasViewer() {
                       ? newPid
                       : r.plataforma_id,
                   contrasena:
-                    hasNewPass && typeof edit.contrasena === "string"
+                    shouldSubmitCredential && typeof edit.contrasena === "string"
                       ? edit.contrasena
                       : r.contrasena,
                 }
@@ -1118,12 +1142,13 @@ export default function PantallasViewer() {
         });
 
         // 4) Mezcla la fila editada con lo devuelto por la API
-        mergePantallaIntoCache({
+        const updated = {
           id: Number(flat?.row?.id ?? edit.id),
           cuenta_id: cuentaIdToUpdate,
           contacto: flat?.row?.contacto ?? edit.contacto,
           nombre: flat?.row?.usuarios?.nombre ?? edit.nombre ?? null,
           nro_pantalla: flat?.row?.nro_pantalla ?? edit.nro_pantalla ?? null,
+          pin: flat?.row?.pin ?? edit.pin ?? null,
           fecha_compra: flat?.row?.fecha_compra ?? edit.fecha_compra ?? null,
           fecha_vencimiento: flat?.row?.fecha_vencimiento ?? finalVence ?? null,
           meses_pagados:
@@ -1149,14 +1174,20 @@ export default function PantallasViewer() {
               : row.plataforma_id,
           correo: newCorreo ? newCorreo : row.correo || null,
           contrasena:
-            hasNewPass && typeof edit.contrasena === "string"
+            shouldSubmitCredential && typeof edit.contrasena === "string"
               ? edit.contrasena
               : (row.contrasena ?? null),
           proveedor: edit.proveedor ?? null,
-        });
+          cuenta_caida: row.cuenta_caida,
+        } satisfies Pantalla;
+
+        mergePantallaIntoCache(updated);
 
         notifyPantallasChanged();
-        setEdit(null);
+        if ((updated.contrasena ?? "") !== (row.contrasena ?? "") && updated.correo) {
+        recordPasswordChange(updated.correo, updated.contrasena ?? "", updated.plataforma_id ?? undefined);
+      }
+      setEdit(null);
         setSaving(false);
         return; // ← Detén aquí; no entres a la rama normal
       }
@@ -1167,35 +1198,21 @@ export default function PantallasViewer() {
         // -> sin filtrar por plataforma, podía reutilizar por error el
         // cuenta_id de OTRA plataforma que casualmente comparte el correo.
         // Ahora usa el helper compartido, con la plataforma correcta.
-        const hasNewPass =
-          typeof edit.contrasena === "string" &&
-          edit.contrasena.trim() !== "";
-
         const { id: cuentaId } = await upsertCuentaCompartida(
           newPid ?? oldPid ?? null,
           newCorreo,
-          { contrasena: hasNewPass ? edit.contrasena : null },
+          {
+            contrasena:
+              shouldSubmitCredential && typeof edit.contrasena === "string"
+                ? edit.contrasena
+                : null,
+          },
         );
 
         (payloadPant as any).cuenta_id = cuentaId;
         (payloadPant as any).correo = newCorreo;
         cuentaIdToUpdate = cuentaId;
       } else {
-        const hasNewPass =
-          typeof edit.contrasena === "string" &&
-          edit.contrasena.trim() !== "" &&
-          edit.contrasena !== row.contrasena;
-
-        if (hasNewPass && row.cuenta_id) {
-          try {
-            await fetch(`/api/cuentascompartidas/${row.cuenta_id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ contrasena: edit.contrasena }),
-            });
-          } catch {}
-        }
-
         (payloadPant as any).correo = newCorreo || oldCorreo || null;
 
         if (!newCorreo) {
@@ -1221,6 +1238,7 @@ export default function PantallasViewer() {
         contacto: flat?.row?.contacto ?? edit.contacto,
         nombre: flat?.row?.usuarios?.nombre ?? edit.nombre ?? null,
         nro_pantalla: flat?.row?.nro_pantalla ?? edit.nro_pantalla ?? null,
+          pin: flat?.row?.pin ?? edit.pin ?? null,
         fecha_compra: flat?.row?.fecha_compra ?? edit.fecha_compra ?? null,
         fecha_vencimiento: flat?.row?.fecha_vencimiento ?? finalVence ?? null,
         meses_pagados:
@@ -1252,6 +1270,9 @@ export default function PantallasViewer() {
       const nextCache = mergePantallaIntoCache(updated);
       setRows(nextCache.map(normalizeRow));
       notifyPantallasChanged();
+      if ((updated.contrasena ?? "") !== (row.contrasena ?? "") && updated.correo) {
+        recordPasswordChange(updated.correo, updated.contrasena ?? "", updated.plataforma_id ?? undefined);
+      }
       setEdit(null);
     } catch (e: any) {
       setErr(e?.message ?? "Error guardando");
@@ -2000,6 +2021,7 @@ export default function PantallasViewer() {
                         setEdit((s) => ({
                           ...(s as EditState),
                           plataforma_id: newPid,
+                          contrasena: "",
                         }));
 
                         // ✅ Autorellenar total_pagado / total_pagado_proveedor
@@ -2104,7 +2126,7 @@ export default function PantallasViewer() {
                         setEdit((s) => ({
                           ...(s as EditState),
                           correo: e.target.value,
-                          contrasena: null,
+                          contrasena: "",
                         }));
                         setEmailDropdownOpen(true);
                       }}
@@ -2134,6 +2156,11 @@ export default function PantallasViewer() {
                                   type="button"
                                   onMouseDown={(e) => e.preventDefault()}
                                   onClick={() => {
+                                    acceptKnownCredential(
+                                      edit.plataforma_id,
+                                      item.email,
+                                      item.password,
+                                    );
                                     setEdit((s) => ({
                                       ...(s as EditState),
                                       correo: item.email,
@@ -2173,16 +2200,32 @@ export default function PantallasViewer() {
                   </label>
 
                   <label className="grid gap-1">
-                    <span className="text-sm text-neutral-300">Contraseña</span>
+                    <span className="flex items-center gap-2 text-sm text-neutral-300">
+                      Contraseña
+                      {loadingCredential && (
+                        <span className="text-xs text-sky-400">
+                          buscando clave…
+                        </span>
+                      )}
+                    </span>
                     <input
-                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-300"
+                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600"
                       value={edit.contrasena ?? ""}
-                      readOnly
-                      title="La clave se obtiene automáticamente del correo seleccionado"
+                      onChange={(e) => {
+                        markPasswordManuallyEdited();
+                        setEdit((s) => ({
+                          ...(s as EditState),
+                          contrasena: e.target.value,
+                        }));
+                      }}
+                      title="La clave se carga automáticamente y puede editarse antes de guardar"
                     />
-                    <span className="text-xs text-neutral-500">Se sincroniza automáticamente con el correo seleccionado.</span>
+                    <span className="text-xs text-neutral-500">
+                      Se carga desde el correo seleccionado, pero puedes modificarla.
+                    </span>
                   </label>
 
+                  <div className="grid gap-3">
                   <label className="grid gap-1">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm text-neutral-300">
@@ -2226,6 +2269,22 @@ export default function PantallasViewer() {
                       ))}
                     </select>
                   </label>
+                    <label className="grid gap-1">
+                      <span className="text-sm text-neutral-300">PIN</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={50}
+                        className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
+                        value={edit.pin ?? ""}
+                        onChange={(e) => {
+                          const pin = e.target.value;
+                          if (/^\d*$/.test(pin)) setEdit((current) => ({ ...(current as EditState), pin }));
+                        }}
+                      />
+                    </label>
+                  </div>
 
                   <label className="grid gap-1">
                     <span className="text-sm text-neutral-300">Estado</span>
@@ -2419,7 +2478,21 @@ export default function PantallasViewer() {
                   </label>
                 </div>
 
-                <div className="px-5 py-3 border-t border-neutral-800 flex items-center justify-end gap-2 sticky bottom-0 bg-neutral-900 rounded-b-2xl">
+                <div className="px-5 py-3 border-t border-neutral-800 flex flex-wrap items-center justify-end gap-2 sticky bottom-0 bg-neutral-900 rounded-b-2xl">
+                  <CopyDataUpdateButton
+                    tipo="pantalla"
+                    correo={edit.correo}
+                    contrasena={edit.contrasena}
+                    fechaVencimiento={edit.fecha_vencimiento}
+                    servicio={
+                      plataformas.find(
+                        (p) => Number(p.id) === Number(edit.plataforma_id),
+                      )?.nombre ?? "Sin plataforma"
+                    }
+                    numeroPantalla={edit.nro_pantalla}
+                    pin={edit.pin}
+                    className="mr-auto"
+                  />
                   <button
                     className="px-3 py-2 rounded-lg border border-neutral-600 hover:bg-neutral-800"
                     onClick={() => setEdit(null)}
@@ -2430,9 +2503,13 @@ export default function PantallasViewer() {
                   <button
                     className="px-3 py-2 rounded-lg border border-emerald-700 bg-emerald-800/40 hover:bg-emerald-800/60 disabled:opacity-60"
                     onClick={saveEdit}
-                    disabled={saving}
+                    disabled={saving || loadingCredential}
                   >
-                    {saving ? "Guardando…" : "Guardar cambios"}
+                    {saving
+                      ? "Guardando…"
+                      : loadingCredential
+                        ? "Cargando clave…"
+                        : "Guardar cambios"}
                   </button>
                 </div>
               </div>

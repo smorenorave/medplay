@@ -1,4 +1,5 @@
 "use client";
+import { recordPasswordChange } from "@/lib/passwordChanges";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
@@ -1289,6 +1290,10 @@ function InventarioPane() {
         throw new Error(j?.error ?? "No se pudo guardar");
       }
       const upd = await res.json().catch(() => payload);
+      const previous = rows.find((row) => row.id === editingId);
+      if (previous && (previous.clave ?? "") !== (upd.clave ?? "")) {
+        recordPasswordChange(upd.correo, upd.clave ?? "", upd.plataforma_id);
+      }
       setRows((rs) =>
         rs.map((r) => (r.id === editingId ? { ...r, ...upd } : r)),
       );

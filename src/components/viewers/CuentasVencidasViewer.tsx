@@ -12,6 +12,7 @@ import React, {
 import { createPortal } from "react-dom";
 import { usePlataformas } from "@/hooks/usePlataformas";
 import { getDaily, setDaily, todayYMDLocal } from "@/lib/dailyCache";
+import { readPasswordChanges, writePasswordChanges, recordPasswordChange, deletePasswordChange, isResolvedExpiration, readResolvedExpirations, PASSWORD_CHANGES_KEY, PASSWORD_CHANGES_EVENT } from "@/lib/passwordChanges";
 
 /* ====================== Tipos ====================== */
 type TipoRegistro = "cuenta" | "pantalla";
@@ -49,16 +50,11 @@ type TipoFilter = "all" | "cuenta" | "pantalla";
 
 /* ====================== Constantes (ajusta si necesitas) ====================== */
 const DAILY_KEY = "__vencidas_daily_v6";
-const NOTIFY_URL = "/api/cuentasvencidas";
 const CUENTAS_BASE = "/api/cuentascompletas";
 const PANTALLAS_BASE = "/api/pantallas";
 const CHECK_LAST_CUENTAS_URL = `${CUENTAS_BASE}/check-last`;
 const CHECK_LAST_PANTALLAS_URL = `${PANTALLAS_BASE}/check-last`;
 const INVENTARIO_URL = "/api/inventario";
-const QUEUE_KEY = "__pw_queue_daily_v1";
-const NOTIFY_LOCK_KEY = "__pw_notify_lock_v1"; // lock cross-tab
-const NOTIFY_BC = "pw-notify-sync"; // canal de broadcast para notify
-
 /** Normaliza texto para búsqueda: minúsculas, sin tildes y sin espacios */
 const normSearch = (s?: string | null) =>
   (s ?? "")
@@ -182,24 +178,7 @@ if (typeof window !== "undefined" && "BroadcastChannel" in window) {
   bc = new BroadcastChannel("vencidas-sync");
 }
 
-let bcNotify: BroadcastChannel | null = null;
-if (typeof window !== "undefined" && "BroadcastChannel" in window) {
-  bcNotify = new BroadcastChannel(NOTIFY_BC);
-}
-
 /* ====================== Fetchers ====================== */
-
-// helper: plataformas por correo a partir de las filas cargadas
-function getPlatformsByEmail(rows: Registro[]) {
-  const m = new Map<string, Set<number>>();
-  for (const r of rows) {
-    const email = (r.correo || "").trim().toLowerCase();
-    if (!email || r.plataforma_id == null) continue;
-    if (!m.has(email)) m.set(email, new Set<number>());
-    m.get(email)!.add(r.plataforma_id);
-  }
-  return m;
-}
 
 async function pagedFetch(baseUrl: string) {
   const out: any[] = [];
@@ -291,7 +270,7 @@ async function fetchVencidasHoyManana(): Promise<Registro[]> {
 export default function CuentasPantallasVencidasPage() {
   const { plataformas } = usePlataformas();
 
-  const [rows, setRows] = useState<Registro[]>([]);
+  const [allRows, setRows] = useState<Registro[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [source, setSource] = useState<"cache" | "server" | null>(null);
@@ -311,11 +290,15 @@ export default function CuentasPantallasVencidasPage() {
   };
 
   const [pwNewByEmail, setPwNewByEmail] = useState<Record<string, PwQueueItem>>(
-    () => {
-      const cached = getDaily<Record<string, PwQueueItem>>(QUEUE_KEY);
-      return cached && typeof cached === "object" ? cached : {};
-    }
+    () => readPasswordChanges()
   );
+  const [resolvedExpirations, setResolvedExpirations] = useState(readResolvedExpirations);
+  const rows = useMemo(() => allRows.filter((row) =>
+    !isResolvedExpiration(row.correo, row.fecha_vencimiento, resolvedExpirations)
+  ), [allRows, resolvedExpirations]);
+  const updateHistory = (update: (prev: Record<string, PwQueueItem>) => Record<string, PwQueueItem>) => {
+    writePasswordChanges(update(readPasswordChanges()));
+  };
 
   // Añadir manualmente a la cola
   const [manualEmails, setManualEmails] = useState("");
@@ -354,7 +337,7 @@ export default function CuentasPantallasVencidasPage() {
       return;
     }
 
-    setPwNewByEmail((prev) => {
+    updateHistory((prev) => {
       const next = { ...prev };
       for (const e of emails) {
         next[e] = {
@@ -369,16 +352,6 @@ export default function CuentasPantallasVencidasPage() {
     setManualPw("");
     setManualPlatform("");
   };
-
-  const [notifying, setNotifying] = useState(false);
-
-  // Persistir cambios de la cola en la caché diaria
-  useEffect(() => {
-    setDaily(QUEUE_KEY, pwNewByEmail);
-    try {
-      bcNotify?.postMessage({ t: "queue_update", at: Date.now() });
-    } catch { }
-  }, [pwNewByEmail]);
 
   // Editar
   const [edit, setEdit] = useState<EditState | null>(null);
@@ -522,35 +495,18 @@ export default function CuentasPantallasVencidasPage() {
   }, []); // solo una vez
 
   useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      // si otra pestaña modificó la cola diaria -> reflejar aquí
-      if (e.key === QUEUE_KEY) {
-        try {
-          const v = getDaily<Record<string, PwQueueItem>>(QUEUE_KEY) || {};
-          setPwNewByEmail(v);
-        } catch { }
-      }
-      // si otra pestaña liberó el lock -> despejar estado local
-      if (e.key === NOTIFY_LOCK_KEY && e.newValue === null) {
-        setNotifying(false);
-      }
+    const sync = () => {
+      setPwNewByEmail(readPasswordChanges());
+      setResolvedExpirations(readResolvedExpirations());
     };
+    const onStorage = (event: StorageEvent) => {
+      if (!event.key || event.key === PASSWORD_CHANGES_KEY || event.key === "__pw_resolved_expirations_v1") sync();
+    };
+    window.addEventListener(PASSWORD_CHANGES_EVENT, sync);
     window.addEventListener("storage", onStorage);
-
-    const onBC = (ev: MessageEvent) => {
-      const msg = ev.data || {};
-      if (msg.t === "notify_start") setNotifying(true);
-      if (msg.t === "notify_done") setNotifying(false);
-      if (msg.t === "queue_update") {
-        const v = getDaily<Record<string, PwQueueItem>>(QUEUE_KEY) || {};
-        setPwNewByEmail(v);
-      }
-    };
-    bcNotify?.addEventListener?.("message", onBC);
-
     return () => {
+      window.removeEventListener(PASSWORD_CHANGES_EVENT, sync);
       window.removeEventListener("storage", onStorage);
-      bcNotify?.removeEventListener?.("message", onBC);
     };
   }, []);
 
@@ -818,109 +774,6 @@ export default function CuentasPantallasVencidasPage() {
     () => Object.keys(pwNewByEmail),
     [pwNewByEmail]
   );
-  const platByEmail = useMemo(() => getPlatformsByEmail(rows), [rows]);
-  const sendPwChangeNotifications = async () => {
-    if (notifying) return; // guard extra
-
-    // ----- LOCK cross-tab (TTL 5 min) -----
-    const now = Date.now();
-    const TTL = 5 * 60 * 1000;
-    try {
-      const raw = localStorage.getItem(NOTIFY_LOCK_KEY);
-      if (raw) {
-        const { at } = JSON.parse(raw);
-        if (typeof at === "number" && now - at < TTL) {
-          alert("Ya hay un envío en curso desde otra pestaña/ventana.");
-          return;
-        }
-      }
-      localStorage.setItem(NOTIFY_LOCK_KEY, JSON.stringify({ at: now }));
-      bcNotify?.postMessage({ t: "notify_start", at: now });
-    } catch {
-      // si localStorage falla, seguimos sin lock (no recomendado)
-    }
-
-    // ----- Construcción de items (igual que antes) -----
-    const items = Object.entries(pwNewByEmail).flatMap(
-      ([correoRaw, data]) => {
-        const correo = (correoRaw || "").trim().toLowerCase();
-        const clave =
-          typeof data === "string"
-            ? data
-            : (data?.pw || "").trim();
-        const manualPlat = data?.plataforma_id;
-
-        if (!correo || !clave) return [];
-
-        // Si vino manual, usar esa plataforma directamente
-        if (manualPlat) {
-          return [
-            {
-              correo,
-              nuevaClave: clave,
-              plataforma_id: manualPlat,
-              plataforma_nombre: platformName(manualPlat),
-            },
-          ];
-        }
-
-        // Fallback: comportamiento actual por coincidencia de filas
-        const plats = platByEmail.get(correo);
-        if (!plats || plats.size === 0) {
-          return [{ correo, nuevaClave: clave }];
-        }
-
-        return Array.from(plats).map((plataforma_id) => ({
-          correo,
-          nuevaClave: clave,
-          plataforma_id,
-          plataforma_nombre: platformName(plataforma_id),
-        }));
-      }
-    );
-
-    if (items.length === 0) {
-      alert("No hay correos o faltan claves.");
-      // liberar lock
-      try {
-        localStorage.removeItem(NOTIFY_LOCK_KEY);
-        bcNotify?.postMessage({ t: "notify_done", at: Date.now() });
-      } catch { }
-      return;
-    }
-
-    try {
-      setNotifying(true);
-      const res = await fetch(NOTIFY_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items }),
-        cache: "no-store",
-      });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok || j?.error)
-        throw new Error(j?.error || "No se pudo iniciar la notificación");
-
-      alert(
-        `Notificación lanzada. PID: ${j?.pid ?? "—"}\nLog: ${j?.logFile ?? "(servidor)"
-        }`
-      );
-      setPwNewByEmail({});
-      setDaily(QUEUE_KEY, {}); // limpia local
-      try {
-        bcNotify?.postMessage({ t: "queue_update", at: Date.now() });
-      } catch { }
-    } catch (e: any) {
-      alert(e?.message ?? "Error al enviar notificaciones");
-    } finally {
-      setNotifying(false);
-      try {
-        localStorage.removeItem(NOTIFY_LOCK_KEY);
-        bcNotify?.postMessage({ t: "notify_done", at: Date.now() });
-      } catch { }
-    }
-  };
-
   /* ====== Editar ====== */
   const openEdit = useCallback(
     (r: Registro, focus: "contacto" | "contrasena" = "contacto") => {
@@ -1019,7 +872,7 @@ export default function CuentasPantallasVencidasPage() {
           : r
       );
 
-      // Encolar notificación si cambió la contraseña
+      // Registrar el cambio confirmado y retirar el correo de vencimientos.
       const updated = merged.find(
         (r) => `${r.tipo}:${r.id}` === `${edit.tipo}:${edit.id}`
       )!;
@@ -1033,14 +886,8 @@ export default function CuentasPantallasVencidasPage() {
       )
         .toString()
         .trim();
-      if (newPw && newPw !== oldPw && emailForQueue) {
-        setPwNewByEmail((prev) => ({
-          ...prev,
-          [emailForQueue]: {
-            pw: newPw,
-            plataforma_id: updated.plataforma_id ?? undefined,
-          },
-        }));
+      if (newPw !== oldPw && emailForQueue) {
+        recordPasswordChange(emailForQueue, newPw, updated.plataforma_id ?? undefined);
       }
       const T = today();
       const T1 = tomorrow();
@@ -1200,21 +1047,13 @@ export default function CuentasPantallasVencidasPage() {
             >
               Copiar correos
             </button>
-            <button
-              type="button"
-              onClick={sendPwChangeNotifications}
-              disabled={pwChangedEmails.length === 0 || notifying}
-              className="rounded-lg border border-emerald-700 bg-emerald-800/40 px-3 py-2 text-emerald-100 hover:bg-emerald-800/60 disabled:opacity-60"
-              title="Invoca scripts/notify-password-changes.js vía /api/cuentasvencidas"
-            >
-              {notifying ? "Enviando…" : "Enviar notificación cambios de clave"}
-            </button>
+
           </div>
         </div>
         {/* Añadir manualmente */}
         <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-3">
           <div className="text-sm font-semibold text-neutral-200 mb-2">
-            Añadir correos manualmente a la cola
+            Añadir registros manualmente
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -1254,7 +1093,7 @@ export default function CuentasPantallasVencidasPage() {
               type="button"
               onClick={addManualToQueue}
               className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
-              title="Añadir a la cola de notificación"
+              title="Añadir al historial"
             >
               Añadir
             </button>
@@ -1268,7 +1107,7 @@ export default function CuentasPantallasVencidasPage() {
         <div className="flex flex-col gap-2">
           {pwChangedEmails.length === 0 ? (
             <span className="text-neutral-400 text-sm">
-              No hay correos en la cola (se añaden al guardar un registro con
+              No hay cambios de clave registrados (se añaden al guardar un registro con
               contraseña cambiada).
             </span>
           ) : (
@@ -1277,16 +1116,16 @@ export default function CuentasPantallasVencidasPage() {
                 <span className="inline-flex items-center gap-2 rounded-full border border-neutral-700 px-3 py-1 text-sm text-neutral-200">
                   {email}
                   <button
-                    className="text-neutral-400 hover:text-white"
-                    onClick={() =>
-                      setPwNewByEmail((prev) => {
-                        const { [email]: _, ...rest } = prev;
-                        return rest;
-                      })
-                    }
-                    title="Quitar de la cola"
+                    type="button"
+                    className="text-red-300 hover:text-red-200"
+                    onClick={() => {
+                      if (window.confirm(`¿Borrar el registro de cambio de clave de ${email}? La cuenta y su contraseña se conservarán.`)) {
+                        deletePasswordChange(email);
+                      }
+                    }}
+                    title="Borrar únicamente este registro"
                   >
-                    ×
+                    Borrar
                   </button>
                 </span>
 
@@ -1302,7 +1141,7 @@ export default function CuentasPantallasVencidasPage() {
                   placeholder="Nueva clave…"
                   value={pwNewByEmail[email]?.pw ?? ""}
                   onChange={(e) =>
-                    setPwNewByEmail((prev) => ({
+                    updateHistory((prev) => ({
                       ...prev,
                       [email]: {
                         ...prev[email],
@@ -2068,7 +1907,8 @@ export default function CuentasPantallasVencidasPage() {
               </Field>
             </div>
 
-            <div className="px-5 py-3 border-t border-neutral-800 flex items-center justify-end gap-2 sticky bottom-0 bg-neutral-900 rounded-b-2xl">
+            <div className="px-5 py-3 border-t border-neutral-800 flex flex-wrap items-center justify-end gap-2 sticky bottom-0 bg-neutral-900 rounded-b-2xl">
+
               <button
                 className="px-3 py-2 rounded-lg border border-neutral-600 hover:bg-neutral-800"
                 onClick={closeEdit}
