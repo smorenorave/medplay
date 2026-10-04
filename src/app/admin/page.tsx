@@ -486,21 +486,23 @@ export default function AdminPanel() {
     try {
       if (fmtOut === 'xlsx') {
         try {
-          const XLSX = await import('xlsx');
-          const wb = XLSX.utils.book_new();
+          const { default: ExcelJS } = await import('exceljs');
+          const wb = new ExcelJS.Workbook();
 
-          const ws1 = XLSX.utils.json_to_sheet(rows, { header: [...HEADERS] as unknown as string[] });
-          XLSX.utils.book_append_sheet(wb, ws1, `Registros_${period}`);
+          const ws1 = wb.addWorksheet(`Registros_${period}`);
+          ws1.columns = HEADERS.map(header => ({ header, key: header }));
+          ws1.addRows(rows);
 
           const rankingRows = ranking.map(r => ({
             Plataforma: r.name, Unidades: r.count, Total: Number(r.total || 0)
           }));
-          const ws2 = XLSX.utils.json_to_sheet(rankingRows, { header: ['Plataforma','Unidades','Total'] });
-          XLSX.utils.book_append_sheet(wb, ws2, 'Ranking_plataformas');
+          const ws2 = wb.addWorksheet('Ranking_plataformas');
+          ws2.columns = ['Plataforma', 'Unidades', 'Total'].map(header => ({ header, key: header }));
+          ws2.addRows(rankingRows);
 
-          const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+          const buf = await wb.xlsx.writeBuffer();
           saveBlob(
-            new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+            new Blob([new Uint8Array(buf)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
             `registros-${period}.xlsx`
           );
           setDlMsg(`Descargado Excel (registros-${period}.xlsx)`);

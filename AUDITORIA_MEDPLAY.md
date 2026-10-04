@@ -1,5 +1,15 @@
 # Auditoría técnica y de producto de Medplay
 
+## Actualización de dependencias — 3 de octubre de 2026
+
+- La auditoría completa pasó de 27 alertas (23 altas, 4 moderadas) a 5 altas. `npm audit --omit=dev` reporta 0 vulnerabilidades.
+- Next.js y su configuración ESLint se actualizaron a 15.5.27; Nodemailer a 10.0.14. El archivo de bloqueo incluye Sharp 0.35.5 y las actualizaciones compatibles de las demás dependencias afectadas.
+- Los overrides de `package.json` fuerzan PostCSS >=8.5.28, DeepmergeTS >=8.0.2 dentro de Prisma y UUID >=11.1.1 dentro de ExcelJS. Revisarlos al actualizar esas dependencias para retirarlos cuando sus versiones originales incorporen las correcciones.
+- Se retiró Puppeteer, sin usos en el código; la automatización WhatsApp conserva Playwright. La exportación de registros reemplaza SheetJS (`xlsx`) por ExcelJS, manteniendo las hojas de registros y ranking, los valores numéricos y la alternativa CSV.
+- La versión mínima de Node.js es 20.9.0, por los requisitos de las dependencias actualizadas.
+- Las cinco alertas restantes corresponden a una única cadena de desarrollo: `eslint-config-next` → `@next/eslint-plugin-next` → `fast-glob` → `micromatch` → `braces`. El [aviso GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) no tiene versión corregida publicada. Los patrones de lint deben mantenerse como configuración confiable. No se rebajó ESLint a una configuración de Next.js 14 para ocultar estas alertas; siguen pendientes de corrección upstream.
+- Validación: TypeScript, lint (0 errores y 61 advertencias), compilación de producción, 9 pruebas existentes, escritura/lectura Excel de ambas hojas, validación del esquema Prisma con URL ficticia, transporte local de Nodemailer sin envío y biblioteca nativa Sharp. La compilación conserva avisos de JOSE sobre APIs de compresión en Edge. No se probaron conexiones MySQL ni entregas SMTP reales.
+
 Fecha: 2 de septiembre de 2026.
 
 ## Hallazgos y tratamiento
