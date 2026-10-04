@@ -1047,7 +1047,15 @@ export default function CuentasPantallasVencidasPage() {
             >
               Copiar correos
             </button>
-
+            <button
+              type="button"
+              onClick={() => writePasswordChanges({})}
+              disabled={pwChangedEmails.length === 0}
+              className="rounded-lg border border-red-900 bg-red-950/40 px-3 py-2 text-red-200 hover:bg-red-950/70 disabled:opacity-60"
+              title="Limpiar el historial de cambios de clave"
+            >
+              Limpiar lista
+            </button>
           </div>
         </div>
         {/* Añadir manualmente */}
