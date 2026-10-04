@@ -1,5 +1,8 @@
 'use client';
 
+import Link from 'next/link';
+import { useAccountDataRefresh } from '@/hooks/useAccountDataRefresh';
+import { readCurrentAccountData } from '@/lib/accountDataChanges';
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { todayYMDBogota } from '@/lib/bogotaDate';
@@ -202,6 +205,8 @@ export default function AdminPanel() {
   const [downloading, setDownloading] = useState(false);
   const [dlMsg, setDlMsg] = useState<string|null>(null);
 
+  const [deletionRevision, setDeletionRevision] = useState(0);
+  useAccountDataRefresh(() => setDeletionRevision(value => value + 1));
   /* ======== Carga de datos ======== */
   useEffect(() => {
     let cancel = false;
@@ -345,7 +350,11 @@ export default function AdminPanel() {
   const loadMonthlySnapshot = useCallback(async () => {
     try {
       setLoadingSnap(true); setMsg(null);
-      const res = await fetch(`/api/metricas-mensuales?year=${year}&month=${month}`, { cache: 'no-store' });
+      const { res, data } = await readCurrentAccountData(async () => {
+        const res = await fetch(`/api/metricas-mensuales?year=${year}&month=${month}`, { cache: 'no-store' });
+        const data: MonthlySnapshot | null = res.ok ? await res.json() : null;
+        return { res, data };
+      });
       if (res.status === 404) {
         setSnapshot(null);
         setViewMode('live');
@@ -353,7 +362,7 @@ export default function AdminPanel() {
         return;
       }
       if (!res.ok) throw new Error(`Error ${res.status}`);
-      const data: MonthlySnapshot = await res.json();
+      if (!data) throw new Error('No se pudo cargar el snapshot');
       setSnapshot(data);
       setViewMode('snapshot');
       setMsg(`Viendo snapshot guardado (${data.periodLabel}).`);
@@ -366,7 +375,7 @@ export default function AdminPanel() {
 
   useEffect(() => {
     void loadMonthlySnapshot();
-  }, [loadMonthlySnapshot]);
+  }, [loadMonthlySnapshot, deletionRevision]);
 
   useEffect(() => {
     if (!annualOpen) return;
@@ -388,7 +397,7 @@ export default function AdminPanel() {
         if (!cancelled) setAnnualLoading(false);
       });
     return () => { cancelled = true; };
-  }, [annualOpen, year]);
+  }, [annualOpen, year, deletionRevision]);
 
   const showLive = useCallback(() => {
     setViewMode('live');
@@ -542,6 +551,7 @@ export default function AdminPanel() {
     <div className="mx-auto max-w-[1250px] p-6 space-y-6">
       <header className="flex flex-wrap items-center gap-3 justify-between">
         <div className="flex items-end gap-3">
+          <Link href="/admin/deletions" className="rounded-md border border-neutral-700 px-3 py-2 text-sm text-sky-300">Historial de eliminaciones</Link>
           <h1 className="text-2xl font-bold text-neutral-100">Panel de Información (Admin)</h1>
           <span className="text-sm text-neutral-400">• {monthName(year, month)}</span>
         </div>

@@ -1,7 +1,10 @@
 "use client";
+import { deleteEmailsGlobally } from "@/lib/accountDataChanges";
+import { useAccountDataRefresh } from "@/hooks/useAccountDataRefresh";
+
 import { recordPasswordChange } from "@/lib/passwordChanges";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ThHTMLAttributes,
   TdHTMLAttributes,
@@ -219,7 +222,9 @@ function PlataformasPane() {
     total_pagado_proveedor_completa: Number(p.total_pagado_proveedor_completa ?? 0),
   });
 
+  const loadSequence = useRef(0);
   const load = useCallback(async () => {
+    const sequence = ++loadSequence.current;
     setLoading(true);
     setErr(null);
     try {
@@ -232,7 +237,7 @@ function PlataformasPane() {
       list.sort((a, b) =>
         a.nombre.localeCompare(b.nombre, undefined, { sensitivity: "base" }),
       );
-      setRows(list);
+      if (sequence === loadSequence.current) setRows(list);
     } catch (e: any) {
       setErr(e?.message ?? "Error al cargar");
       setRows([]);
@@ -240,6 +245,8 @@ function PlataformasPane() {
       setLoading(false);
     }
   }, []);
+  useAccountDataRefresh(load);
+
   useEffect(() => {
     load();
   }, [load]);
@@ -777,7 +784,9 @@ function ContactosPane() {
   const tblInput =
     "w-full rounded-md px-2 py-1 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500";
 
+  const loadSequence = useRef(0);
   const load = useCallback(async () => {
+    const sequence = ++loadSequence.current;
     setLoading(true);
     setErr(null);
     try {
@@ -791,7 +800,7 @@ function ContactosPane() {
           nombre: u?.nombre ?? null,
         }),
       );
-      setRows(list);
+      if (sequence === loadSequence.current) setRows(list);
     } catch (e: any) {
       setErr(e?.message ?? "Error al cargar");
       setRows([]);
@@ -799,6 +808,8 @@ function ContactosPane() {
       setLoading(false);
     }
   }, []);
+  useAccountDataRefresh(load);
+
   useEffect(() => {
     load();
   }, [load]);
@@ -1184,7 +1195,9 @@ function InventarioPane() {
   }, []);
 
   /* -------- cargar inventario (GET) -------- */
+  const loadSequence = useRef(0);
   const load = useCallback(async () => {
+    const sequence = ++loadSequence.current;
     setLoading(true);
     setErr(null);
     try {
@@ -1203,7 +1216,7 @@ function InventarioPane() {
           clave: r.clave ?? null,
         }),
       );
-      setRows(list);
+      if (sequence === loadSequence.current) setRows(list);
     } catch (e: any) {
       setErr(e?.message ?? "Error al cargar");
       setRows([]);
@@ -1211,6 +1224,8 @@ function InventarioPane() {
       setLoading(false);
     }
   }, [fPlataformaId, q]);
+  useAccountDataRefresh(load);
+
   useEffect(() => {
     load();
   }, [load]);
@@ -1305,29 +1320,11 @@ function InventarioPane() {
     }
   };
   const onDelete = async (row: Inventario) => {
-    if (!confirm(`¿Eliminar ${row.correo}?`)) return;
+    if (!confirm(`¿Eliminar definitivamente ${row.correo} de todas las cuentas, pantallas e inventario, en todas las plataformas? La eliminación quedará auditada.`)) return;
     try {
-      // Optimista + luego confirmación del backend
-      setRows((rs) => rs.filter((r) => r.id !== row.id));
-      const res = await fetch(`/api/inventario/${row.id}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        return;
-      }
-      // Si falló, reponemos la fila
-      const j = await res.json().catch(() => ({}) as any);
-      if (res.status === 409) {
-        alert(j?.message || "No se puede eliminar.");
-        load();
-        return;
-      }
-      throw new Error(j?.error ?? "No se pudo eliminar");
-    } catch (e: any) {
-      alert(e?.message ?? "Error al eliminar");
-      // re-sync
-      load();
-    }
+      await deleteEmailsGlobally([row.correo], "Eliminación definitiva desde Inventario");
+      await load();
+    } catch (error) { alert((error as Error).message); }
   };
 
   /* -------- UI -------- */

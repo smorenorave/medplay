@@ -2,6 +2,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { registerAccountCache } from '@/lib/accountDataChanges';
+import { useAccountDataRefresh } from './useAccountDataRefresh';
 
 export type Plataforma = {
   id: number;
@@ -13,6 +15,7 @@ export type Plataforma = {
 type PlatCache = { rows: Plataforma[]; ts: number };
 
 const MEM: { value: PlatCache | null } = { value: null };
+registerAccountCache(() => invalidatePlataformasCache());
 // nueva versión de la clave (v2) para incluir cantidad_pantallas
 const LS_KEY_V2 = '__plat_cache_v2';
 const LS_KEY_V1 = '__plat_cache_v1'; // por si existe, migramos
@@ -162,5 +165,6 @@ export function usePlataformas() {
     }
   };
 
+  useAccountDataRefresh(refresh);
   return { plataformas, loading, error, refresh };
 }

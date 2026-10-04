@@ -1,3 +1,5 @@
+import { serializable } from "./emailDeletion";
+import type { Prisma } from "../src/generated/prisma";
 import { prisma } from "@/lib/db";
 import { addDaysYMD, todayYMDBogota, utcDateFromYMD } from "@/lib/bogotaDate";
 
@@ -32,13 +34,17 @@ function periodIsFuture(year: number, month: number) {
 }
 
 export async function generateMonthlySnapshot(year: number, month: number) {
+  return serializable(prisma, tx => generateSnapshot(tx, year, month));
+}
+
+async function generateSnapshot(tx: Prisma.TransactionClient, year: number, month: number) {
   if (!Number.isInteger(year) || year < 2000 || year > 2100 || !Number.isInteger(month) || month < 1 || month > 12) {
     throw new Error("invalid-period");
   }
 
   const { start, end } = monthBounds(year, month);
   const [screenRows, completeRows] = await Promise.all([
-    prisma.pantallas.findMany({
+    tx.pantallas.findMany({
       where: { fecha_compra: { gte: start, lt: end } },
       select: {
         fecha_compra: true,
@@ -51,7 +57,7 @@ export async function generateMonthlySnapshot(year: number, month: number) {
         },
       },
     }),
-    prisma.cuentascompletas.findMany({
+    tx.cuentascompletas.findMany({
       where: { fecha_compra: { gte: start, lt: end } },
       select: {
         fecha_compra: true,
@@ -123,10 +129,10 @@ export async function generateMonthlySnapshot(year: number, month: number) {
     ? utcDateFromYMD(addDaysYMD(todayYMDBogota(), 1))
     : end;
   const [activeScreens, activeCompletes] = await Promise.all([
-    prisma.pantallas.count({
+    tx.pantallas.count({
       where: { fecha_compra: { lt: activeThreshold }, fecha_vencimiento: { gte: activeThreshold } },
     }),
-    prisma.cuentascompletas.count({
+    tx.cuentascompletas.count({
       where: { fecha_compra: { lt: activeThreshold }, fecha_vencimiento: { gte: activeThreshold } },
     }),
   ]);
@@ -138,7 +144,7 @@ export async function generateMonthlySnapshot(year: number, month: number) {
     ventas_dia_plataforma: dailyPlatform,
   };
 
-  return prisma.metricasmensuales.upsert({
+  return tx.metricasmensuales.upsert({
     where: { year_month: { year, month } },
     create: {
       year,

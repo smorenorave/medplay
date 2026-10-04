@@ -1,3 +1,4 @@
+import { deleteEmailForRecord } from "@/lib/deleteEmailForRecord";
 // src/app/api/pantallas/[id]/route.ts
 export const runtime = "nodejs";
 
@@ -584,6 +585,8 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    const globalDeletion = await deleteEmailForRecord(req, { tipo: "pantalla", id });
+    if (globalDeletion) return globalDeletion;
     const pid = parseId(id);
     const adminId = await getAuthenticatedAdminId(req);
 

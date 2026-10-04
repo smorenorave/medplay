@@ -1,4 +1,6 @@
 "use client";
+import { deleteEmailsGlobally, readCurrentAccountData, accountDataEpoch } from "@/lib/accountDataChanges";
+import { useAccountDataRefresh } from "@/hooks/useAccountDataRefresh";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { usePlataformas } from "@/hooks/usePlataformas";
@@ -851,7 +853,7 @@ export default function FormPantallas() {
     if (!force && pantallasPidCacheRef.current[pid]) {
       return pantallasPidCacheRef.current[pid];
     }
-    const rows = await fetchPantallasPorPlataforma(pid);
+    const rows = await readCurrentAccountData(() => fetchPantallasPorPlataforma(pid));
     pantallasPidCacheRef.current[pid] = rows;
     return rows;
   }
@@ -1086,6 +1088,10 @@ export default function FormPantallas() {
   };
 
   async function loadEmailsForPid(pid: number, force = false) {
+    return readCurrentAccountData(() => loadEmailsForPidFromServer(pid, force));
+  }
+  async function loadEmailsForPidFromServer(pid: number, force = false): Promise<void> {
+    const epoch = accountDataEpoch();
     if (!pid) return;
     ensurePerPidInit(pid);
 
@@ -1112,6 +1118,8 @@ export default function FormPantallas() {
 
       const acctRows: Cuenta[] = await acctRes.json();
       const invRows: InventarioItem[] = await invRes.json();
+
+      if (epoch !== accountDataEpoch()) return loadEmailsForPidFromServer(pid, true);
 
       // Seguimos escribiendo el cache LS de cuentas/inventario porque otras
       // partes del componente lo siguen leyendo (líneas ~739, 758, 1239:
@@ -1141,6 +1149,8 @@ export default function FormPantallas() {
 
       // ✅ Pantallas usadas: dataset fresco de la plataforma.
       const pantallasRows = await getPantallasPorPlataformaCached(pid, force);
+
+      if (epoch !== accountDataEpoch()) return loadEmailsForPidFromServer(pid, true);
 
       // ✅ Única fuente de verdad para disponibilidad de correos.
       const disponibilidad = buildDisponibilidadCorreos({
@@ -1194,22 +1204,23 @@ export default function FormPantallas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshTick]);
 
+  useAccountDataRefresh(change => {
+    const emails = new Set(change.correos.map(normalizeEmail));
+    invalidatePantallasPidCache();
+    setPerPid({});
+    setOrders(previous => previous.map(order => emails.has(normalizeEmail(order.correo)) ? { ...order, correo: "", contrasena: "" } : order));
+    setRefreshTick(value => value + 1);
+  });
+
   async function deleteCuentaCompartidaByEmail(pid: number, email: string) {
     const cache = perPid[pid];
     const id = cache?.acctIdMap?.[email];
     if (!pid || !id) return;
 
-    if (!window.confirm(`¿Eliminar la cuenta compartida\n${email}?`)) return;
+    if (!window.confirm(`¿Eliminar definitivamente ${email} de todas las cuentas, pantallas e inventario, en todas las plataformas? La operación quedará auditada.`)) return;
 
     try {
-      const res = await fetch(`/api/cuentascompartidas/${id}`, {
-        method: "DELETE",
-        cache: "no-store",
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j?.error ?? "No se pudo eliminar la cuenta");
-      }
+      await deleteEmailsGlobally([email], "Eliminación definitiva desde Nueva pantalla");
 
       // LS
       const map = getAcctMap(pid) || {};
@@ -1493,7 +1504,7 @@ export default function FormPantallas() {
           const o = confirmOrders[idx];
           if (o.selectedEmailSource === "inv" && o.selectedInvId != null) {
             try {
-              await fetch(`/api/inventario/${o.selectedInvId}`, {
+              await fetch(`/api/inventario/${o.selectedInvId}?scope=record`, {
                 method: "DELETE",
                 cache: "no-store",
               });

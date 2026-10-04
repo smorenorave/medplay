@@ -1,4 +1,6 @@
 "use client";
+import { useAccountDataRefresh } from "@/hooks/useAccountDataRefresh";
+import { readCurrentAccountData } from "@/lib/accountDataChanges";
 
 import { useEffect, useState } from "react";
 import { AlertTriangle, ArrowRight, BadgeDollarSign, CalendarClock, CircleDollarSign, HandCoins, PackageCheck, RefreshCw, ShoppingBag, Sparkles } from "lucide-react";
@@ -20,15 +22,19 @@ export default function OperationsDashboard({ onNavigate }: { onNavigate: (view:
   async function load() {
     setRefreshing(true); setError("");
     try {
-      const response = await fetch("/api/dashboard", { cache: "no-store" });
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.error || "No fue posible cargar el dashboard");
+      const json = await readCurrentAccountData(async () => {
+        const response = await fetch("/api/dashboard", { cache: "no-store" });
+        const json = await response.json();
+        if (!response.ok) throw new Error(json.error || "No fue posible cargar el dashboard");
+        return json;
+      });
       setData(json);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "No fue posible cargar el dashboard");
     } finally { setRefreshing(false); }
   }
 
+  useAccountDataRefresh(load);
   useEffect(() => { void load(); }, []);
 
   if (error) return <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-5 text-rose-100">

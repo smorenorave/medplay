@@ -1,3 +1,4 @@
+import { deleteEmailForRecord } from "@/lib/deleteEmailForRecord";
 // app/api/cuentascompletas/[id]/route.ts
 export const runtime = 'nodejs';
 
@@ -372,6 +373,8 @@ export async function PUT(req: Request, ctx: RouteCtx) {
 export async function DELETE(req: Request, ctx: RouteCtx) {
   try {
     const { id: idStr } = await ctx.params;
+    const globalDeletion = await deleteEmailForRecord(req, { tipo: "completa", id: idStr });
+    if (globalDeletion) return globalDeletion;
     const id = parseId(idStr);
 
     const adminId = await getAuthenticatedAdminId(req);

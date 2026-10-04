@@ -1,5 +1,7 @@
 // src/components/forms/FormCuentaCompletas.tsx
 "use client";
+import { readCurrentAccountData, accountDataEpoch } from "@/lib/accountDataChanges";
+import { useAccountDataRefresh } from "@/hooks/useAccountDataRefresh";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Field from "@/components/ui/Field";
@@ -709,7 +711,11 @@ export default function FormCuentaCompletas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orders.length]);
 
-  async function fetchEmailsByPlatform(plataformaId: number) {
+  async function fetchEmailsByPlatform(plataformaId: number): Promise<Record<string, InvEntry>> {
+    return readCurrentAccountData(() => fetchEmailsByPlatformFromServer(plataformaId));
+  }
+  async function fetchEmailsByPlatformFromServer(plataformaId: number): Promise<Record<string, InvEntry>> {
+    const epoch = accountDataEpoch();
     if (!plataformaId) return {};
 
     // 1) LS cache
@@ -733,10 +739,20 @@ export default function FormCuentaCompletas() {
       if (!c) continue;
       m[c] = { pass: (it as any)?.clave ?? null, id: Number(it?.id) };
     }
+    if (epoch !== accountDataEpoch()) return fetchEmailsByPlatformFromServer(plataformaId);
     writeInvCache(plataformaId, m);
     setInvIndexByPid((s) => ({ ...s, [plataformaId]: m }));
     return m;
   }
+
+  useAccountDataRefresh(change => {
+    const emails = new Set(change.correos.map(normalizeEmail));
+    setInvIndexByPid({});
+    setEmailOptsByIdx([]);
+    setSelectedInvIdByIdx([]);
+    setOrders(previous => previous.map(order => emails.has(normalizeEmail(order.correo)) ? { ...order, correo: "", contrasena: "" } : order));
+    orders.forEach(order => { if (order.plataforma_id) void fetchEmailsByPlatform(order.plataforma_id).catch(() => {}); });
+  });
 
   const openEmailForIdx = async (idx: number) => {
     setEmailOpenIdx(idx);
@@ -1067,7 +1083,7 @@ export default function FormCuentaCompletas() {
         const invId = selectedInvIdByIdx[idx];
         if (invId != null) {
           try {
-            await fetch(`/api/inventario/${invId}`, { method: "DELETE" });
+            await fetch(`/api/inventario/${invId}?scope=record`, { method: "DELETE" });
           } catch {}
         }
       }

@@ -229,6 +229,30 @@ exports.Prisma.AdminScalarFieldEnum = {
   creado_en: 'creado_en'
 };
 
+exports.Prisma.EmailDeletionAuditScalarFieldEnum = {
+  id: 'id',
+  correo: 'correo',
+  dedupeKey: 'dedupeKey',
+  clave: 'clave',
+  claves: 'claves',
+  plataformas: 'plataformas',
+  contactos: 'contactos',
+  registros: 'registros',
+  identificadorOriginal: 'identificadorOriginal',
+  adminId: 'adminId',
+  eliminadoPor: 'eliminadoPor',
+  motivo: 'motivo',
+  primeraEliminacion: 'primeraEliminacion',
+  fechaEliminacion: 'fechaEliminacion',
+  revision: 'revision'
+};
+
+exports.Prisma.AccountDataRevisionScalarFieldEnum = {
+  id: 'id',
+  revision: 'revision',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.DeletedAccountHistoryScalarFieldEnum = {
   id: 'id',
   dedupeKey: 'dedupeKey',
@@ -353,6 +377,16 @@ exports.Prisma.adminOrderByRelevanceFieldEnum = {
   contrasena: 'contrasena'
 };
 
+exports.Prisma.emailDeletionAuditOrderByRelevanceFieldEnum = {
+  correo: 'correo',
+  dedupeKey: 'dedupeKey',
+  clave: 'clave',
+  claves: 'claves',
+  identificadorOriginal: 'identificadorOriginal',
+  eliminadoPor: 'eliminadoPor',
+  motivo: 'motivo'
+};
+
 exports.Prisma.deletedAccountHistoryOrderByRelevanceFieldEnum = {
   dedupeKey: 'dedupeKey',
   plataforma: 'plataforma',
@@ -390,6 +424,8 @@ exports.Prisma.ModelName = {
   inventario: 'inventario',
   metricasmensuales: 'metricasmensuales',
   admin: 'admin',
+  emailDeletionAudit: 'emailDeletionAudit',
+  accountDataRevision: 'accountDataRevision',
   deletedAccountHistory: 'deletedAccountHistory',
   adminPasswordResetToken: 'adminPasswordResetToken',
   adminSecurityEvent: 'adminSecurityEvent'

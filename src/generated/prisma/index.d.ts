@@ -64,6 +64,16 @@ export type metricasmensuales = $Result.DefaultSelection<Prisma.$metricasmensual
  */
 export type admin = $Result.DefaultSelection<Prisma.$adminPayload>
 /**
+ * Model emailDeletionAudit
+ * 
+ */
+export type emailDeletionAudit = $Result.DefaultSelection<Prisma.$emailDeletionAuditPayload>
+/**
+ * Model accountDataRevision
+ * 
+ */
+export type accountDataRevision = $Result.DefaultSelection<Prisma.$accountDataRevisionPayload>
+/**
  * Model deletedAccountHistory
  * 
  */
@@ -314,6 +324,26 @@ export class PrismaClient<
     * ```
     */
   get admin(): Prisma.adminDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.emailDeletionAudit`: Exposes CRUD operations for the **emailDeletionAudit** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more EmailDeletionAudits
+    * const emailDeletionAudits = await prisma.emailDeletionAudit.findMany()
+    * ```
+    */
+  get emailDeletionAudit(): Prisma.emailDeletionAuditDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.accountDataRevision`: Exposes CRUD operations for the **accountDataRevision** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more AccountDataRevisions
+    * const accountDataRevisions = await prisma.accountDataRevision.findMany()
+    * ```
+    */
+  get accountDataRevision(): Prisma.accountDataRevisionDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.deletedAccountHistory`: Exposes CRUD operations for the **deletedAccountHistory** model.
@@ -795,6 +825,8 @@ export namespace Prisma {
     inventario: 'inventario',
     metricasmensuales: 'metricasmensuales',
     admin: 'admin',
+    emailDeletionAudit: 'emailDeletionAudit',
+    accountDataRevision: 'accountDataRevision',
     deletedAccountHistory: 'deletedAccountHistory',
     adminPasswordResetToken: 'adminPasswordResetToken',
     adminSecurityEvent: 'adminSecurityEvent'
@@ -816,7 +848,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "cuentascompartidas" | "cuentascompletas" | "pantallas" | "plataformas" | "usuarios" | "wa_notificaciones" | "wa_logs" | "inventario" | "metricasmensuales" | "admin" | "deletedAccountHistory" | "adminPasswordResetToken" | "adminSecurityEvent"
+      modelProps: "cuentascompartidas" | "cuentascompletas" | "pantallas" | "plataformas" | "usuarios" | "wa_notificaciones" | "wa_logs" | "inventario" | "metricasmensuales" | "admin" | "emailDeletionAudit" | "accountDataRevision" | "deletedAccountHistory" | "adminPasswordResetToken" | "adminSecurityEvent"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -1480,6 +1512,138 @@ export namespace Prisma {
           }
         }
       }
+      emailDeletionAudit: {
+        payload: Prisma.$emailDeletionAuditPayload<ExtArgs>
+        fields: Prisma.emailDeletionAuditFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.emailDeletionAuditFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$emailDeletionAuditPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.emailDeletionAuditFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$emailDeletionAuditPayload>
+          }
+          findFirst: {
+            args: Prisma.emailDeletionAuditFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$emailDeletionAuditPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.emailDeletionAuditFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$emailDeletionAuditPayload>
+          }
+          findMany: {
+            args: Prisma.emailDeletionAuditFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$emailDeletionAuditPayload>[]
+          }
+          create: {
+            args: Prisma.emailDeletionAuditCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$emailDeletionAuditPayload>
+          }
+          createMany: {
+            args: Prisma.emailDeletionAuditCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          delete: {
+            args: Prisma.emailDeletionAuditDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$emailDeletionAuditPayload>
+          }
+          update: {
+            args: Prisma.emailDeletionAuditUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$emailDeletionAuditPayload>
+          }
+          deleteMany: {
+            args: Prisma.emailDeletionAuditDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.emailDeletionAuditUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          upsert: {
+            args: Prisma.emailDeletionAuditUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$emailDeletionAuditPayload>
+          }
+          aggregate: {
+            args: Prisma.EmailDeletionAuditAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateEmailDeletionAudit>
+          }
+          groupBy: {
+            args: Prisma.emailDeletionAuditGroupByArgs<ExtArgs>
+            result: $Utils.Optional<EmailDeletionAuditGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.emailDeletionAuditCountArgs<ExtArgs>
+            result: $Utils.Optional<EmailDeletionAuditCountAggregateOutputType> | number
+          }
+        }
+      }
+      accountDataRevision: {
+        payload: Prisma.$accountDataRevisionPayload<ExtArgs>
+        fields: Prisma.accountDataRevisionFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.accountDataRevisionFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$accountDataRevisionPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.accountDataRevisionFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$accountDataRevisionPayload>
+          }
+          findFirst: {
+            args: Prisma.accountDataRevisionFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$accountDataRevisionPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.accountDataRevisionFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$accountDataRevisionPayload>
+          }
+          findMany: {
+            args: Prisma.accountDataRevisionFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$accountDataRevisionPayload>[]
+          }
+          create: {
+            args: Prisma.accountDataRevisionCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$accountDataRevisionPayload>
+          }
+          createMany: {
+            args: Prisma.accountDataRevisionCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          delete: {
+            args: Prisma.accountDataRevisionDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$accountDataRevisionPayload>
+          }
+          update: {
+            args: Prisma.accountDataRevisionUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$accountDataRevisionPayload>
+          }
+          deleteMany: {
+            args: Prisma.accountDataRevisionDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.accountDataRevisionUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          upsert: {
+            args: Prisma.accountDataRevisionUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$accountDataRevisionPayload>
+          }
+          aggregate: {
+            args: Prisma.AccountDataRevisionAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateAccountDataRevision>
+          }
+          groupBy: {
+            args: Prisma.accountDataRevisionGroupByArgs<ExtArgs>
+            result: $Utils.Optional<AccountDataRevisionGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.accountDataRevisionCountArgs<ExtArgs>
+            result: $Utils.Optional<AccountDataRevisionCountAggregateOutputType> | number
+          }
+        }
+      }
       deletedAccountHistory: {
         payload: Prisma.$deletedAccountHistoryPayload<ExtArgs>
         fields: Prisma.deletedAccountHistoryFieldRefs
@@ -1784,6 +1948,8 @@ export namespace Prisma {
     inventario?: inventarioOmit
     metricasmensuales?: metricasmensualesOmit
     admin?: adminOmit
+    emailDeletionAudit?: emailDeletionAuditOmit
+    accountDataRevision?: accountDataRevisionOmit
     deletedAccountHistory?: deletedAccountHistoryOmit
     adminPasswordResetToken?: adminPasswordResetTokenOmit
     adminSecurityEvent?: adminSecurityEventOmit
@@ -1990,12 +2156,14 @@ export namespace Prisma {
     resetTokens: number
     securityEvents: number
     deletionHistory: number
+    emailDeletions: number
   }
 
   export type AdminCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     resetTokens?: boolean | AdminCountOutputTypeCountResetTokensArgs
     securityEvents?: boolean | AdminCountOutputTypeCountSecurityEventsArgs
     deletionHistory?: boolean | AdminCountOutputTypeCountDeletionHistoryArgs
+    emailDeletions?: boolean | AdminCountOutputTypeCountEmailDeletionsArgs
   }
 
   // Custom InputTypes
@@ -2028,6 +2196,13 @@ export namespace Prisma {
    */
   export type AdminCountOutputTypeCountDeletionHistoryArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: deletedAccountHistoryWhereInput
+  }
+
+  /**
+   * AdminCountOutputType without action
+   */
+  export type AdminCountOutputTypeCountEmailDeletionsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: emailDeletionAuditWhereInput
   }
 
 
@@ -11321,6 +11496,7 @@ export namespace Prisma {
     resetTokens?: boolean | admin$resetTokensArgs<ExtArgs>
     securityEvents?: boolean | admin$securityEventsArgs<ExtArgs>
     deletionHistory?: boolean | admin$deletionHistoryArgs<ExtArgs>
+    emailDeletions?: boolean | admin$emailDeletionsArgs<ExtArgs>
     _count?: boolean | AdminCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["admin"]>
 
@@ -11339,6 +11515,7 @@ export namespace Prisma {
     resetTokens?: boolean | admin$resetTokensArgs<ExtArgs>
     securityEvents?: boolean | admin$securityEventsArgs<ExtArgs>
     deletionHistory?: boolean | admin$deletionHistoryArgs<ExtArgs>
+    emailDeletions?: boolean | admin$emailDeletionsArgs<ExtArgs>
     _count?: boolean | AdminCountOutputTypeDefaultArgs<ExtArgs>
   }
 
@@ -11348,6 +11525,7 @@ export namespace Prisma {
       resetTokens: Prisma.$adminPasswordResetTokenPayload<ExtArgs>[]
       securityEvents: Prisma.$adminSecurityEventPayload<ExtArgs>[]
       deletionHistory: Prisma.$deletedAccountHistoryPayload<ExtArgs>[]
+      emailDeletions: Prisma.$emailDeletionAuditPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: number
@@ -11698,6 +11876,7 @@ export namespace Prisma {
     resetTokens<T extends admin$resetTokensArgs<ExtArgs> = {}>(args?: Subset<T, admin$resetTokensArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$adminPasswordResetTokenPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     securityEvents<T extends admin$securityEventsArgs<ExtArgs> = {}>(args?: Subset<T, admin$securityEventsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$adminSecurityEventPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     deletionHistory<T extends admin$deletionHistoryArgs<ExtArgs> = {}>(args?: Subset<T, admin$deletionHistoryArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$deletedAccountHistoryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    emailDeletions<T extends admin$emailDeletionsArgs<ExtArgs> = {}>(args?: Subset<T, admin$emailDeletionsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$emailDeletionAuditPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -12147,6 +12326,30 @@ export namespace Prisma {
   }
 
   /**
+   * admin.emailDeletions
+   */
+  export type admin$emailDeletionsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the emailDeletionAudit
+     */
+    select?: emailDeletionAuditSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the emailDeletionAudit
+     */
+    omit?: emailDeletionAuditOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: emailDeletionAuditInclude<ExtArgs> | null
+    where?: emailDeletionAuditWhereInput
+    orderBy?: emailDeletionAuditOrderByWithRelationInput | emailDeletionAuditOrderByWithRelationInput[]
+    cursor?: emailDeletionAuditWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: EmailDeletionAuditScalarFieldEnum | EmailDeletionAuditScalarFieldEnum[]
+  }
+
+  /**
    * admin without action
    */
   export type adminDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -12162,6 +12365,1992 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well
      */
     include?: adminInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model emailDeletionAudit
+   */
+
+  export type AggregateEmailDeletionAudit = {
+    _count: EmailDeletionAuditCountAggregateOutputType | null
+    _avg: EmailDeletionAuditAvgAggregateOutputType | null
+    _sum: EmailDeletionAuditSumAggregateOutputType | null
+    _min: EmailDeletionAuditMinAggregateOutputType | null
+    _max: EmailDeletionAuditMaxAggregateOutputType | null
+  }
+
+  export type EmailDeletionAuditAvgAggregateOutputType = {
+    id: number | null
+    adminId: number | null
+    revision: number | null
+  }
+
+  export type EmailDeletionAuditSumAggregateOutputType = {
+    id: bigint | null
+    adminId: number | null
+    revision: bigint | null
+  }
+
+  export type EmailDeletionAuditMinAggregateOutputType = {
+    id: bigint | null
+    correo: string | null
+    dedupeKey: string | null
+    clave: string | null
+    claves: string | null
+    identificadorOriginal: string | null
+    adminId: number | null
+    eliminadoPor: string | null
+    motivo: string | null
+    primeraEliminacion: Date | null
+    fechaEliminacion: Date | null
+    revision: bigint | null
+  }
+
+  export type EmailDeletionAuditMaxAggregateOutputType = {
+    id: bigint | null
+    correo: string | null
+    dedupeKey: string | null
+    clave: string | null
+    claves: string | null
+    identificadorOriginal: string | null
+    adminId: number | null
+    eliminadoPor: string | null
+    motivo: string | null
+    primeraEliminacion: Date | null
+    fechaEliminacion: Date | null
+    revision: bigint | null
+  }
+
+  export type EmailDeletionAuditCountAggregateOutputType = {
+    id: number
+    correo: number
+    dedupeKey: number
+    clave: number
+    claves: number
+    plataformas: number
+    contactos: number
+    registros: number
+    identificadorOriginal: number
+    adminId: number
+    eliminadoPor: number
+    motivo: number
+    primeraEliminacion: number
+    fechaEliminacion: number
+    revision: number
+    _all: number
+  }
+
+
+  export type EmailDeletionAuditAvgAggregateInputType = {
+    id?: true
+    adminId?: true
+    revision?: true
+  }
+
+  export type EmailDeletionAuditSumAggregateInputType = {
+    id?: true
+    adminId?: true
+    revision?: true
+  }
+
+  export type EmailDeletionAuditMinAggregateInputType = {
+    id?: true
+    correo?: true
+    dedupeKey?: true
+    clave?: true
+    claves?: true
+    identificadorOriginal?: true
+    adminId?: true
+    eliminadoPor?: true
+    motivo?: true
+    primeraEliminacion?: true
+    fechaEliminacion?: true
+    revision?: true
+  }
+
+  export type EmailDeletionAuditMaxAggregateInputType = {
+    id?: true
+    correo?: true
+    dedupeKey?: true
+    clave?: true
+    claves?: true
+    identificadorOriginal?: true
+    adminId?: true
+    eliminadoPor?: true
+    motivo?: true
+    primeraEliminacion?: true
+    fechaEliminacion?: true
+    revision?: true
+  }
+
+  export type EmailDeletionAuditCountAggregateInputType = {
+    id?: true
+    correo?: true
+    dedupeKey?: true
+    clave?: true
+    claves?: true
+    plataformas?: true
+    contactos?: true
+    registros?: true
+    identificadorOriginal?: true
+    adminId?: true
+    eliminadoPor?: true
+    motivo?: true
+    primeraEliminacion?: true
+    fechaEliminacion?: true
+    revision?: true
+    _all?: true
+  }
+
+  export type EmailDeletionAuditAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which emailDeletionAudit to aggregate.
+     */
+    where?: emailDeletionAuditWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of emailDeletionAudits to fetch.
+     */
+    orderBy?: emailDeletionAuditOrderByWithRelationInput | emailDeletionAuditOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: emailDeletionAuditWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` emailDeletionAudits from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` emailDeletionAudits.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned emailDeletionAudits
+    **/
+    _count?: true | EmailDeletionAuditCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: EmailDeletionAuditAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: EmailDeletionAuditSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: EmailDeletionAuditMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: EmailDeletionAuditMaxAggregateInputType
+  }
+
+  export type GetEmailDeletionAuditAggregateType<T extends EmailDeletionAuditAggregateArgs> = {
+        [P in keyof T & keyof AggregateEmailDeletionAudit]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateEmailDeletionAudit[P]>
+      : GetScalarType<T[P], AggregateEmailDeletionAudit[P]>
+  }
+
+
+
+
+  export type emailDeletionAuditGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: emailDeletionAuditWhereInput
+    orderBy?: emailDeletionAuditOrderByWithAggregationInput | emailDeletionAuditOrderByWithAggregationInput[]
+    by: EmailDeletionAuditScalarFieldEnum[] | EmailDeletionAuditScalarFieldEnum
+    having?: emailDeletionAuditScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: EmailDeletionAuditCountAggregateInputType | true
+    _avg?: EmailDeletionAuditAvgAggregateInputType
+    _sum?: EmailDeletionAuditSumAggregateInputType
+    _min?: EmailDeletionAuditMinAggregateInputType
+    _max?: EmailDeletionAuditMaxAggregateInputType
+  }
+
+  export type EmailDeletionAuditGroupByOutputType = {
+    id: bigint
+    correo: string
+    dedupeKey: string | null
+    clave: string | null
+    claves: string
+    plataformas: JsonValue
+    contactos: JsonValue
+    registros: JsonValue
+    identificadorOriginal: string | null
+    adminId: number | null
+    eliminadoPor: string
+    motivo: string | null
+    primeraEliminacion: Date
+    fechaEliminacion: Date
+    revision: bigint
+    _count: EmailDeletionAuditCountAggregateOutputType | null
+    _avg: EmailDeletionAuditAvgAggregateOutputType | null
+    _sum: EmailDeletionAuditSumAggregateOutputType | null
+    _min: EmailDeletionAuditMinAggregateOutputType | null
+    _max: EmailDeletionAuditMaxAggregateOutputType | null
+  }
+
+  type GetEmailDeletionAuditGroupByPayload<T extends emailDeletionAuditGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<EmailDeletionAuditGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof EmailDeletionAuditGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], EmailDeletionAuditGroupByOutputType[P]>
+            : GetScalarType<T[P], EmailDeletionAuditGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type emailDeletionAuditSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    correo?: boolean
+    dedupeKey?: boolean
+    clave?: boolean
+    claves?: boolean
+    plataformas?: boolean
+    contactos?: boolean
+    registros?: boolean
+    identificadorOriginal?: boolean
+    adminId?: boolean
+    eliminadoPor?: boolean
+    motivo?: boolean
+    primeraEliminacion?: boolean
+    fechaEliminacion?: boolean
+    revision?: boolean
+    admin?: boolean | emailDeletionAudit$adminArgs<ExtArgs>
+  }, ExtArgs["result"]["emailDeletionAudit"]>
+
+
+
+  export type emailDeletionAuditSelectScalar = {
+    id?: boolean
+    correo?: boolean
+    dedupeKey?: boolean
+    clave?: boolean
+    claves?: boolean
+    plataformas?: boolean
+    contactos?: boolean
+    registros?: boolean
+    identificadorOriginal?: boolean
+    adminId?: boolean
+    eliminadoPor?: boolean
+    motivo?: boolean
+    primeraEliminacion?: boolean
+    fechaEliminacion?: boolean
+    revision?: boolean
+  }
+
+  export type emailDeletionAuditOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "correo" | "dedupeKey" | "clave" | "claves" | "plataformas" | "contactos" | "registros" | "identificadorOriginal" | "adminId" | "eliminadoPor" | "motivo" | "primeraEliminacion" | "fechaEliminacion" | "revision", ExtArgs["result"]["emailDeletionAudit"]>
+  export type emailDeletionAuditInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    admin?: boolean | emailDeletionAudit$adminArgs<ExtArgs>
+  }
+
+  export type $emailDeletionAuditPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "emailDeletionAudit"
+    objects: {
+      admin: Prisma.$adminPayload<ExtArgs> | null
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: bigint
+      correo: string
+      dedupeKey: string | null
+      clave: string | null
+      claves: string
+      plataformas: Prisma.JsonValue
+      contactos: Prisma.JsonValue
+      registros: Prisma.JsonValue
+      identificadorOriginal: string | null
+      adminId: number | null
+      eliminadoPor: string
+      motivo: string | null
+      primeraEliminacion: Date
+      fechaEliminacion: Date
+      revision: bigint
+    }, ExtArgs["result"]["emailDeletionAudit"]>
+    composites: {}
+  }
+
+  type emailDeletionAuditGetPayload<S extends boolean | null | undefined | emailDeletionAuditDefaultArgs> = $Result.GetResult<Prisma.$emailDeletionAuditPayload, S>
+
+  type emailDeletionAuditCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<emailDeletionAuditFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: EmailDeletionAuditCountAggregateInputType | true
+    }
+
+  export interface emailDeletionAuditDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['emailDeletionAudit'], meta: { name: 'emailDeletionAudit' } }
+    /**
+     * Find zero or one EmailDeletionAudit that matches the filter.
+     * @param {emailDeletionAuditFindUniqueArgs} args - Arguments to find a EmailDeletionAudit
+     * @example
+     * // Get one EmailDeletionAudit
+     * const emailDeletionAudit = await prisma.emailDeletionAudit.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends emailDeletionAuditFindUniqueArgs>(args: SelectSubset<T, emailDeletionAuditFindUniqueArgs<ExtArgs>>): Prisma__emailDeletionAuditClient<$Result.GetResult<Prisma.$emailDeletionAuditPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one EmailDeletionAudit that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {emailDeletionAuditFindUniqueOrThrowArgs} args - Arguments to find a EmailDeletionAudit
+     * @example
+     * // Get one EmailDeletionAudit
+     * const emailDeletionAudit = await prisma.emailDeletionAudit.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends emailDeletionAuditFindUniqueOrThrowArgs>(args: SelectSubset<T, emailDeletionAuditFindUniqueOrThrowArgs<ExtArgs>>): Prisma__emailDeletionAuditClient<$Result.GetResult<Prisma.$emailDeletionAuditPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first EmailDeletionAudit that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {emailDeletionAuditFindFirstArgs} args - Arguments to find a EmailDeletionAudit
+     * @example
+     * // Get one EmailDeletionAudit
+     * const emailDeletionAudit = await prisma.emailDeletionAudit.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends emailDeletionAuditFindFirstArgs>(args?: SelectSubset<T, emailDeletionAuditFindFirstArgs<ExtArgs>>): Prisma__emailDeletionAuditClient<$Result.GetResult<Prisma.$emailDeletionAuditPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first EmailDeletionAudit that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {emailDeletionAuditFindFirstOrThrowArgs} args - Arguments to find a EmailDeletionAudit
+     * @example
+     * // Get one EmailDeletionAudit
+     * const emailDeletionAudit = await prisma.emailDeletionAudit.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends emailDeletionAuditFindFirstOrThrowArgs>(args?: SelectSubset<T, emailDeletionAuditFindFirstOrThrowArgs<ExtArgs>>): Prisma__emailDeletionAuditClient<$Result.GetResult<Prisma.$emailDeletionAuditPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more EmailDeletionAudits that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {emailDeletionAuditFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all EmailDeletionAudits
+     * const emailDeletionAudits = await prisma.emailDeletionAudit.findMany()
+     * 
+     * // Get first 10 EmailDeletionAudits
+     * const emailDeletionAudits = await prisma.emailDeletionAudit.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const emailDeletionAuditWithIdOnly = await prisma.emailDeletionAudit.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends emailDeletionAuditFindManyArgs>(args?: SelectSubset<T, emailDeletionAuditFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$emailDeletionAuditPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a EmailDeletionAudit.
+     * @param {emailDeletionAuditCreateArgs} args - Arguments to create a EmailDeletionAudit.
+     * @example
+     * // Create one EmailDeletionAudit
+     * const EmailDeletionAudit = await prisma.emailDeletionAudit.create({
+     *   data: {
+     *     // ... data to create a EmailDeletionAudit
+     *   }
+     * })
+     * 
+     */
+    create<T extends emailDeletionAuditCreateArgs>(args: SelectSubset<T, emailDeletionAuditCreateArgs<ExtArgs>>): Prisma__emailDeletionAuditClient<$Result.GetResult<Prisma.$emailDeletionAuditPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many EmailDeletionAudits.
+     * @param {emailDeletionAuditCreateManyArgs} args - Arguments to create many EmailDeletionAudits.
+     * @example
+     * // Create many EmailDeletionAudits
+     * const emailDeletionAudit = await prisma.emailDeletionAudit.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends emailDeletionAuditCreateManyArgs>(args?: SelectSubset<T, emailDeletionAuditCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a EmailDeletionAudit.
+     * @param {emailDeletionAuditDeleteArgs} args - Arguments to delete one EmailDeletionAudit.
+     * @example
+     * // Delete one EmailDeletionAudit
+     * const EmailDeletionAudit = await prisma.emailDeletionAudit.delete({
+     *   where: {
+     *     // ... filter to delete one EmailDeletionAudit
+     *   }
+     * })
+     * 
+     */
+    delete<T extends emailDeletionAuditDeleteArgs>(args: SelectSubset<T, emailDeletionAuditDeleteArgs<ExtArgs>>): Prisma__emailDeletionAuditClient<$Result.GetResult<Prisma.$emailDeletionAuditPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one EmailDeletionAudit.
+     * @param {emailDeletionAuditUpdateArgs} args - Arguments to update one EmailDeletionAudit.
+     * @example
+     * // Update one EmailDeletionAudit
+     * const emailDeletionAudit = await prisma.emailDeletionAudit.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends emailDeletionAuditUpdateArgs>(args: SelectSubset<T, emailDeletionAuditUpdateArgs<ExtArgs>>): Prisma__emailDeletionAuditClient<$Result.GetResult<Prisma.$emailDeletionAuditPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more EmailDeletionAudits.
+     * @param {emailDeletionAuditDeleteManyArgs} args - Arguments to filter EmailDeletionAudits to delete.
+     * @example
+     * // Delete a few EmailDeletionAudits
+     * const { count } = await prisma.emailDeletionAudit.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends emailDeletionAuditDeleteManyArgs>(args?: SelectSubset<T, emailDeletionAuditDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more EmailDeletionAudits.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {emailDeletionAuditUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many EmailDeletionAudits
+     * const emailDeletionAudit = await prisma.emailDeletionAudit.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends emailDeletionAuditUpdateManyArgs>(args: SelectSubset<T, emailDeletionAuditUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one EmailDeletionAudit.
+     * @param {emailDeletionAuditUpsertArgs} args - Arguments to update or create a EmailDeletionAudit.
+     * @example
+     * // Update or create a EmailDeletionAudit
+     * const emailDeletionAudit = await prisma.emailDeletionAudit.upsert({
+     *   create: {
+     *     // ... data to create a EmailDeletionAudit
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the EmailDeletionAudit we want to update
+     *   }
+     * })
+     */
+    upsert<T extends emailDeletionAuditUpsertArgs>(args: SelectSubset<T, emailDeletionAuditUpsertArgs<ExtArgs>>): Prisma__emailDeletionAuditClient<$Result.GetResult<Prisma.$emailDeletionAuditPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of EmailDeletionAudits.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {emailDeletionAuditCountArgs} args - Arguments to filter EmailDeletionAudits to count.
+     * @example
+     * // Count the number of EmailDeletionAudits
+     * const count = await prisma.emailDeletionAudit.count({
+     *   where: {
+     *     // ... the filter for the EmailDeletionAudits we want to count
+     *   }
+     * })
+    **/
+    count<T extends emailDeletionAuditCountArgs>(
+      args?: Subset<T, emailDeletionAuditCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], EmailDeletionAuditCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a EmailDeletionAudit.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {EmailDeletionAuditAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends EmailDeletionAuditAggregateArgs>(args: Subset<T, EmailDeletionAuditAggregateArgs>): Prisma.PrismaPromise<GetEmailDeletionAuditAggregateType<T>>
+
+    /**
+     * Group by EmailDeletionAudit.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {emailDeletionAuditGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends emailDeletionAuditGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: emailDeletionAuditGroupByArgs['orderBy'] }
+        : { orderBy?: emailDeletionAuditGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, emailDeletionAuditGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetEmailDeletionAuditGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the emailDeletionAudit model
+   */
+  readonly fields: emailDeletionAuditFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for emailDeletionAudit.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__emailDeletionAuditClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    admin<T extends emailDeletionAudit$adminArgs<ExtArgs> = {}>(args?: Subset<T, emailDeletionAudit$adminArgs<ExtArgs>>): Prisma__adminClient<$Result.GetResult<Prisma.$adminPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the emailDeletionAudit model
+   */
+  interface emailDeletionAuditFieldRefs {
+    readonly id: FieldRef<"emailDeletionAudit", 'BigInt'>
+    readonly correo: FieldRef<"emailDeletionAudit", 'String'>
+    readonly dedupeKey: FieldRef<"emailDeletionAudit", 'String'>
+    readonly clave: FieldRef<"emailDeletionAudit", 'String'>
+    readonly claves: FieldRef<"emailDeletionAudit", 'String'>
+    readonly plataformas: FieldRef<"emailDeletionAudit", 'Json'>
+    readonly contactos: FieldRef<"emailDeletionAudit", 'Json'>
+    readonly registros: FieldRef<"emailDeletionAudit", 'Json'>
+    readonly identificadorOriginal: FieldRef<"emailDeletionAudit", 'String'>
+    readonly adminId: FieldRef<"emailDeletionAudit", 'Int'>
+    readonly eliminadoPor: FieldRef<"emailDeletionAudit", 'String'>
+    readonly motivo: FieldRef<"emailDeletionAudit", 'String'>
+    readonly primeraEliminacion: FieldRef<"emailDeletionAudit", 'DateTime'>
+    readonly fechaEliminacion: FieldRef<"emailDeletionAudit", 'DateTime'>
+    readonly revision: FieldRef<"emailDeletionAudit", 'BigInt'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * emailDeletionAudit findUnique
+   */
+  export type emailDeletionAuditFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the emailDeletionAudit
+     */
+    select?: emailDeletionAuditSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the emailDeletionAudit
+     */
+    omit?: emailDeletionAuditOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: emailDeletionAuditInclude<ExtArgs> | null
+    /**
+     * Filter, which emailDeletionAudit to fetch.
+     */
+    where: emailDeletionAuditWhereUniqueInput
+  }
+
+  /**
+   * emailDeletionAudit findUniqueOrThrow
+   */
+  export type emailDeletionAuditFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the emailDeletionAudit
+     */
+    select?: emailDeletionAuditSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the emailDeletionAudit
+     */
+    omit?: emailDeletionAuditOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: emailDeletionAuditInclude<ExtArgs> | null
+    /**
+     * Filter, which emailDeletionAudit to fetch.
+     */
+    where: emailDeletionAuditWhereUniqueInput
+  }
+
+  /**
+   * emailDeletionAudit findFirst
+   */
+  export type emailDeletionAuditFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the emailDeletionAudit
+     */
+    select?: emailDeletionAuditSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the emailDeletionAudit
+     */
+    omit?: emailDeletionAuditOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: emailDeletionAuditInclude<ExtArgs> | null
+    /**
+     * Filter, which emailDeletionAudit to fetch.
+     */
+    where?: emailDeletionAuditWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of emailDeletionAudits to fetch.
+     */
+    orderBy?: emailDeletionAuditOrderByWithRelationInput | emailDeletionAuditOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for emailDeletionAudits.
+     */
+    cursor?: emailDeletionAuditWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` emailDeletionAudits from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` emailDeletionAudits.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of emailDeletionAudits.
+     */
+    distinct?: EmailDeletionAuditScalarFieldEnum | EmailDeletionAuditScalarFieldEnum[]
+  }
+
+  /**
+   * emailDeletionAudit findFirstOrThrow
+   */
+  export type emailDeletionAuditFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the emailDeletionAudit
+     */
+    select?: emailDeletionAuditSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the emailDeletionAudit
+     */
+    omit?: emailDeletionAuditOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: emailDeletionAuditInclude<ExtArgs> | null
+    /**
+     * Filter, which emailDeletionAudit to fetch.
+     */
+    where?: emailDeletionAuditWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of emailDeletionAudits to fetch.
+     */
+    orderBy?: emailDeletionAuditOrderByWithRelationInput | emailDeletionAuditOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for emailDeletionAudits.
+     */
+    cursor?: emailDeletionAuditWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` emailDeletionAudits from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` emailDeletionAudits.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of emailDeletionAudits.
+     */
+    distinct?: EmailDeletionAuditScalarFieldEnum | EmailDeletionAuditScalarFieldEnum[]
+  }
+
+  /**
+   * emailDeletionAudit findMany
+   */
+  export type emailDeletionAuditFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the emailDeletionAudit
+     */
+    select?: emailDeletionAuditSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the emailDeletionAudit
+     */
+    omit?: emailDeletionAuditOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: emailDeletionAuditInclude<ExtArgs> | null
+    /**
+     * Filter, which emailDeletionAudits to fetch.
+     */
+    where?: emailDeletionAuditWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of emailDeletionAudits to fetch.
+     */
+    orderBy?: emailDeletionAuditOrderByWithRelationInput | emailDeletionAuditOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing emailDeletionAudits.
+     */
+    cursor?: emailDeletionAuditWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` emailDeletionAudits from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` emailDeletionAudits.
+     */
+    skip?: number
+    distinct?: EmailDeletionAuditScalarFieldEnum | EmailDeletionAuditScalarFieldEnum[]
+  }
+
+  /**
+   * emailDeletionAudit create
+   */
+  export type emailDeletionAuditCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the emailDeletionAudit
+     */
+    select?: emailDeletionAuditSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the emailDeletionAudit
+     */
+    omit?: emailDeletionAuditOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: emailDeletionAuditInclude<ExtArgs> | null
+    /**
+     * The data needed to create a emailDeletionAudit.
+     */
+    data: XOR<emailDeletionAuditCreateInput, emailDeletionAuditUncheckedCreateInput>
+  }
+
+  /**
+   * emailDeletionAudit createMany
+   */
+  export type emailDeletionAuditCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many emailDeletionAudits.
+     */
+    data: emailDeletionAuditCreateManyInput | emailDeletionAuditCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * emailDeletionAudit update
+   */
+  export type emailDeletionAuditUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the emailDeletionAudit
+     */
+    select?: emailDeletionAuditSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the emailDeletionAudit
+     */
+    omit?: emailDeletionAuditOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: emailDeletionAuditInclude<ExtArgs> | null
+    /**
+     * The data needed to update a emailDeletionAudit.
+     */
+    data: XOR<emailDeletionAuditUpdateInput, emailDeletionAuditUncheckedUpdateInput>
+    /**
+     * Choose, which emailDeletionAudit to update.
+     */
+    where: emailDeletionAuditWhereUniqueInput
+  }
+
+  /**
+   * emailDeletionAudit updateMany
+   */
+  export type emailDeletionAuditUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update emailDeletionAudits.
+     */
+    data: XOR<emailDeletionAuditUpdateManyMutationInput, emailDeletionAuditUncheckedUpdateManyInput>
+    /**
+     * Filter which emailDeletionAudits to update
+     */
+    where?: emailDeletionAuditWhereInput
+    /**
+     * Limit how many emailDeletionAudits to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * emailDeletionAudit upsert
+   */
+  export type emailDeletionAuditUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the emailDeletionAudit
+     */
+    select?: emailDeletionAuditSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the emailDeletionAudit
+     */
+    omit?: emailDeletionAuditOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: emailDeletionAuditInclude<ExtArgs> | null
+    /**
+     * The filter to search for the emailDeletionAudit to update in case it exists.
+     */
+    where: emailDeletionAuditWhereUniqueInput
+    /**
+     * In case the emailDeletionAudit found by the `where` argument doesn't exist, create a new emailDeletionAudit with this data.
+     */
+    create: XOR<emailDeletionAuditCreateInput, emailDeletionAuditUncheckedCreateInput>
+    /**
+     * In case the emailDeletionAudit was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<emailDeletionAuditUpdateInput, emailDeletionAuditUncheckedUpdateInput>
+  }
+
+  /**
+   * emailDeletionAudit delete
+   */
+  export type emailDeletionAuditDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the emailDeletionAudit
+     */
+    select?: emailDeletionAuditSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the emailDeletionAudit
+     */
+    omit?: emailDeletionAuditOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: emailDeletionAuditInclude<ExtArgs> | null
+    /**
+     * Filter which emailDeletionAudit to delete.
+     */
+    where: emailDeletionAuditWhereUniqueInput
+  }
+
+  /**
+   * emailDeletionAudit deleteMany
+   */
+  export type emailDeletionAuditDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which emailDeletionAudits to delete
+     */
+    where?: emailDeletionAuditWhereInput
+    /**
+     * Limit how many emailDeletionAudits to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * emailDeletionAudit.admin
+   */
+  export type emailDeletionAudit$adminArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the admin
+     */
+    select?: adminSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the admin
+     */
+    omit?: adminOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: adminInclude<ExtArgs> | null
+    where?: adminWhereInput
+  }
+
+  /**
+   * emailDeletionAudit without action
+   */
+  export type emailDeletionAuditDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the emailDeletionAudit
+     */
+    select?: emailDeletionAuditSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the emailDeletionAudit
+     */
+    omit?: emailDeletionAuditOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: emailDeletionAuditInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model accountDataRevision
+   */
+
+  export type AggregateAccountDataRevision = {
+    _count: AccountDataRevisionCountAggregateOutputType | null
+    _avg: AccountDataRevisionAvgAggregateOutputType | null
+    _sum: AccountDataRevisionSumAggregateOutputType | null
+    _min: AccountDataRevisionMinAggregateOutputType | null
+    _max: AccountDataRevisionMaxAggregateOutputType | null
+  }
+
+  export type AccountDataRevisionAvgAggregateOutputType = {
+    id: number | null
+    revision: number | null
+  }
+
+  export type AccountDataRevisionSumAggregateOutputType = {
+    id: number | null
+    revision: bigint | null
+  }
+
+  export type AccountDataRevisionMinAggregateOutputType = {
+    id: number | null
+    revision: bigint | null
+    updatedAt: Date | null
+  }
+
+  export type AccountDataRevisionMaxAggregateOutputType = {
+    id: number | null
+    revision: bigint | null
+    updatedAt: Date | null
+  }
+
+  export type AccountDataRevisionCountAggregateOutputType = {
+    id: number
+    revision: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type AccountDataRevisionAvgAggregateInputType = {
+    id?: true
+    revision?: true
+  }
+
+  export type AccountDataRevisionSumAggregateInputType = {
+    id?: true
+    revision?: true
+  }
+
+  export type AccountDataRevisionMinAggregateInputType = {
+    id?: true
+    revision?: true
+    updatedAt?: true
+  }
+
+  export type AccountDataRevisionMaxAggregateInputType = {
+    id?: true
+    revision?: true
+    updatedAt?: true
+  }
+
+  export type AccountDataRevisionCountAggregateInputType = {
+    id?: true
+    revision?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type AccountDataRevisionAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which accountDataRevision to aggregate.
+     */
+    where?: accountDataRevisionWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of accountDataRevisions to fetch.
+     */
+    orderBy?: accountDataRevisionOrderByWithRelationInput | accountDataRevisionOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: accountDataRevisionWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` accountDataRevisions from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` accountDataRevisions.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned accountDataRevisions
+    **/
+    _count?: true | AccountDataRevisionCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: AccountDataRevisionAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: AccountDataRevisionSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: AccountDataRevisionMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: AccountDataRevisionMaxAggregateInputType
+  }
+
+  export type GetAccountDataRevisionAggregateType<T extends AccountDataRevisionAggregateArgs> = {
+        [P in keyof T & keyof AggregateAccountDataRevision]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateAccountDataRevision[P]>
+      : GetScalarType<T[P], AggregateAccountDataRevision[P]>
+  }
+
+
+
+
+  export type accountDataRevisionGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: accountDataRevisionWhereInput
+    orderBy?: accountDataRevisionOrderByWithAggregationInput | accountDataRevisionOrderByWithAggregationInput[]
+    by: AccountDataRevisionScalarFieldEnum[] | AccountDataRevisionScalarFieldEnum
+    having?: accountDataRevisionScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: AccountDataRevisionCountAggregateInputType | true
+    _avg?: AccountDataRevisionAvgAggregateInputType
+    _sum?: AccountDataRevisionSumAggregateInputType
+    _min?: AccountDataRevisionMinAggregateInputType
+    _max?: AccountDataRevisionMaxAggregateInputType
+  }
+
+  export type AccountDataRevisionGroupByOutputType = {
+    id: number
+    revision: bigint
+    updatedAt: Date
+    _count: AccountDataRevisionCountAggregateOutputType | null
+    _avg: AccountDataRevisionAvgAggregateOutputType | null
+    _sum: AccountDataRevisionSumAggregateOutputType | null
+    _min: AccountDataRevisionMinAggregateOutputType | null
+    _max: AccountDataRevisionMaxAggregateOutputType | null
+  }
+
+  type GetAccountDataRevisionGroupByPayload<T extends accountDataRevisionGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<AccountDataRevisionGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof AccountDataRevisionGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], AccountDataRevisionGroupByOutputType[P]>
+            : GetScalarType<T[P], AccountDataRevisionGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type accountDataRevisionSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    revision?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["accountDataRevision"]>
+
+
+
+  export type accountDataRevisionSelectScalar = {
+    id?: boolean
+    revision?: boolean
+    updatedAt?: boolean
+  }
+
+  export type accountDataRevisionOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "revision" | "updatedAt", ExtArgs["result"]["accountDataRevision"]>
+
+  export type $accountDataRevisionPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "accountDataRevision"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: number
+      revision: bigint
+      updatedAt: Date
+    }, ExtArgs["result"]["accountDataRevision"]>
+    composites: {}
+  }
+
+  type accountDataRevisionGetPayload<S extends boolean | null | undefined | accountDataRevisionDefaultArgs> = $Result.GetResult<Prisma.$accountDataRevisionPayload, S>
+
+  type accountDataRevisionCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<accountDataRevisionFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: AccountDataRevisionCountAggregateInputType | true
+    }
+
+  export interface accountDataRevisionDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['accountDataRevision'], meta: { name: 'accountDataRevision' } }
+    /**
+     * Find zero or one AccountDataRevision that matches the filter.
+     * @param {accountDataRevisionFindUniqueArgs} args - Arguments to find a AccountDataRevision
+     * @example
+     * // Get one AccountDataRevision
+     * const accountDataRevision = await prisma.accountDataRevision.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends accountDataRevisionFindUniqueArgs>(args: SelectSubset<T, accountDataRevisionFindUniqueArgs<ExtArgs>>): Prisma__accountDataRevisionClient<$Result.GetResult<Prisma.$accountDataRevisionPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one AccountDataRevision that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {accountDataRevisionFindUniqueOrThrowArgs} args - Arguments to find a AccountDataRevision
+     * @example
+     * // Get one AccountDataRevision
+     * const accountDataRevision = await prisma.accountDataRevision.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends accountDataRevisionFindUniqueOrThrowArgs>(args: SelectSubset<T, accountDataRevisionFindUniqueOrThrowArgs<ExtArgs>>): Prisma__accountDataRevisionClient<$Result.GetResult<Prisma.$accountDataRevisionPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first AccountDataRevision that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {accountDataRevisionFindFirstArgs} args - Arguments to find a AccountDataRevision
+     * @example
+     * // Get one AccountDataRevision
+     * const accountDataRevision = await prisma.accountDataRevision.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends accountDataRevisionFindFirstArgs>(args?: SelectSubset<T, accountDataRevisionFindFirstArgs<ExtArgs>>): Prisma__accountDataRevisionClient<$Result.GetResult<Prisma.$accountDataRevisionPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first AccountDataRevision that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {accountDataRevisionFindFirstOrThrowArgs} args - Arguments to find a AccountDataRevision
+     * @example
+     * // Get one AccountDataRevision
+     * const accountDataRevision = await prisma.accountDataRevision.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends accountDataRevisionFindFirstOrThrowArgs>(args?: SelectSubset<T, accountDataRevisionFindFirstOrThrowArgs<ExtArgs>>): Prisma__accountDataRevisionClient<$Result.GetResult<Prisma.$accountDataRevisionPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more AccountDataRevisions that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {accountDataRevisionFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all AccountDataRevisions
+     * const accountDataRevisions = await prisma.accountDataRevision.findMany()
+     * 
+     * // Get first 10 AccountDataRevisions
+     * const accountDataRevisions = await prisma.accountDataRevision.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const accountDataRevisionWithIdOnly = await prisma.accountDataRevision.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends accountDataRevisionFindManyArgs>(args?: SelectSubset<T, accountDataRevisionFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$accountDataRevisionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a AccountDataRevision.
+     * @param {accountDataRevisionCreateArgs} args - Arguments to create a AccountDataRevision.
+     * @example
+     * // Create one AccountDataRevision
+     * const AccountDataRevision = await prisma.accountDataRevision.create({
+     *   data: {
+     *     // ... data to create a AccountDataRevision
+     *   }
+     * })
+     * 
+     */
+    create<T extends accountDataRevisionCreateArgs>(args: SelectSubset<T, accountDataRevisionCreateArgs<ExtArgs>>): Prisma__accountDataRevisionClient<$Result.GetResult<Prisma.$accountDataRevisionPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many AccountDataRevisions.
+     * @param {accountDataRevisionCreateManyArgs} args - Arguments to create many AccountDataRevisions.
+     * @example
+     * // Create many AccountDataRevisions
+     * const accountDataRevision = await prisma.accountDataRevision.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends accountDataRevisionCreateManyArgs>(args?: SelectSubset<T, accountDataRevisionCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Delete a AccountDataRevision.
+     * @param {accountDataRevisionDeleteArgs} args - Arguments to delete one AccountDataRevision.
+     * @example
+     * // Delete one AccountDataRevision
+     * const AccountDataRevision = await prisma.accountDataRevision.delete({
+     *   where: {
+     *     // ... filter to delete one AccountDataRevision
+     *   }
+     * })
+     * 
+     */
+    delete<T extends accountDataRevisionDeleteArgs>(args: SelectSubset<T, accountDataRevisionDeleteArgs<ExtArgs>>): Prisma__accountDataRevisionClient<$Result.GetResult<Prisma.$accountDataRevisionPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one AccountDataRevision.
+     * @param {accountDataRevisionUpdateArgs} args - Arguments to update one AccountDataRevision.
+     * @example
+     * // Update one AccountDataRevision
+     * const accountDataRevision = await prisma.accountDataRevision.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends accountDataRevisionUpdateArgs>(args: SelectSubset<T, accountDataRevisionUpdateArgs<ExtArgs>>): Prisma__accountDataRevisionClient<$Result.GetResult<Prisma.$accountDataRevisionPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more AccountDataRevisions.
+     * @param {accountDataRevisionDeleteManyArgs} args - Arguments to filter AccountDataRevisions to delete.
+     * @example
+     * // Delete a few AccountDataRevisions
+     * const { count } = await prisma.accountDataRevision.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends accountDataRevisionDeleteManyArgs>(args?: SelectSubset<T, accountDataRevisionDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more AccountDataRevisions.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {accountDataRevisionUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many AccountDataRevisions
+     * const accountDataRevision = await prisma.accountDataRevision.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends accountDataRevisionUpdateManyArgs>(args: SelectSubset<T, accountDataRevisionUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one AccountDataRevision.
+     * @param {accountDataRevisionUpsertArgs} args - Arguments to update or create a AccountDataRevision.
+     * @example
+     * // Update or create a AccountDataRevision
+     * const accountDataRevision = await prisma.accountDataRevision.upsert({
+     *   create: {
+     *     // ... data to create a AccountDataRevision
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the AccountDataRevision we want to update
+     *   }
+     * })
+     */
+    upsert<T extends accountDataRevisionUpsertArgs>(args: SelectSubset<T, accountDataRevisionUpsertArgs<ExtArgs>>): Prisma__accountDataRevisionClient<$Result.GetResult<Prisma.$accountDataRevisionPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of AccountDataRevisions.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {accountDataRevisionCountArgs} args - Arguments to filter AccountDataRevisions to count.
+     * @example
+     * // Count the number of AccountDataRevisions
+     * const count = await prisma.accountDataRevision.count({
+     *   where: {
+     *     // ... the filter for the AccountDataRevisions we want to count
+     *   }
+     * })
+    **/
+    count<T extends accountDataRevisionCountArgs>(
+      args?: Subset<T, accountDataRevisionCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], AccountDataRevisionCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a AccountDataRevision.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AccountDataRevisionAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends AccountDataRevisionAggregateArgs>(args: Subset<T, AccountDataRevisionAggregateArgs>): Prisma.PrismaPromise<GetAccountDataRevisionAggregateType<T>>
+
+    /**
+     * Group by AccountDataRevision.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {accountDataRevisionGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends accountDataRevisionGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: accountDataRevisionGroupByArgs['orderBy'] }
+        : { orderBy?: accountDataRevisionGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, accountDataRevisionGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetAccountDataRevisionGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the accountDataRevision model
+   */
+  readonly fields: accountDataRevisionFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for accountDataRevision.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__accountDataRevisionClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the accountDataRevision model
+   */
+  interface accountDataRevisionFieldRefs {
+    readonly id: FieldRef<"accountDataRevision", 'Int'>
+    readonly revision: FieldRef<"accountDataRevision", 'BigInt'>
+    readonly updatedAt: FieldRef<"accountDataRevision", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * accountDataRevision findUnique
+   */
+  export type accountDataRevisionFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the accountDataRevision
+     */
+    select?: accountDataRevisionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the accountDataRevision
+     */
+    omit?: accountDataRevisionOmit<ExtArgs> | null
+    /**
+     * Filter, which accountDataRevision to fetch.
+     */
+    where: accountDataRevisionWhereUniqueInput
+  }
+
+  /**
+   * accountDataRevision findUniqueOrThrow
+   */
+  export type accountDataRevisionFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the accountDataRevision
+     */
+    select?: accountDataRevisionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the accountDataRevision
+     */
+    omit?: accountDataRevisionOmit<ExtArgs> | null
+    /**
+     * Filter, which accountDataRevision to fetch.
+     */
+    where: accountDataRevisionWhereUniqueInput
+  }
+
+  /**
+   * accountDataRevision findFirst
+   */
+  export type accountDataRevisionFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the accountDataRevision
+     */
+    select?: accountDataRevisionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the accountDataRevision
+     */
+    omit?: accountDataRevisionOmit<ExtArgs> | null
+    /**
+     * Filter, which accountDataRevision to fetch.
+     */
+    where?: accountDataRevisionWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of accountDataRevisions to fetch.
+     */
+    orderBy?: accountDataRevisionOrderByWithRelationInput | accountDataRevisionOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for accountDataRevisions.
+     */
+    cursor?: accountDataRevisionWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` accountDataRevisions from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` accountDataRevisions.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of accountDataRevisions.
+     */
+    distinct?: AccountDataRevisionScalarFieldEnum | AccountDataRevisionScalarFieldEnum[]
+  }
+
+  /**
+   * accountDataRevision findFirstOrThrow
+   */
+  export type accountDataRevisionFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the accountDataRevision
+     */
+    select?: accountDataRevisionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the accountDataRevision
+     */
+    omit?: accountDataRevisionOmit<ExtArgs> | null
+    /**
+     * Filter, which accountDataRevision to fetch.
+     */
+    where?: accountDataRevisionWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of accountDataRevisions to fetch.
+     */
+    orderBy?: accountDataRevisionOrderByWithRelationInput | accountDataRevisionOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for accountDataRevisions.
+     */
+    cursor?: accountDataRevisionWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` accountDataRevisions from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` accountDataRevisions.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of accountDataRevisions.
+     */
+    distinct?: AccountDataRevisionScalarFieldEnum | AccountDataRevisionScalarFieldEnum[]
+  }
+
+  /**
+   * accountDataRevision findMany
+   */
+  export type accountDataRevisionFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the accountDataRevision
+     */
+    select?: accountDataRevisionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the accountDataRevision
+     */
+    omit?: accountDataRevisionOmit<ExtArgs> | null
+    /**
+     * Filter, which accountDataRevisions to fetch.
+     */
+    where?: accountDataRevisionWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of accountDataRevisions to fetch.
+     */
+    orderBy?: accountDataRevisionOrderByWithRelationInput | accountDataRevisionOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing accountDataRevisions.
+     */
+    cursor?: accountDataRevisionWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` accountDataRevisions from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` accountDataRevisions.
+     */
+    skip?: number
+    distinct?: AccountDataRevisionScalarFieldEnum | AccountDataRevisionScalarFieldEnum[]
+  }
+
+  /**
+   * accountDataRevision create
+   */
+  export type accountDataRevisionCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the accountDataRevision
+     */
+    select?: accountDataRevisionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the accountDataRevision
+     */
+    omit?: accountDataRevisionOmit<ExtArgs> | null
+    /**
+     * The data needed to create a accountDataRevision.
+     */
+    data: XOR<accountDataRevisionCreateInput, accountDataRevisionUncheckedCreateInput>
+  }
+
+  /**
+   * accountDataRevision createMany
+   */
+  export type accountDataRevisionCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many accountDataRevisions.
+     */
+    data: accountDataRevisionCreateManyInput | accountDataRevisionCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * accountDataRevision update
+   */
+  export type accountDataRevisionUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the accountDataRevision
+     */
+    select?: accountDataRevisionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the accountDataRevision
+     */
+    omit?: accountDataRevisionOmit<ExtArgs> | null
+    /**
+     * The data needed to update a accountDataRevision.
+     */
+    data: XOR<accountDataRevisionUpdateInput, accountDataRevisionUncheckedUpdateInput>
+    /**
+     * Choose, which accountDataRevision to update.
+     */
+    where: accountDataRevisionWhereUniqueInput
+  }
+
+  /**
+   * accountDataRevision updateMany
+   */
+  export type accountDataRevisionUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update accountDataRevisions.
+     */
+    data: XOR<accountDataRevisionUpdateManyMutationInput, accountDataRevisionUncheckedUpdateManyInput>
+    /**
+     * Filter which accountDataRevisions to update
+     */
+    where?: accountDataRevisionWhereInput
+    /**
+     * Limit how many accountDataRevisions to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * accountDataRevision upsert
+   */
+  export type accountDataRevisionUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the accountDataRevision
+     */
+    select?: accountDataRevisionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the accountDataRevision
+     */
+    omit?: accountDataRevisionOmit<ExtArgs> | null
+    /**
+     * The filter to search for the accountDataRevision to update in case it exists.
+     */
+    where: accountDataRevisionWhereUniqueInput
+    /**
+     * In case the accountDataRevision found by the `where` argument doesn't exist, create a new accountDataRevision with this data.
+     */
+    create: XOR<accountDataRevisionCreateInput, accountDataRevisionUncheckedCreateInput>
+    /**
+     * In case the accountDataRevision was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<accountDataRevisionUpdateInput, accountDataRevisionUncheckedUpdateInput>
+  }
+
+  /**
+   * accountDataRevision delete
+   */
+  export type accountDataRevisionDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the accountDataRevision
+     */
+    select?: accountDataRevisionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the accountDataRevision
+     */
+    omit?: accountDataRevisionOmit<ExtArgs> | null
+    /**
+     * Filter which accountDataRevision to delete.
+     */
+    where: accountDataRevisionWhereUniqueInput
+  }
+
+  /**
+   * accountDataRevision deleteMany
+   */
+  export type accountDataRevisionDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which accountDataRevisions to delete
+     */
+    where?: accountDataRevisionWhereInput
+    /**
+     * Limit how many accountDataRevisions to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * accountDataRevision without action
+   */
+  export type accountDataRevisionDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the accountDataRevision
+     */
+    select?: accountDataRevisionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the accountDataRevision
+     */
+    omit?: accountDataRevisionOmit<ExtArgs> | null
   }
 
 
@@ -15410,6 +17599,36 @@ export namespace Prisma {
   export type AdminScalarFieldEnum = (typeof AdminScalarFieldEnum)[keyof typeof AdminScalarFieldEnum]
 
 
+  export const EmailDeletionAuditScalarFieldEnum: {
+    id: 'id',
+    correo: 'correo',
+    dedupeKey: 'dedupeKey',
+    clave: 'clave',
+    claves: 'claves',
+    plataformas: 'plataformas',
+    contactos: 'contactos',
+    registros: 'registros',
+    identificadorOriginal: 'identificadorOriginal',
+    adminId: 'adminId',
+    eliminadoPor: 'eliminadoPor',
+    motivo: 'motivo',
+    primeraEliminacion: 'primeraEliminacion',
+    fechaEliminacion: 'fechaEliminacion',
+    revision: 'revision'
+  };
+
+  export type EmailDeletionAuditScalarFieldEnum = (typeof EmailDeletionAuditScalarFieldEnum)[keyof typeof EmailDeletionAuditScalarFieldEnum]
+
+
+  export const AccountDataRevisionScalarFieldEnum: {
+    id: 'id',
+    revision: 'revision',
+    updatedAt: 'updatedAt'
+  };
+
+  export type AccountDataRevisionScalarFieldEnum = (typeof AccountDataRevisionScalarFieldEnum)[keyof typeof AccountDataRevisionScalarFieldEnum]
+
+
   export const DeletedAccountHistoryScalarFieldEnum: {
     id: 'id',
     dedupeKey: 'dedupeKey',
@@ -15589,6 +17808,19 @@ export namespace Prisma {
   };
 
   export type adminOrderByRelevanceFieldEnum = (typeof adminOrderByRelevanceFieldEnum)[keyof typeof adminOrderByRelevanceFieldEnum]
+
+
+  export const emailDeletionAuditOrderByRelevanceFieldEnum: {
+    correo: 'correo',
+    dedupeKey: 'dedupeKey',
+    clave: 'clave',
+    claves: 'claves',
+    identificadorOriginal: 'identificadorOriginal',
+    eliminadoPor: 'eliminadoPor',
+    motivo: 'motivo'
+  };
+
+  export type emailDeletionAuditOrderByRelevanceFieldEnum = (typeof emailDeletionAuditOrderByRelevanceFieldEnum)[keyof typeof emailDeletionAuditOrderByRelevanceFieldEnum]
 
 
   export const deletedAccountHistoryOrderByRelevanceFieldEnum: {
@@ -16383,6 +18615,7 @@ export namespace Prisma {
     resetTokens?: AdminPasswordResetTokenListRelationFilter
     securityEvents?: AdminSecurityEventListRelationFilter
     deletionHistory?: DeletedAccountHistoryListRelationFilter
+    emailDeletions?: EmailDeletionAuditListRelationFilter
   }
 
   export type adminOrderByWithRelationInput = {
@@ -16394,6 +18627,7 @@ export namespace Prisma {
     resetTokens?: adminPasswordResetTokenOrderByRelationAggregateInput
     securityEvents?: adminSecurityEventOrderByRelationAggregateInput
     deletionHistory?: deletedAccountHistoryOrderByRelationAggregateInput
+    emailDeletions?: emailDeletionAuditOrderByRelationAggregateInput
     _relevance?: adminOrderByRelevanceInput
   }
 
@@ -16409,6 +18643,7 @@ export namespace Prisma {
     resetTokens?: AdminPasswordResetTokenListRelationFilter
     securityEvents?: AdminSecurityEventListRelationFilter
     deletionHistory?: DeletedAccountHistoryListRelationFilter
+    emailDeletions?: EmailDeletionAuditListRelationFilter
   }, "id" | "usuario" | "email">
 
   export type adminOrderByWithAggregationInput = {
@@ -16433,6 +18668,158 @@ export namespace Prisma {
     email?: StringNullableWithAggregatesFilter<"admin"> | string | null
     contrasena?: StringWithAggregatesFilter<"admin"> | string
     creado_en?: DateTimeWithAggregatesFilter<"admin"> | Date | string
+  }
+
+  export type emailDeletionAuditWhereInput = {
+    AND?: emailDeletionAuditWhereInput | emailDeletionAuditWhereInput[]
+    OR?: emailDeletionAuditWhereInput[]
+    NOT?: emailDeletionAuditWhereInput | emailDeletionAuditWhereInput[]
+    id?: BigIntFilter<"emailDeletionAudit"> | bigint | number
+    correo?: StringFilter<"emailDeletionAudit"> | string
+    dedupeKey?: StringNullableFilter<"emailDeletionAudit"> | string | null
+    clave?: StringNullableFilter<"emailDeletionAudit"> | string | null
+    claves?: StringFilter<"emailDeletionAudit"> | string
+    plataformas?: JsonFilter<"emailDeletionAudit">
+    contactos?: JsonFilter<"emailDeletionAudit">
+    registros?: JsonFilter<"emailDeletionAudit">
+    identificadorOriginal?: StringNullableFilter<"emailDeletionAudit"> | string | null
+    adminId?: IntNullableFilter<"emailDeletionAudit"> | number | null
+    eliminadoPor?: StringFilter<"emailDeletionAudit"> | string
+    motivo?: StringNullableFilter<"emailDeletionAudit"> | string | null
+    primeraEliminacion?: DateTimeFilter<"emailDeletionAudit"> | Date | string
+    fechaEliminacion?: DateTimeFilter<"emailDeletionAudit"> | Date | string
+    revision?: BigIntFilter<"emailDeletionAudit"> | bigint | number
+    admin?: XOR<AdminNullableScalarRelationFilter, adminWhereInput> | null
+  }
+
+  export type emailDeletionAuditOrderByWithRelationInput = {
+    id?: SortOrder
+    correo?: SortOrder
+    dedupeKey?: SortOrderInput | SortOrder
+    clave?: SortOrderInput | SortOrder
+    claves?: SortOrder
+    plataformas?: SortOrder
+    contactos?: SortOrder
+    registros?: SortOrder
+    identificadorOriginal?: SortOrderInput | SortOrder
+    adminId?: SortOrderInput | SortOrder
+    eliminadoPor?: SortOrder
+    motivo?: SortOrderInput | SortOrder
+    primeraEliminacion?: SortOrder
+    fechaEliminacion?: SortOrder
+    revision?: SortOrder
+    admin?: adminOrderByWithRelationInput
+    _relevance?: emailDeletionAuditOrderByRelevanceInput
+  }
+
+  export type emailDeletionAuditWhereUniqueInput = Prisma.AtLeast<{
+    id?: bigint | number
+    dedupeKey?: string
+    AND?: emailDeletionAuditWhereInput | emailDeletionAuditWhereInput[]
+    OR?: emailDeletionAuditWhereInput[]
+    NOT?: emailDeletionAuditWhereInput | emailDeletionAuditWhereInput[]
+    correo?: StringFilter<"emailDeletionAudit"> | string
+    clave?: StringNullableFilter<"emailDeletionAudit"> | string | null
+    claves?: StringFilter<"emailDeletionAudit"> | string
+    plataformas?: JsonFilter<"emailDeletionAudit">
+    contactos?: JsonFilter<"emailDeletionAudit">
+    registros?: JsonFilter<"emailDeletionAudit">
+    identificadorOriginal?: StringNullableFilter<"emailDeletionAudit"> | string | null
+    adminId?: IntNullableFilter<"emailDeletionAudit"> | number | null
+    eliminadoPor?: StringFilter<"emailDeletionAudit"> | string
+    motivo?: StringNullableFilter<"emailDeletionAudit"> | string | null
+    primeraEliminacion?: DateTimeFilter<"emailDeletionAudit"> | Date | string
+    fechaEliminacion?: DateTimeFilter<"emailDeletionAudit"> | Date | string
+    revision?: BigIntFilter<"emailDeletionAudit"> | bigint | number
+    admin?: XOR<AdminNullableScalarRelationFilter, adminWhereInput> | null
+  }, "id" | "dedupeKey">
+
+  export type emailDeletionAuditOrderByWithAggregationInput = {
+    id?: SortOrder
+    correo?: SortOrder
+    dedupeKey?: SortOrderInput | SortOrder
+    clave?: SortOrderInput | SortOrder
+    claves?: SortOrder
+    plataformas?: SortOrder
+    contactos?: SortOrder
+    registros?: SortOrder
+    identificadorOriginal?: SortOrderInput | SortOrder
+    adminId?: SortOrderInput | SortOrder
+    eliminadoPor?: SortOrder
+    motivo?: SortOrderInput | SortOrder
+    primeraEliminacion?: SortOrder
+    fechaEliminacion?: SortOrder
+    revision?: SortOrder
+    _count?: emailDeletionAuditCountOrderByAggregateInput
+    _avg?: emailDeletionAuditAvgOrderByAggregateInput
+    _max?: emailDeletionAuditMaxOrderByAggregateInput
+    _min?: emailDeletionAuditMinOrderByAggregateInput
+    _sum?: emailDeletionAuditSumOrderByAggregateInput
+  }
+
+  export type emailDeletionAuditScalarWhereWithAggregatesInput = {
+    AND?: emailDeletionAuditScalarWhereWithAggregatesInput | emailDeletionAuditScalarWhereWithAggregatesInput[]
+    OR?: emailDeletionAuditScalarWhereWithAggregatesInput[]
+    NOT?: emailDeletionAuditScalarWhereWithAggregatesInput | emailDeletionAuditScalarWhereWithAggregatesInput[]
+    id?: BigIntWithAggregatesFilter<"emailDeletionAudit"> | bigint | number
+    correo?: StringWithAggregatesFilter<"emailDeletionAudit"> | string
+    dedupeKey?: StringNullableWithAggregatesFilter<"emailDeletionAudit"> | string | null
+    clave?: StringNullableWithAggregatesFilter<"emailDeletionAudit"> | string | null
+    claves?: StringWithAggregatesFilter<"emailDeletionAudit"> | string
+    plataformas?: JsonWithAggregatesFilter<"emailDeletionAudit">
+    contactos?: JsonWithAggregatesFilter<"emailDeletionAudit">
+    registros?: JsonWithAggregatesFilter<"emailDeletionAudit">
+    identificadorOriginal?: StringNullableWithAggregatesFilter<"emailDeletionAudit"> | string | null
+    adminId?: IntNullableWithAggregatesFilter<"emailDeletionAudit"> | number | null
+    eliminadoPor?: StringWithAggregatesFilter<"emailDeletionAudit"> | string
+    motivo?: StringNullableWithAggregatesFilter<"emailDeletionAudit"> | string | null
+    primeraEliminacion?: DateTimeWithAggregatesFilter<"emailDeletionAudit"> | Date | string
+    fechaEliminacion?: DateTimeWithAggregatesFilter<"emailDeletionAudit"> | Date | string
+    revision?: BigIntWithAggregatesFilter<"emailDeletionAudit"> | bigint | number
+  }
+
+  export type accountDataRevisionWhereInput = {
+    AND?: accountDataRevisionWhereInput | accountDataRevisionWhereInput[]
+    OR?: accountDataRevisionWhereInput[]
+    NOT?: accountDataRevisionWhereInput | accountDataRevisionWhereInput[]
+    id?: IntFilter<"accountDataRevision"> | number
+    revision?: BigIntFilter<"accountDataRevision"> | bigint | number
+    updatedAt?: DateTimeFilter<"accountDataRevision"> | Date | string
+  }
+
+  export type accountDataRevisionOrderByWithRelationInput = {
+    id?: SortOrder
+    revision?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type accountDataRevisionWhereUniqueInput = Prisma.AtLeast<{
+    id?: number
+    AND?: accountDataRevisionWhereInput | accountDataRevisionWhereInput[]
+    OR?: accountDataRevisionWhereInput[]
+    NOT?: accountDataRevisionWhereInput | accountDataRevisionWhereInput[]
+    revision?: BigIntFilter<"accountDataRevision"> | bigint | number
+    updatedAt?: DateTimeFilter<"accountDataRevision"> | Date | string
+  }, "id">
+
+  export type accountDataRevisionOrderByWithAggregationInput = {
+    id?: SortOrder
+    revision?: SortOrder
+    updatedAt?: SortOrder
+    _count?: accountDataRevisionCountOrderByAggregateInput
+    _avg?: accountDataRevisionAvgOrderByAggregateInput
+    _max?: accountDataRevisionMaxOrderByAggregateInput
+    _min?: accountDataRevisionMinOrderByAggregateInput
+    _sum?: accountDataRevisionSumOrderByAggregateInput
+  }
+
+  export type accountDataRevisionScalarWhereWithAggregatesInput = {
+    AND?: accountDataRevisionScalarWhereWithAggregatesInput | accountDataRevisionScalarWhereWithAggregatesInput[]
+    OR?: accountDataRevisionScalarWhereWithAggregatesInput[]
+    NOT?: accountDataRevisionScalarWhereWithAggregatesInput | accountDataRevisionScalarWhereWithAggregatesInput[]
+    id?: IntWithAggregatesFilter<"accountDataRevision"> | number
+    revision?: BigIntWithAggregatesFilter<"accountDataRevision"> | bigint | number
+    updatedAt?: DateTimeWithAggregatesFilter<"accountDataRevision"> | Date | string
   }
 
   export type deletedAccountHistoryWhereInput = {
@@ -17390,6 +19777,7 @@ export namespace Prisma {
     resetTokens?: adminPasswordResetTokenCreateNestedManyWithoutAdminInput
     securityEvents?: adminSecurityEventCreateNestedManyWithoutAdminInput
     deletionHistory?: deletedAccountHistoryCreateNestedManyWithoutEliminadoPorInput
+    emailDeletions?: emailDeletionAuditCreateNestedManyWithoutAdminInput
   }
 
   export type adminUncheckedCreateInput = {
@@ -17401,6 +19789,7 @@ export namespace Prisma {
     resetTokens?: adminPasswordResetTokenUncheckedCreateNestedManyWithoutAdminInput
     securityEvents?: adminSecurityEventUncheckedCreateNestedManyWithoutAdminInput
     deletionHistory?: deletedAccountHistoryUncheckedCreateNestedManyWithoutEliminadoPorInput
+    emailDeletions?: emailDeletionAuditUncheckedCreateNestedManyWithoutAdminInput
   }
 
   export type adminUpdateInput = {
@@ -17411,6 +19800,7 @@ export namespace Prisma {
     resetTokens?: adminPasswordResetTokenUpdateManyWithoutAdminNestedInput
     securityEvents?: adminSecurityEventUpdateManyWithoutAdminNestedInput
     deletionHistory?: deletedAccountHistoryUpdateManyWithoutEliminadoPorNestedInput
+    emailDeletions?: emailDeletionAuditUpdateManyWithoutAdminNestedInput
   }
 
   export type adminUncheckedUpdateInput = {
@@ -17422,6 +19812,7 @@ export namespace Prisma {
     resetTokens?: adminPasswordResetTokenUncheckedUpdateManyWithoutAdminNestedInput
     securityEvents?: adminSecurityEventUncheckedUpdateManyWithoutAdminNestedInput
     deletionHistory?: deletedAccountHistoryUncheckedUpdateManyWithoutEliminadoPorNestedInput
+    emailDeletions?: emailDeletionAuditUncheckedUpdateManyWithoutAdminNestedInput
   }
 
   export type adminCreateManyInput = {
@@ -17445,6 +19836,173 @@ export namespace Prisma {
     email?: NullableStringFieldUpdateOperationsInput | string | null
     contrasena?: StringFieldUpdateOperationsInput | string
     creado_en?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type emailDeletionAuditCreateInput = {
+    id?: bigint | number
+    correo: string
+    dedupeKey?: string | null
+    clave?: string | null
+    claves: string
+    plataformas: JsonNullValueInput | InputJsonValue
+    contactos: JsonNullValueInput | InputJsonValue
+    registros: JsonNullValueInput | InputJsonValue
+    identificadorOriginal?: string | null
+    eliminadoPor: string
+    motivo?: string | null
+    primeraEliminacion?: Date | string
+    fechaEliminacion?: Date | string
+    revision: bigint | number
+    admin?: adminCreateNestedOneWithoutEmailDeletionsInput
+  }
+
+  export type emailDeletionAuditUncheckedCreateInput = {
+    id?: bigint | number
+    correo: string
+    dedupeKey?: string | null
+    clave?: string | null
+    claves: string
+    plataformas: JsonNullValueInput | InputJsonValue
+    contactos: JsonNullValueInput | InputJsonValue
+    registros: JsonNullValueInput | InputJsonValue
+    identificadorOriginal?: string | null
+    adminId?: number | null
+    eliminadoPor: string
+    motivo?: string | null
+    primeraEliminacion?: Date | string
+    fechaEliminacion?: Date | string
+    revision: bigint | number
+  }
+
+  export type emailDeletionAuditUpdateInput = {
+    id?: BigIntFieldUpdateOperationsInput | bigint | number
+    correo?: StringFieldUpdateOperationsInput | string
+    dedupeKey?: NullableStringFieldUpdateOperationsInput | string | null
+    clave?: NullableStringFieldUpdateOperationsInput | string | null
+    claves?: StringFieldUpdateOperationsInput | string
+    plataformas?: JsonNullValueInput | InputJsonValue
+    contactos?: JsonNullValueInput | InputJsonValue
+    registros?: JsonNullValueInput | InputJsonValue
+    identificadorOriginal?: NullableStringFieldUpdateOperationsInput | string | null
+    eliminadoPor?: StringFieldUpdateOperationsInput | string
+    motivo?: NullableStringFieldUpdateOperationsInput | string | null
+    primeraEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    fechaEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    revision?: BigIntFieldUpdateOperationsInput | bigint | number
+    admin?: adminUpdateOneWithoutEmailDeletionsNestedInput
+  }
+
+  export type emailDeletionAuditUncheckedUpdateInput = {
+    id?: BigIntFieldUpdateOperationsInput | bigint | number
+    correo?: StringFieldUpdateOperationsInput | string
+    dedupeKey?: NullableStringFieldUpdateOperationsInput | string | null
+    clave?: NullableStringFieldUpdateOperationsInput | string | null
+    claves?: StringFieldUpdateOperationsInput | string
+    plataformas?: JsonNullValueInput | InputJsonValue
+    contactos?: JsonNullValueInput | InputJsonValue
+    registros?: JsonNullValueInput | InputJsonValue
+    identificadorOriginal?: NullableStringFieldUpdateOperationsInput | string | null
+    adminId?: NullableIntFieldUpdateOperationsInput | number | null
+    eliminadoPor?: StringFieldUpdateOperationsInput | string
+    motivo?: NullableStringFieldUpdateOperationsInput | string | null
+    primeraEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    fechaEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    revision?: BigIntFieldUpdateOperationsInput | bigint | number
+  }
+
+  export type emailDeletionAuditCreateManyInput = {
+    id?: bigint | number
+    correo: string
+    dedupeKey?: string | null
+    clave?: string | null
+    claves: string
+    plataformas: JsonNullValueInput | InputJsonValue
+    contactos: JsonNullValueInput | InputJsonValue
+    registros: JsonNullValueInput | InputJsonValue
+    identificadorOriginal?: string | null
+    adminId?: number | null
+    eliminadoPor: string
+    motivo?: string | null
+    primeraEliminacion?: Date | string
+    fechaEliminacion?: Date | string
+    revision: bigint | number
+  }
+
+  export type emailDeletionAuditUpdateManyMutationInput = {
+    id?: BigIntFieldUpdateOperationsInput | bigint | number
+    correo?: StringFieldUpdateOperationsInput | string
+    dedupeKey?: NullableStringFieldUpdateOperationsInput | string | null
+    clave?: NullableStringFieldUpdateOperationsInput | string | null
+    claves?: StringFieldUpdateOperationsInput | string
+    plataformas?: JsonNullValueInput | InputJsonValue
+    contactos?: JsonNullValueInput | InputJsonValue
+    registros?: JsonNullValueInput | InputJsonValue
+    identificadorOriginal?: NullableStringFieldUpdateOperationsInput | string | null
+    eliminadoPor?: StringFieldUpdateOperationsInput | string
+    motivo?: NullableStringFieldUpdateOperationsInput | string | null
+    primeraEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    fechaEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    revision?: BigIntFieldUpdateOperationsInput | bigint | number
+  }
+
+  export type emailDeletionAuditUncheckedUpdateManyInput = {
+    id?: BigIntFieldUpdateOperationsInput | bigint | number
+    correo?: StringFieldUpdateOperationsInput | string
+    dedupeKey?: NullableStringFieldUpdateOperationsInput | string | null
+    clave?: NullableStringFieldUpdateOperationsInput | string | null
+    claves?: StringFieldUpdateOperationsInput | string
+    plataformas?: JsonNullValueInput | InputJsonValue
+    contactos?: JsonNullValueInput | InputJsonValue
+    registros?: JsonNullValueInput | InputJsonValue
+    identificadorOriginal?: NullableStringFieldUpdateOperationsInput | string | null
+    adminId?: NullableIntFieldUpdateOperationsInput | number | null
+    eliminadoPor?: StringFieldUpdateOperationsInput | string
+    motivo?: NullableStringFieldUpdateOperationsInput | string | null
+    primeraEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    fechaEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    revision?: BigIntFieldUpdateOperationsInput | bigint | number
+  }
+
+  export type accountDataRevisionCreateInput = {
+    id: number
+    revision?: bigint | number
+    updatedAt?: Date | string
+  }
+
+  export type accountDataRevisionUncheckedCreateInput = {
+    id: number
+    revision?: bigint | number
+    updatedAt?: Date | string
+  }
+
+  export type accountDataRevisionUpdateInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    revision?: BigIntFieldUpdateOperationsInput | bigint | number
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type accountDataRevisionUncheckedUpdateInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    revision?: BigIntFieldUpdateOperationsInput | bigint | number
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type accountDataRevisionCreateManyInput = {
+    id: number
+    revision?: bigint | number
+    updatedAt?: Date | string
+  }
+
+  export type accountDataRevisionUpdateManyMutationInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    revision?: BigIntFieldUpdateOperationsInput | bigint | number
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type accountDataRevisionUncheckedUpdateManyInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    revision?: BigIntFieldUpdateOperationsInput | bigint | number
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type deletedAccountHistoryCreateInput = {
@@ -18645,6 +21203,12 @@ export namespace Prisma {
     none?: deletedAccountHistoryWhereInput
   }
 
+  export type EmailDeletionAuditListRelationFilter = {
+    every?: emailDeletionAuditWhereInput
+    some?: emailDeletionAuditWhereInput
+    none?: emailDeletionAuditWhereInput
+  }
+
   export type adminPasswordResetTokenOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
@@ -18654,6 +21218,10 @@ export namespace Prisma {
   }
 
   export type deletedAccountHistoryOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type emailDeletionAuditOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -18698,6 +21266,100 @@ export namespace Prisma {
   export type AdminNullableScalarRelationFilter = {
     is?: adminWhereInput | null
     isNot?: adminWhereInput | null
+  }
+
+  export type emailDeletionAuditOrderByRelevanceInput = {
+    fields: emailDeletionAuditOrderByRelevanceFieldEnum | emailDeletionAuditOrderByRelevanceFieldEnum[]
+    sort: SortOrder
+    search: string
+  }
+
+  export type emailDeletionAuditCountOrderByAggregateInput = {
+    id?: SortOrder
+    correo?: SortOrder
+    dedupeKey?: SortOrder
+    clave?: SortOrder
+    claves?: SortOrder
+    plataformas?: SortOrder
+    contactos?: SortOrder
+    registros?: SortOrder
+    identificadorOriginal?: SortOrder
+    adminId?: SortOrder
+    eliminadoPor?: SortOrder
+    motivo?: SortOrder
+    primeraEliminacion?: SortOrder
+    fechaEliminacion?: SortOrder
+    revision?: SortOrder
+  }
+
+  export type emailDeletionAuditAvgOrderByAggregateInput = {
+    id?: SortOrder
+    adminId?: SortOrder
+    revision?: SortOrder
+  }
+
+  export type emailDeletionAuditMaxOrderByAggregateInput = {
+    id?: SortOrder
+    correo?: SortOrder
+    dedupeKey?: SortOrder
+    clave?: SortOrder
+    claves?: SortOrder
+    identificadorOriginal?: SortOrder
+    adminId?: SortOrder
+    eliminadoPor?: SortOrder
+    motivo?: SortOrder
+    primeraEliminacion?: SortOrder
+    fechaEliminacion?: SortOrder
+    revision?: SortOrder
+  }
+
+  export type emailDeletionAuditMinOrderByAggregateInput = {
+    id?: SortOrder
+    correo?: SortOrder
+    dedupeKey?: SortOrder
+    clave?: SortOrder
+    claves?: SortOrder
+    identificadorOriginal?: SortOrder
+    adminId?: SortOrder
+    eliminadoPor?: SortOrder
+    motivo?: SortOrder
+    primeraEliminacion?: SortOrder
+    fechaEliminacion?: SortOrder
+    revision?: SortOrder
+  }
+
+  export type emailDeletionAuditSumOrderByAggregateInput = {
+    id?: SortOrder
+    adminId?: SortOrder
+    revision?: SortOrder
+  }
+
+  export type accountDataRevisionCountOrderByAggregateInput = {
+    id?: SortOrder
+    revision?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type accountDataRevisionAvgOrderByAggregateInput = {
+    id?: SortOrder
+    revision?: SortOrder
+  }
+
+  export type accountDataRevisionMaxOrderByAggregateInput = {
+    id?: SortOrder
+    revision?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type accountDataRevisionMinOrderByAggregateInput = {
+    id?: SortOrder
+    revision?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type accountDataRevisionSumOrderByAggregateInput = {
+    id?: SortOrder
+    revision?: SortOrder
   }
 
   export type deletedAccountHistoryOrderByRelevanceInput = {
@@ -19290,6 +21952,13 @@ export namespace Prisma {
     connect?: deletedAccountHistoryWhereUniqueInput | deletedAccountHistoryWhereUniqueInput[]
   }
 
+  export type emailDeletionAuditCreateNestedManyWithoutAdminInput = {
+    create?: XOR<emailDeletionAuditCreateWithoutAdminInput, emailDeletionAuditUncheckedCreateWithoutAdminInput> | emailDeletionAuditCreateWithoutAdminInput[] | emailDeletionAuditUncheckedCreateWithoutAdminInput[]
+    connectOrCreate?: emailDeletionAuditCreateOrConnectWithoutAdminInput | emailDeletionAuditCreateOrConnectWithoutAdminInput[]
+    createMany?: emailDeletionAuditCreateManyAdminInputEnvelope
+    connect?: emailDeletionAuditWhereUniqueInput | emailDeletionAuditWhereUniqueInput[]
+  }
+
   export type adminPasswordResetTokenUncheckedCreateNestedManyWithoutAdminInput = {
     create?: XOR<adminPasswordResetTokenCreateWithoutAdminInput, adminPasswordResetTokenUncheckedCreateWithoutAdminInput> | adminPasswordResetTokenCreateWithoutAdminInput[] | adminPasswordResetTokenUncheckedCreateWithoutAdminInput[]
     connectOrCreate?: adminPasswordResetTokenCreateOrConnectWithoutAdminInput | adminPasswordResetTokenCreateOrConnectWithoutAdminInput[]
@@ -19309,6 +21978,13 @@ export namespace Prisma {
     connectOrCreate?: deletedAccountHistoryCreateOrConnectWithoutEliminadoPorInput | deletedAccountHistoryCreateOrConnectWithoutEliminadoPorInput[]
     createMany?: deletedAccountHistoryCreateManyEliminadoPorInputEnvelope
     connect?: deletedAccountHistoryWhereUniqueInput | deletedAccountHistoryWhereUniqueInput[]
+  }
+
+  export type emailDeletionAuditUncheckedCreateNestedManyWithoutAdminInput = {
+    create?: XOR<emailDeletionAuditCreateWithoutAdminInput, emailDeletionAuditUncheckedCreateWithoutAdminInput> | emailDeletionAuditCreateWithoutAdminInput[] | emailDeletionAuditUncheckedCreateWithoutAdminInput[]
+    connectOrCreate?: emailDeletionAuditCreateOrConnectWithoutAdminInput | emailDeletionAuditCreateOrConnectWithoutAdminInput[]
+    createMany?: emailDeletionAuditCreateManyAdminInputEnvelope
+    connect?: emailDeletionAuditWhereUniqueInput | emailDeletionAuditWhereUniqueInput[]
   }
 
   export type adminPasswordResetTokenUpdateManyWithoutAdminNestedInput = {
@@ -19353,6 +22029,20 @@ export namespace Prisma {
     deleteMany?: deletedAccountHistoryScalarWhereInput | deletedAccountHistoryScalarWhereInput[]
   }
 
+  export type emailDeletionAuditUpdateManyWithoutAdminNestedInput = {
+    create?: XOR<emailDeletionAuditCreateWithoutAdminInput, emailDeletionAuditUncheckedCreateWithoutAdminInput> | emailDeletionAuditCreateWithoutAdminInput[] | emailDeletionAuditUncheckedCreateWithoutAdminInput[]
+    connectOrCreate?: emailDeletionAuditCreateOrConnectWithoutAdminInput | emailDeletionAuditCreateOrConnectWithoutAdminInput[]
+    upsert?: emailDeletionAuditUpsertWithWhereUniqueWithoutAdminInput | emailDeletionAuditUpsertWithWhereUniqueWithoutAdminInput[]
+    createMany?: emailDeletionAuditCreateManyAdminInputEnvelope
+    set?: emailDeletionAuditWhereUniqueInput | emailDeletionAuditWhereUniqueInput[]
+    disconnect?: emailDeletionAuditWhereUniqueInput | emailDeletionAuditWhereUniqueInput[]
+    delete?: emailDeletionAuditWhereUniqueInput | emailDeletionAuditWhereUniqueInput[]
+    connect?: emailDeletionAuditWhereUniqueInput | emailDeletionAuditWhereUniqueInput[]
+    update?: emailDeletionAuditUpdateWithWhereUniqueWithoutAdminInput | emailDeletionAuditUpdateWithWhereUniqueWithoutAdminInput[]
+    updateMany?: emailDeletionAuditUpdateManyWithWhereWithoutAdminInput | emailDeletionAuditUpdateManyWithWhereWithoutAdminInput[]
+    deleteMany?: emailDeletionAuditScalarWhereInput | emailDeletionAuditScalarWhereInput[]
+  }
+
   export type adminPasswordResetTokenUncheckedUpdateManyWithoutAdminNestedInput = {
     create?: XOR<adminPasswordResetTokenCreateWithoutAdminInput, adminPasswordResetTokenUncheckedCreateWithoutAdminInput> | adminPasswordResetTokenCreateWithoutAdminInput[] | adminPasswordResetTokenUncheckedCreateWithoutAdminInput[]
     connectOrCreate?: adminPasswordResetTokenCreateOrConnectWithoutAdminInput | adminPasswordResetTokenCreateOrConnectWithoutAdminInput[]
@@ -19393,6 +22083,36 @@ export namespace Prisma {
     update?: deletedAccountHistoryUpdateWithWhereUniqueWithoutEliminadoPorInput | deletedAccountHistoryUpdateWithWhereUniqueWithoutEliminadoPorInput[]
     updateMany?: deletedAccountHistoryUpdateManyWithWhereWithoutEliminadoPorInput | deletedAccountHistoryUpdateManyWithWhereWithoutEliminadoPorInput[]
     deleteMany?: deletedAccountHistoryScalarWhereInput | deletedAccountHistoryScalarWhereInput[]
+  }
+
+  export type emailDeletionAuditUncheckedUpdateManyWithoutAdminNestedInput = {
+    create?: XOR<emailDeletionAuditCreateWithoutAdminInput, emailDeletionAuditUncheckedCreateWithoutAdminInput> | emailDeletionAuditCreateWithoutAdminInput[] | emailDeletionAuditUncheckedCreateWithoutAdminInput[]
+    connectOrCreate?: emailDeletionAuditCreateOrConnectWithoutAdminInput | emailDeletionAuditCreateOrConnectWithoutAdminInput[]
+    upsert?: emailDeletionAuditUpsertWithWhereUniqueWithoutAdminInput | emailDeletionAuditUpsertWithWhereUniqueWithoutAdminInput[]
+    createMany?: emailDeletionAuditCreateManyAdminInputEnvelope
+    set?: emailDeletionAuditWhereUniqueInput | emailDeletionAuditWhereUniqueInput[]
+    disconnect?: emailDeletionAuditWhereUniqueInput | emailDeletionAuditWhereUniqueInput[]
+    delete?: emailDeletionAuditWhereUniqueInput | emailDeletionAuditWhereUniqueInput[]
+    connect?: emailDeletionAuditWhereUniqueInput | emailDeletionAuditWhereUniqueInput[]
+    update?: emailDeletionAuditUpdateWithWhereUniqueWithoutAdminInput | emailDeletionAuditUpdateWithWhereUniqueWithoutAdminInput[]
+    updateMany?: emailDeletionAuditUpdateManyWithWhereWithoutAdminInput | emailDeletionAuditUpdateManyWithWhereWithoutAdminInput[]
+    deleteMany?: emailDeletionAuditScalarWhereInput | emailDeletionAuditScalarWhereInput[]
+  }
+
+  export type adminCreateNestedOneWithoutEmailDeletionsInput = {
+    create?: XOR<adminCreateWithoutEmailDeletionsInput, adminUncheckedCreateWithoutEmailDeletionsInput>
+    connectOrCreate?: adminCreateOrConnectWithoutEmailDeletionsInput
+    connect?: adminWhereUniqueInput
+  }
+
+  export type adminUpdateOneWithoutEmailDeletionsNestedInput = {
+    create?: XOR<adminCreateWithoutEmailDeletionsInput, adminUncheckedCreateWithoutEmailDeletionsInput>
+    connectOrCreate?: adminCreateOrConnectWithoutEmailDeletionsInput
+    upsert?: adminUpsertWithoutEmailDeletionsInput
+    disconnect?: adminWhereInput | boolean
+    delete?: adminWhereInput | boolean
+    connect?: adminWhereUniqueInput
+    update?: XOR<XOR<adminUpdateToOneWithWhereWithoutEmailDeletionsInput, adminUpdateWithoutEmailDeletionsInput>, adminUncheckedUpdateWithoutEmailDeletionsInput>
   }
 
   export type adminCreateNestedOneWithoutDeletionHistoryInput = {
@@ -20581,6 +23301,50 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type emailDeletionAuditCreateWithoutAdminInput = {
+    id?: bigint | number
+    correo: string
+    dedupeKey?: string | null
+    clave?: string | null
+    claves: string
+    plataformas: JsonNullValueInput | InputJsonValue
+    contactos: JsonNullValueInput | InputJsonValue
+    registros: JsonNullValueInput | InputJsonValue
+    identificadorOriginal?: string | null
+    eliminadoPor: string
+    motivo?: string | null
+    primeraEliminacion?: Date | string
+    fechaEliminacion?: Date | string
+    revision: bigint | number
+  }
+
+  export type emailDeletionAuditUncheckedCreateWithoutAdminInput = {
+    id?: bigint | number
+    correo: string
+    dedupeKey?: string | null
+    clave?: string | null
+    claves: string
+    plataformas: JsonNullValueInput | InputJsonValue
+    contactos: JsonNullValueInput | InputJsonValue
+    registros: JsonNullValueInput | InputJsonValue
+    identificadorOriginal?: string | null
+    eliminadoPor: string
+    motivo?: string | null
+    primeraEliminacion?: Date | string
+    fechaEliminacion?: Date | string
+    revision: bigint | number
+  }
+
+  export type emailDeletionAuditCreateOrConnectWithoutAdminInput = {
+    where: emailDeletionAuditWhereUniqueInput
+    create: XOR<emailDeletionAuditCreateWithoutAdminInput, emailDeletionAuditUncheckedCreateWithoutAdminInput>
+  }
+
+  export type emailDeletionAuditCreateManyAdminInputEnvelope = {
+    data: emailDeletionAuditCreateManyAdminInput | emailDeletionAuditCreateManyAdminInput[]
+    skipDuplicates?: boolean
+  }
+
   export type adminPasswordResetTokenUpsertWithWhereUniqueWithoutAdminInput = {
     where: adminPasswordResetTokenWhereUniqueInput
     update: XOR<adminPasswordResetTokenUpdateWithoutAdminInput, adminPasswordResetTokenUncheckedUpdateWithoutAdminInput>
@@ -20676,6 +23440,101 @@ export namespace Prisma {
     ultimaEliminacion?: DateTimeFilter<"deletedAccountHistory"> | Date | string
   }
 
+  export type emailDeletionAuditUpsertWithWhereUniqueWithoutAdminInput = {
+    where: emailDeletionAuditWhereUniqueInput
+    update: XOR<emailDeletionAuditUpdateWithoutAdminInput, emailDeletionAuditUncheckedUpdateWithoutAdminInput>
+    create: XOR<emailDeletionAuditCreateWithoutAdminInput, emailDeletionAuditUncheckedCreateWithoutAdminInput>
+  }
+
+  export type emailDeletionAuditUpdateWithWhereUniqueWithoutAdminInput = {
+    where: emailDeletionAuditWhereUniqueInput
+    data: XOR<emailDeletionAuditUpdateWithoutAdminInput, emailDeletionAuditUncheckedUpdateWithoutAdminInput>
+  }
+
+  export type emailDeletionAuditUpdateManyWithWhereWithoutAdminInput = {
+    where: emailDeletionAuditScalarWhereInput
+    data: XOR<emailDeletionAuditUpdateManyMutationInput, emailDeletionAuditUncheckedUpdateManyWithoutAdminInput>
+  }
+
+  export type emailDeletionAuditScalarWhereInput = {
+    AND?: emailDeletionAuditScalarWhereInput | emailDeletionAuditScalarWhereInput[]
+    OR?: emailDeletionAuditScalarWhereInput[]
+    NOT?: emailDeletionAuditScalarWhereInput | emailDeletionAuditScalarWhereInput[]
+    id?: BigIntFilter<"emailDeletionAudit"> | bigint | number
+    correo?: StringFilter<"emailDeletionAudit"> | string
+    dedupeKey?: StringNullableFilter<"emailDeletionAudit"> | string | null
+    clave?: StringNullableFilter<"emailDeletionAudit"> | string | null
+    claves?: StringFilter<"emailDeletionAudit"> | string
+    plataformas?: JsonFilter<"emailDeletionAudit">
+    contactos?: JsonFilter<"emailDeletionAudit">
+    registros?: JsonFilter<"emailDeletionAudit">
+    identificadorOriginal?: StringNullableFilter<"emailDeletionAudit"> | string | null
+    adminId?: IntNullableFilter<"emailDeletionAudit"> | number | null
+    eliminadoPor?: StringFilter<"emailDeletionAudit"> | string
+    motivo?: StringNullableFilter<"emailDeletionAudit"> | string | null
+    primeraEliminacion?: DateTimeFilter<"emailDeletionAudit"> | Date | string
+    fechaEliminacion?: DateTimeFilter<"emailDeletionAudit"> | Date | string
+    revision?: BigIntFilter<"emailDeletionAudit"> | bigint | number
+  }
+
+  export type adminCreateWithoutEmailDeletionsInput = {
+    usuario: string
+    email?: string | null
+    contrasena: string
+    creado_en?: Date | string
+    resetTokens?: adminPasswordResetTokenCreateNestedManyWithoutAdminInput
+    securityEvents?: adminSecurityEventCreateNestedManyWithoutAdminInput
+    deletionHistory?: deletedAccountHistoryCreateNestedManyWithoutEliminadoPorInput
+  }
+
+  export type adminUncheckedCreateWithoutEmailDeletionsInput = {
+    id?: number
+    usuario: string
+    email?: string | null
+    contrasena: string
+    creado_en?: Date | string
+    resetTokens?: adminPasswordResetTokenUncheckedCreateNestedManyWithoutAdminInput
+    securityEvents?: adminSecurityEventUncheckedCreateNestedManyWithoutAdminInput
+    deletionHistory?: deletedAccountHistoryUncheckedCreateNestedManyWithoutEliminadoPorInput
+  }
+
+  export type adminCreateOrConnectWithoutEmailDeletionsInput = {
+    where: adminWhereUniqueInput
+    create: XOR<adminCreateWithoutEmailDeletionsInput, adminUncheckedCreateWithoutEmailDeletionsInput>
+  }
+
+  export type adminUpsertWithoutEmailDeletionsInput = {
+    update: XOR<adminUpdateWithoutEmailDeletionsInput, adminUncheckedUpdateWithoutEmailDeletionsInput>
+    create: XOR<adminCreateWithoutEmailDeletionsInput, adminUncheckedCreateWithoutEmailDeletionsInput>
+    where?: adminWhereInput
+  }
+
+  export type adminUpdateToOneWithWhereWithoutEmailDeletionsInput = {
+    where?: adminWhereInput
+    data: XOR<adminUpdateWithoutEmailDeletionsInput, adminUncheckedUpdateWithoutEmailDeletionsInput>
+  }
+
+  export type adminUpdateWithoutEmailDeletionsInput = {
+    usuario?: StringFieldUpdateOperationsInput | string
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    contrasena?: StringFieldUpdateOperationsInput | string
+    creado_en?: DateTimeFieldUpdateOperationsInput | Date | string
+    resetTokens?: adminPasswordResetTokenUpdateManyWithoutAdminNestedInput
+    securityEvents?: adminSecurityEventUpdateManyWithoutAdminNestedInput
+    deletionHistory?: deletedAccountHistoryUpdateManyWithoutEliminadoPorNestedInput
+  }
+
+  export type adminUncheckedUpdateWithoutEmailDeletionsInput = {
+    id?: IntFieldUpdateOperationsInput | number
+    usuario?: StringFieldUpdateOperationsInput | string
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    contrasena?: StringFieldUpdateOperationsInput | string
+    creado_en?: DateTimeFieldUpdateOperationsInput | Date | string
+    resetTokens?: adminPasswordResetTokenUncheckedUpdateManyWithoutAdminNestedInput
+    securityEvents?: adminSecurityEventUncheckedUpdateManyWithoutAdminNestedInput
+    deletionHistory?: deletedAccountHistoryUncheckedUpdateManyWithoutEliminadoPorNestedInput
+  }
+
   export type adminCreateWithoutDeletionHistoryInput = {
     usuario: string
     email?: string | null
@@ -20683,6 +23542,7 @@ export namespace Prisma {
     creado_en?: Date | string
     resetTokens?: adminPasswordResetTokenCreateNestedManyWithoutAdminInput
     securityEvents?: adminSecurityEventCreateNestedManyWithoutAdminInput
+    emailDeletions?: emailDeletionAuditCreateNestedManyWithoutAdminInput
   }
 
   export type adminUncheckedCreateWithoutDeletionHistoryInput = {
@@ -20693,6 +23553,7 @@ export namespace Prisma {
     creado_en?: Date | string
     resetTokens?: adminPasswordResetTokenUncheckedCreateNestedManyWithoutAdminInput
     securityEvents?: adminSecurityEventUncheckedCreateNestedManyWithoutAdminInput
+    emailDeletions?: emailDeletionAuditUncheckedCreateNestedManyWithoutAdminInput
   }
 
   export type adminCreateOrConnectWithoutDeletionHistoryInput = {
@@ -20718,6 +23579,7 @@ export namespace Prisma {
     creado_en?: DateTimeFieldUpdateOperationsInput | Date | string
     resetTokens?: adminPasswordResetTokenUpdateManyWithoutAdminNestedInput
     securityEvents?: adminSecurityEventUpdateManyWithoutAdminNestedInput
+    emailDeletions?: emailDeletionAuditUpdateManyWithoutAdminNestedInput
   }
 
   export type adminUncheckedUpdateWithoutDeletionHistoryInput = {
@@ -20728,6 +23590,7 @@ export namespace Prisma {
     creado_en?: DateTimeFieldUpdateOperationsInput | Date | string
     resetTokens?: adminPasswordResetTokenUncheckedUpdateManyWithoutAdminNestedInput
     securityEvents?: adminSecurityEventUncheckedUpdateManyWithoutAdminNestedInput
+    emailDeletions?: emailDeletionAuditUncheckedUpdateManyWithoutAdminNestedInput
   }
 
   export type adminCreateWithoutResetTokensInput = {
@@ -20737,6 +23600,7 @@ export namespace Prisma {
     creado_en?: Date | string
     securityEvents?: adminSecurityEventCreateNestedManyWithoutAdminInput
     deletionHistory?: deletedAccountHistoryCreateNestedManyWithoutEliminadoPorInput
+    emailDeletions?: emailDeletionAuditCreateNestedManyWithoutAdminInput
   }
 
   export type adminUncheckedCreateWithoutResetTokensInput = {
@@ -20747,6 +23611,7 @@ export namespace Prisma {
     creado_en?: Date | string
     securityEvents?: adminSecurityEventUncheckedCreateNestedManyWithoutAdminInput
     deletionHistory?: deletedAccountHistoryUncheckedCreateNestedManyWithoutEliminadoPorInput
+    emailDeletions?: emailDeletionAuditUncheckedCreateNestedManyWithoutAdminInput
   }
 
   export type adminCreateOrConnectWithoutResetTokensInput = {
@@ -20772,6 +23637,7 @@ export namespace Prisma {
     creado_en?: DateTimeFieldUpdateOperationsInput | Date | string
     securityEvents?: adminSecurityEventUpdateManyWithoutAdminNestedInput
     deletionHistory?: deletedAccountHistoryUpdateManyWithoutEliminadoPorNestedInput
+    emailDeletions?: emailDeletionAuditUpdateManyWithoutAdminNestedInput
   }
 
   export type adminUncheckedUpdateWithoutResetTokensInput = {
@@ -20782,6 +23648,7 @@ export namespace Prisma {
     creado_en?: DateTimeFieldUpdateOperationsInput | Date | string
     securityEvents?: adminSecurityEventUncheckedUpdateManyWithoutAdminNestedInput
     deletionHistory?: deletedAccountHistoryUncheckedUpdateManyWithoutEliminadoPorNestedInput
+    emailDeletions?: emailDeletionAuditUncheckedUpdateManyWithoutAdminNestedInput
   }
 
   export type adminCreateWithoutSecurityEventsInput = {
@@ -20791,6 +23658,7 @@ export namespace Prisma {
     creado_en?: Date | string
     resetTokens?: adminPasswordResetTokenCreateNestedManyWithoutAdminInput
     deletionHistory?: deletedAccountHistoryCreateNestedManyWithoutEliminadoPorInput
+    emailDeletions?: emailDeletionAuditCreateNestedManyWithoutAdminInput
   }
 
   export type adminUncheckedCreateWithoutSecurityEventsInput = {
@@ -20801,6 +23669,7 @@ export namespace Prisma {
     creado_en?: Date | string
     resetTokens?: adminPasswordResetTokenUncheckedCreateNestedManyWithoutAdminInput
     deletionHistory?: deletedAccountHistoryUncheckedCreateNestedManyWithoutEliminadoPorInput
+    emailDeletions?: emailDeletionAuditUncheckedCreateNestedManyWithoutAdminInput
   }
 
   export type adminCreateOrConnectWithoutSecurityEventsInput = {
@@ -20826,6 +23695,7 @@ export namespace Prisma {
     creado_en?: DateTimeFieldUpdateOperationsInput | Date | string
     resetTokens?: adminPasswordResetTokenUpdateManyWithoutAdminNestedInput
     deletionHistory?: deletedAccountHistoryUpdateManyWithoutEliminadoPorNestedInput
+    emailDeletions?: emailDeletionAuditUpdateManyWithoutAdminNestedInput
   }
 
   export type adminUncheckedUpdateWithoutSecurityEventsInput = {
@@ -20836,6 +23706,7 @@ export namespace Prisma {
     creado_en?: DateTimeFieldUpdateOperationsInput | Date | string
     resetTokens?: adminPasswordResetTokenUncheckedUpdateManyWithoutAdminNestedInput
     deletionHistory?: deletedAccountHistoryUncheckedUpdateManyWithoutEliminadoPorNestedInput
+    emailDeletions?: emailDeletionAuditUncheckedUpdateManyWithoutAdminNestedInput
   }
 
   export type pantallasCreateManyCuentascompartidasInput = {
@@ -21191,6 +24062,23 @@ export namespace Prisma {
     ultimaEliminacion?: Date | string
   }
 
+  export type emailDeletionAuditCreateManyAdminInput = {
+    id?: bigint | number
+    correo: string
+    dedupeKey?: string | null
+    clave?: string | null
+    claves: string
+    plataformas: JsonNullValueInput | InputJsonValue
+    contactos: JsonNullValueInput | InputJsonValue
+    registros: JsonNullValueInput | InputJsonValue
+    identificadorOriginal?: string | null
+    eliminadoPor: string
+    motivo?: string | null
+    primeraEliminacion?: Date | string
+    fechaEliminacion?: Date | string
+    revision: bigint | number
+  }
+
   export type adminPasswordResetTokenUpdateWithoutAdminInput = {
     tokenHash?: StringFieldUpdateOperationsInput | string
     expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -21292,6 +24180,57 @@ export namespace Prisma {
     cantidadEliminaciones?: IntFieldUpdateOperationsInput | number
     primeraEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
     ultimaEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type emailDeletionAuditUpdateWithoutAdminInput = {
+    id?: BigIntFieldUpdateOperationsInput | bigint | number
+    correo?: StringFieldUpdateOperationsInput | string
+    dedupeKey?: NullableStringFieldUpdateOperationsInput | string | null
+    clave?: NullableStringFieldUpdateOperationsInput | string | null
+    claves?: StringFieldUpdateOperationsInput | string
+    plataformas?: JsonNullValueInput | InputJsonValue
+    contactos?: JsonNullValueInput | InputJsonValue
+    registros?: JsonNullValueInput | InputJsonValue
+    identificadorOriginal?: NullableStringFieldUpdateOperationsInput | string | null
+    eliminadoPor?: StringFieldUpdateOperationsInput | string
+    motivo?: NullableStringFieldUpdateOperationsInput | string | null
+    primeraEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    fechaEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    revision?: BigIntFieldUpdateOperationsInput | bigint | number
+  }
+
+  export type emailDeletionAuditUncheckedUpdateWithoutAdminInput = {
+    id?: BigIntFieldUpdateOperationsInput | bigint | number
+    correo?: StringFieldUpdateOperationsInput | string
+    dedupeKey?: NullableStringFieldUpdateOperationsInput | string | null
+    clave?: NullableStringFieldUpdateOperationsInput | string | null
+    claves?: StringFieldUpdateOperationsInput | string
+    plataformas?: JsonNullValueInput | InputJsonValue
+    contactos?: JsonNullValueInput | InputJsonValue
+    registros?: JsonNullValueInput | InputJsonValue
+    identificadorOriginal?: NullableStringFieldUpdateOperationsInput | string | null
+    eliminadoPor?: StringFieldUpdateOperationsInput | string
+    motivo?: NullableStringFieldUpdateOperationsInput | string | null
+    primeraEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    fechaEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    revision?: BigIntFieldUpdateOperationsInput | bigint | number
+  }
+
+  export type emailDeletionAuditUncheckedUpdateManyWithoutAdminInput = {
+    id?: BigIntFieldUpdateOperationsInput | bigint | number
+    correo?: StringFieldUpdateOperationsInput | string
+    dedupeKey?: NullableStringFieldUpdateOperationsInput | string | null
+    clave?: NullableStringFieldUpdateOperationsInput | string | null
+    claves?: StringFieldUpdateOperationsInput | string
+    plataformas?: JsonNullValueInput | InputJsonValue
+    contactos?: JsonNullValueInput | InputJsonValue
+    registros?: JsonNullValueInput | InputJsonValue
+    identificadorOriginal?: NullableStringFieldUpdateOperationsInput | string | null
+    eliminadoPor?: StringFieldUpdateOperationsInput | string
+    motivo?: NullableStringFieldUpdateOperationsInput | string | null
+    primeraEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    fechaEliminacion?: DateTimeFieldUpdateOperationsInput | Date | string
+    revision?: BigIntFieldUpdateOperationsInput | bigint | number
   }
 
 

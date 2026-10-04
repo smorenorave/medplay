@@ -2,6 +2,7 @@
 
 import { useState, Suspense, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import FloatingTimer from "@/components/FloatingTimer";
 import WorkTimers from "@/components/WorkTimers";
 import RecoveryEmailSettings from "@/components/RecoveryEmailSettings";
@@ -300,6 +301,9 @@ function DashboardApp({ onLogout }: { onLogout: () => void }) {
           <Btn icon={<TriangleAlert size={18} />} active={vista === "ver-cuentas-vencidas"} onClick={() => handleSetVista("ver-cuentas-vencidas")} full>
             Vencimientos
           </Btn>
+          <Link href="/admin/deletions" className="flex min-h-11 items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-neutral-200 hover:bg-white/10">
+            <Rows3 size={18} /> Historial de eliminaciones
+          </Link>
         </nav>
       </aside>
 

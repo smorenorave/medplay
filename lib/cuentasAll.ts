@@ -1,3 +1,4 @@
+import { registerAccountCache, readCurrentAccountData } from "./accountDataChanges";
 // src/lib/cuentasAll.ts
 /**
  * Cache efímera de Cuentas Completas en memoria. Nunca persiste credenciales.
@@ -24,6 +25,7 @@ const TTL_MS = 5 * 60 * 1000;
 
 let MEM: any[] = [];
 let MEM_TS = 0;
+registerAccountCache(() => { MEM = []; MEM_TS = 0; });
 
 function now() { return Date.now(); }
 
@@ -81,7 +83,7 @@ export async function loadAllCuentasCompletas(preferCacheFirst: boolean): Promis
   }
 
   try {
-    const all = await fetchAllFromNetwork();
+    const all = await readCurrentAccountData(fetchAllFromNetwork);
     saveToMem(all);
     return { items: all, fromCache: false };
   } catch (e) {

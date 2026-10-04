@@ -1,4 +1,7 @@
 "use client";
+import { deleteExpiredAccounts, readCurrentAccountData, registerAccountCache } from "@/lib/accountDataChanges";
+import { useAccountDataRefresh } from "@/hooks/useAccountDataRefresh";
+
 
 import React, {
   useEffect,
@@ -54,7 +57,6 @@ const CUENTAS_BASE = "/api/cuentascompletas";
 const PANTALLAS_BASE = "/api/pantallas";
 const CHECK_LAST_CUENTAS_URL = `${CUENTAS_BASE}/check-last`;
 const CHECK_LAST_PANTALLAS_URL = `${PANTALLAS_BASE}/check-last`;
-const INVENTARIO_URL = "/api/inventario";
 /** Normaliza texto para búsqueda: minúsculas, sin tildes y sin espacios */
 const normSearch = (s?: string | null) =>
   (s ?? "")
@@ -221,6 +223,7 @@ async function fetchCuentasAll(): Promise<Cuenta[]> {
 }
 
 let __allPantallasCache: Promise<Pantalla[]> | null = null;
+registerAccountCache(() => { __allCuentasCache = null; __allPantallasCache = null; });
 async function fetchPantallasAll(): Promise<Pantalla[]> {
   if (!__allPantallasCache) {
     __allPantallasCache = (async () => {
@@ -255,7 +258,8 @@ async function fetchPantallas(): Promise<Pantalla[]> {
 }
 
 
-async function fetchVencidasHoyManana(): Promise<Registro[]> {
+function fetchVencidasHoyManana(): Promise<Registro[]> { return readCurrentAccountData(fetchVencidasHoyMananaFromServer); }
+async function fetchVencidasHoyMananaFromServer(): Promise<Registro[]> {
   const [cuentas, pantallas] = await Promise.all([
     fetchCuentas(),
     fetchPantallas(),
@@ -617,50 +621,12 @@ export default function CuentasPantallasVencidasPage() {
     }
   };
 
-  const deleteRowDirect = async (r: Registro) => {
-    const base = r.tipo === "cuenta" ? CUENTAS_BASE : PANTALLAS_BASE;
-    const res = await fetch(`${base}/${r.id}`, { method: "DELETE" });
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      throw new Error(j?.error ?? "No se pudo eliminar");
-    }
-    await res.json().catch(() => ({}));
+  useAccountDataRefresh(forceRefresh);
 
-    const delKey = `${r.tipo}:${r.id}`;
-
-    // ✅ Usar el estado previo real en cada borrado (no el cierre)
-    setRows((prev) => {
-      const next = prev.filter((x) => `${x.tipo}:${x.id}` !== delKey);
-      setDaily(DAILY_KEY, next); // mantener la caché alineada
-      return next;
-    });
-
-    setSelected((prev) => {
-      const n = new Set(prev);
-      n.delete(delKey);
-      return n;
-    });
-
-    // 🔔 Avisar a otras pestañas (solo informativo)
-    try {
-      bc?.postMessage({
-        t: "deleted",
-        key: delKey,
-        by: INSTANCE_ID,
-        at: Date.now(),
-      });
-    } catch { }
-    try {
-      localStorage.setItem(
-        LS_BROADCAST_KEY,
-        JSON.stringify({
-          t: "deleted",
-          key: delKey,
-          by: INSTANCE_ID,
-          at: Date.now(),
-        })
-      );
-    } catch { }
+  const deleteRowDirect = async (r: Registro, motivo?: string) => {
+    await deleteExpiredAccounts([{ tipo: r.tipo === "cuenta" ? "completa" : "pantalla", id: String(r.id) }], motivo?.trim() || "Eliminación desde Vencimientos");
+    await forceRefresh();
+    setSelected(new Set());
   };
 
   const onAskDelete = async (r: Registro) => {
@@ -710,62 +676,18 @@ export default function CuentasPantallasVencidasPage() {
     });
   };
 
-  const processBulk = async (mode: "delete" | "inventory") => {
+  const processBulk = async () => {
     if (!bulkModal.open) return;
-    const { rows: list, lastKeys } = bulkModal;
-
-    setBulkModal((m) => ({ ...m, busy: true, progress: 0 }));
-    let ok = 0,
-      fail = 0;
-    const errs: string[] = [];
-
-    for (let i = 0; i < list.length; i++) {
-      const r = list[i];
-      try {
-        if (mode === "inventory" && lastKeys.has(`${r.tipo}:${r.id}`)) {
-          const resInv = await fetch(INVENTARIO_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "send-to-inventory",
-              kind: r.tipo,
-              plataforma_id: r.plataforma_id,
-              correo: r.correo,
-              clave: (r.contrasena ?? "") || null,
-              comentario: bulkModal.invComment || undefined,
-            }),
-          });
-          if (!resInv.ok) {
-            const j = await resInv.json().catch(() => ({}));
-            throw new Error(j?.error || "Inventario rechazó la operación");
-          }
-        }
-        await deleteRowDirect(r);
-        ok++;
-      } catch (e: any) {
-        fail++;
-        errs.push(`${r.tipo}:${r.id}: ${e?.message ?? "Error"}`);
-      }
-      setBulkModal((m) => ({ ...m, progress: i + 1 }));
-    }
-
-    setBulkModal({
-      open: false,
-      rows: [],
-      lastKeys: new Set(),
-      normalKeys: new Set(),
-      scope: null,
-      busy: false,
-      progress: 0,
-      total: 0,
-      invComment: "",
-    });
-    if (fail > 0) {
-      alert(
-        `Completado con errores.\nOK: ${ok}\nFallidos: ${fail}\n\n${errs
-          .slice(0, 10)
-          .join("\n")}${errs.length > 10 ? "\n…" : ""}`
-      );
+    const list = bulkModal.rows;
+    setBulkModal(m => ({ ...m, busy: true, progress: 0 }));
+    try {
+      await deleteExpiredAccounts(list.map(r => ({ tipo: r.tipo === "cuenta" ? "completa" : "pantalla", id: String(r.id) })), bulkModal.invComment || "Eliminación masiva desde Vencidos");
+      await forceRefresh();
+      setSelected(new Set());
+      setBulkModal(m => ({ ...m, open: false, busy: false, progress: list.length }));
+    } catch (error) {
+      alert((error as Error).message);
+      setBulkModal(m => ({ ...m, busy: false }));
     }
   };
 
@@ -1386,6 +1308,7 @@ export default function CuentasPantallasVencidasPage() {
               </button>
             </div>
             <div className="p-5 space-y-3 text-sm">
+              <p className="text-rose-200">Eliminar definitivamente borra todos los registros del correo en todas las plataformas: cuentas, pantallas e inventario. La operación queda auditada.</p>
               <p>
                 ¿Seguro que deseas eliminar este registro{" "}
                 <b>
@@ -1462,7 +1385,7 @@ export default function CuentasPantallasVencidasPage() {
               )}
               <label className="grid gap-1">
                 <span className="text-sm text-neutral-300">
-                  Comentario (opcional) para Inventario
+                  Comentario / motivo (opcional)
                 </span>
                 <textarea
                   rows={3}
@@ -1475,9 +1398,9 @@ export default function CuentasPantallasVencidasPage() {
                 />
               </label>
               <p>
-                ¿Deseas <b>enviar al inventario</b> antes de eliminar? Si no,
-                puedes <b>eliminar definitivamente</b>.
+                El último registro se conserva en <b>Inventario</b>.
               </p>
+              <p className="text-rose-200">La operación verifica nuevamente los registros existentes antes de confirmar el destino.</p>
             </div>
             <div className="px-5 py-3 border-t border-neutral-800 flex items-center justify-between gap-2">
               <button
@@ -1489,25 +1412,6 @@ export default function CuentasPantallasVencidasPage() {
               </button>
 
               <div className="flex items-center gap-2">
-                {/* Eliminar definitivamente */}
-                <button
-                  className="px-3 py-2 rounded-lg border border-rose-800 bg-rose-900/40 hover:bg-rose-900/60 disabled:opacity-60"
-                  onClick={async () => {
-                    if (!invModal.row) return;
-                    setInvModal((m) => ({ ...m, busy: true }));
-                    try {
-                      await deleteRowDirect(invModal.row);
-                      setInvModal({ open: false, row: null });
-                    } catch (e: any) {
-                      alert(e?.message ?? "Error al eliminar");
-                      setInvModal((m) => ({ ...m, busy: false }));
-                    }
-                  }}
-                  disabled={!!invModal.busy}
-                >
-                  {invModal.busy ? "Procesando…" : "Eliminar definitivamente"}
-                </button>
-
                 {/* Enviar a inventario y eliminar */}
                 <button
                   className="px-3 py-2 rounded-lg border border-amber-700 bg-amber-800/40 hover:bg-amber-800/60 disabled:opacity-60"
@@ -1516,25 +1420,7 @@ export default function CuentasPantallasVencidasPage() {
                     setInvModal((m) => ({ ...m, busy: true }));
                     try {
                       const r = invModal.row;
-                      const res = await fetch(INVENTARIO_URL, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          action: "send-to-inventory",
-                          kind: r.tipo,
-                          plataforma_id: r.plataforma_id,
-                          correo: r.correo,
-                          clave: (r.contrasena ?? "") || null,
-                          comentario: invModal.comment || undefined,
-                        }),
-                      });
-                      if (!res.ok) {
-                        const j = await res.json().catch(() => ({}));
-                        throw new Error(
-                          j?.error || "Inventario rechazó la operación"
-                        );
-                      }
-                      await deleteRowDirect(r);
+                      await deleteRowDirect(r, invModal.comment);
                       setInvModal({ open: false, row: null });
                     } catch (e: any) {
                       alert(
@@ -1597,6 +1483,7 @@ export default function CuentasPantallasVencidasPage() {
               </button>
             </div>
             <div className="p-5 space-y-3 text-sm">
+              <p className="text-rose-200">La eliminación actualiza todas las vistas. Si la selección incluye los últimos registros de una cuenta, se conserva en Inventario sin generar auditoría.</p>
               <p>
                 Total a procesar: <b>{bulkModal.total}</b>
               </p>
@@ -1631,7 +1518,7 @@ export default function CuentasPantallasVencidasPage() {
                   <div className="rounded-md border border-neutral-700 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <div className="font-semibold">
-                        Irán a Inventario ({lastForInventory.length})
+                        Últimos registros detectados ({lastForInventory.length})
                       </div>
                       <button
                         onClick={copy}
@@ -1702,20 +1589,12 @@ export default function CuentasPantallasVencidasPage() {
               </button>
               <button
                 className="px-3 py-2 rounded-lg border border-rose-800 bg-rose-900/40 hover:bg-rose-900/60 disabled:opacity-60"
-                onClick={() => processBulk("delete")}
+                onClick={() => processBulk()}
                 disabled={!!bulkModal.busy}
               >
                 {bulkModal.busy ? "Eliminando…" : "Eliminar selección"}
               </button>
-              <button
-                className="px-3 py-2 rounded-lg border border-amber-700 bg-amber-800/40 hover:bg-amber-800/60 disabled:opacity-60"
-                onClick={() => processBulk("inventory")}
-                disabled={!!bulkModal.busy}
-              >
-                {bulkModal.busy
-                  ? "Procesando…"
-                  : "Enviar al inventario y eliminar"}
-              </button>
+
             </div>
           </div>
         </Modal>

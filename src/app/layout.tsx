@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import SessionGuard from "@/components/SessionGuard";
+import AccountDataSync from "@/components/AccountDataSync";
 
 export const metadata: Metadata = {
   title: "MEDPLAY VENTAS",
@@ -19,6 +20,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <SessionGuard />
+        <AccountDataSync />
         {children}
       </body>
     </html>

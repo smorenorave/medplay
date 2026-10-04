@@ -153,6 +153,38 @@ model admin {
   resetTokens     adminPasswordResetToken[]
   securityEvents  adminSecurityEvent[]
   deletionHistory deletedAccountHistory[]
+  emailDeletions  emailDeletionAudit[]
+}
+
+// One permanent identity per normalized email and exact password.
+model emailDeletionAudit {
+  id                  BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  correo              String   @db.VarChar(191)
+  dedupeKey           String?  @unique @db.Char(64)
+  clave               String?  @db.VarChar(255)
+  claves              String   @db.Text
+  plataformas         Json
+  contactos           Json
+  registros           Json
+  identificadorOriginal String? @db.VarChar(255)
+  adminId             Int?
+  eliminadoPor        String   @db.VarChar(100)
+  motivo              String?  @db.Text
+  primeraEliminacion  DateTime @default(now())
+  fechaEliminacion    DateTime @default(now())
+  revision            BigInt
+  admin               admin?   @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([fechaEliminacion, id])
+  @@index([correo])
+  @@index([revision])
+  @@index([adminId])
+}
+
+model accountDataRevision {
+  id        Int      @id
+  revision  BigInt   @default(0)
+  updatedAt DateTime @updatedAt
 }
 
 model deletedAccountHistory {

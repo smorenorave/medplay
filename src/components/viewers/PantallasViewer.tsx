@@ -1,4 +1,7 @@
 "use client";
+import { deleteEmailsGlobally, readCurrentAccountData, registerAccountCache } from "@/lib/accountDataChanges";
+import { useAccountDataRefresh } from "@/hooks/useAccountDataRefresh";
+
 import { recordPasswordChange } from "@/lib/passwordChanges";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -110,6 +113,7 @@ function normalizeRow(r: any): Pantalla {
 }
 
 let memoryCache: CacheShape | null = null;
+registerAccountCache(() => { memoryCache = null; });
 
 function readCache(): CacheShape | null {
   return memoryCache;
@@ -137,7 +141,8 @@ async function fetchStamp(): Promise<number> {
   }
 }
 
-async function fetchAllPantallas(): Promise<Pantalla[]> {
+function fetchAllPantallas(): Promise<Pantalla[]> { return readCurrentAccountData(fetchAllPantallasFromServer); }
+async function fetchAllPantallasFromServer(): Promise<Pantalla[]> {
   const out: Pantalla[] = [];
   let cursor: number | null = null;
   let guard = 0;
@@ -1375,6 +1380,8 @@ export default function PantallasViewer() {
     }
   };
 
+  useAccountDataRefresh(forceRefresh);
+
   const doDelete = async (archive: boolean) => {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -1388,7 +1395,7 @@ export default function PantallasViewer() {
 
       if ((!victimCorreo || victimPlataforma == null) && archive) {
         try {
-          const resolved = await fetch(`/api/pantallas/${deleteTarget.id}`, {
+          const resolved = await fetch(`/api/pantallas/${deleteTarget.id}?scope=record`, {
             cache: "no-store",
           }).then((r) => (r.ok ? r.json() : null));
           if (resolved) {
@@ -1406,6 +1413,15 @@ export default function PantallasViewer() {
         } catch {}
       }
 
+      if (!archive) {
+        await deleteEmailsGlobally([victimCorreo], "Eliminación definitiva desde Pantallas");
+        await forceRefresh();
+        setSelectedIds(new Set());
+        setDeleteTarget(null);
+        setDeleteMsg("Correo eliminado de todas las cuentas, pantallas e inventario.");
+        return;
+      }
+
       if (archive && victimCorreo && victimPlataforma != null) {
         await ensureInInventario(
           victimPlataforma as number | null,
@@ -1414,7 +1430,7 @@ export default function PantallasViewer() {
         );
       }
 
-      const res = await fetch(`/api/pantallas/${deleteTarget.id}`, {
+      const res = await fetch(`/api/pantallas/${deleteTarget.id}?scope=record`, {
         method: "DELETE",
       });
       if (!res.ok) {
@@ -1535,6 +1551,18 @@ export default function PantallasViewer() {
     setBulkErr(null);
     setBulkProgress(0);
     const total = bulkItems.length;
+    if (!preferArchive) {
+      try {
+        await deleteEmailsGlobally(bulkItems.map(item => item.correo), "Eliminación masiva desde Pantallas");
+        await forceRefresh();
+        setSelectedIds(new Set());
+        setBulkProgress(100);
+        setBulkSummary({ total, archived: 0, purged: total, failed: 0 });
+      } catch (error) {
+        setBulkErr((error as Error).message);
+      } finally { setBulkProcessing(false); }
+      return;
+    }
     let archived = 0,
       purged = 0,
       failed = 0;
@@ -1556,7 +1584,7 @@ export default function PantallasViewer() {
           );
         }
         // eslint-disable-next-line no-await-in-loop
-        const res = await fetch(`/api/pantallas/${it.id}`, {
+        const res = await fetch(`/api/pantallas/${it.id}?scope=record`, {
           method: "DELETE",
         });
         if (!res.ok) {
@@ -2547,9 +2575,10 @@ export default function PantallasViewer() {
                     ? "Verificando si es la última relación por correo y plataforma…"
                     : canArchive
                       ? "Es la última pantalla con este correo en esta plataforma. Puedes enviarla al inventario antes de eliminar."
-                      : "Existen más pantallas con este correo en esta plataforma. Solo puedes eliminar definitivamente."}
+                      : "Existen más pantallas con este correo. La eliminación definitiva también las eliminará."}
                 </p>
 
+                <p className="mt-3 text-sm text-rose-200">Eliminar definitivamente borra todos los registros del correo en todas las plataformas, incluidas cuentas, pantallas e inventario. La operación queda auditada.</p>
                 {deleteErr && (
                   <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">
                     {deleteErr}
@@ -2635,9 +2664,10 @@ export default function PantallasViewer() {
                       Se verificará cada registro: si es la última relación por{" "}
                       <strong>correo + plataforma</strong>, se enviará al
                       inventario y luego se eliminará; en caso contrario, se
-                      eliminará definitivamente.
+                      retirará solo el registro seleccionado.
                     </p>
 
+                    <p className="mt-3 text-sm text-rose-200">Eliminar definitivamente borra todos los registros de los correos seleccionados, en todas las plataformas, incluidas otras cuentas, pantallas e inventario. Es una sola transacción.</p>
                     {bulkErr && (
                       <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">
                         {bulkErr}
@@ -2649,7 +2679,7 @@ export default function PantallasViewer() {
                         <div>Total procesados: {bulkSummary.total}</div>
                         <div>Enviados a inventario: {bulkSummary.archived}</div>
                         <div>
-                          Eliminados definitivamente: {bulkSummary.purged}
+                          Registros eliminados: {bulkSummary.purged}
                         </div>
                         <div>Fallidos: {bulkSummary.failed}</div>
                       </div>
@@ -2685,6 +2715,7 @@ export default function PantallasViewer() {
 
                       <button
                         type="button"
+                        title="Elimina globalmente todos los registros de los correos seleccionados, incluidas otras plataformas e inventario"
                         onClick={() => runBulk(false)}
                         disabled={
                           bulkAssessing ||

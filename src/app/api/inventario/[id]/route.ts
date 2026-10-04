@@ -1,3 +1,4 @@
+import { deleteEmailForRecord } from "@/lib/deleteEmailForRecord";
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
@@ -62,7 +63,9 @@ export async function DELETE(
   ctx: { params: Promise<{ id: string }> } // 👈 params ahora es async
 ) {
   try {
-    const { id } = await ctx.params; // 👈 OBLIGATORIO en tu versión de Next
+    const { id } = await ctx.params;
+    const globalDeletion = await deleteEmailForRecord(req, { tipo: "inventario", id: id });
+    if (globalDeletion) return globalDeletion; // 👈 OBLIGATORIO en tu versión de Next
     const idNum = Number(id);
 
     if (!Number.isFinite(idNum)) {

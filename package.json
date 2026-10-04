@@ -1,5 +1,7 @@
 {
   "scripts": {
+    "test:email-deletion": "node --test tests/emailDeletion.test.cjs tests/accountDataChanges.test.cjs tests/expiredDeletion.regression.test.cjs",
+    "test:email-deletion:ui": "node tests/emailDeletion.ui.cjs",
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start",

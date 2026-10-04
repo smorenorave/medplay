@@ -1,3 +1,4 @@
+import { deleteEmailForRecord } from "@/lib/deleteEmailForRecord";
 // src/app/api/cuentascompartidas/[id]/route.ts
 export const runtime = 'nodejs';
 
@@ -198,6 +199,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: rawId } = await params;
+  const globalDeletion = await deleteEmailForRecord(req, { tipo: "compartida", id: rawId });
+  if (globalDeletion) return globalDeletion;
   const id = Number(rawId);
   if (!Number.isFinite(id)) {
     return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
