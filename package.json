@@ -17,6 +17,7 @@
     "dotenv-cli": "^10.0.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "15.5.27",
+    "fast-glob": "file:tooling/eslint-glob-adapter",
     "prisma": "^6.19.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2"
@@ -42,6 +43,9 @@
     "zod": "^4.0.17"
   },
   "overrides": {
+    "@next/eslint-plugin-next@15.5.27": {
+      "fast-glob": "$fast-glob"
+    },
     "postcss": "^8.5.28",
     "@prisma/config": {
       "deepmerge-ts": "^8.0.2"

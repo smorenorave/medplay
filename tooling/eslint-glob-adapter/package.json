@@ -1,0 +1,10 @@
+{
+  "name": "@medplay/eslint-glob-adapter",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Directory glob adapter for the Next.js 15.5.27 ESLint plugin",
+  "main": "index.cjs",
+  "dependencies": {
+    "tinyglobby": "0.2.17"
+  }
+}

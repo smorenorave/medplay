@@ -1,5 +1,11 @@
 # Auditoría técnica y de producto de Medplay
 
+## Resolución de alertas ESLint — 4 de octubre de 2026
+
+La auditoría completa y la de producción (`npm audit` y `npm audit --omit=dev`) reportan ahora **0 vulnerabilidades**. Se eliminó la cadena vulnerable de ESLint sustituyendo únicamente su dependencia `fast-glob` por un [adaptador local de tinyglobby](tooling/eslint-glob-adapter/README.md). Se mantienen el plugin Next.js 15.5.27 y todas sus reglas; no se ocultan avisos de seguridad ni se rebaja la configuración.
+
+Se verificó una instalación limpia con `npm ci --ignore-scripts`, las tres pruebas de compatibilidad de directorios y detección de enlaces (`node --test tests/eslintGlob.test.cjs`), TypeScript, lint y compilación de producción. El lint conserva las 61 advertencias de código existentes y no tiene errores. El override está limitado a la versión actual del plugin y debe revisarse cuando este se actualice.
+
 ## Actualización de dependencias — 3 de octubre de 2026
 
 - La auditoría completa pasó de 27 alertas (23 altas, 4 moderadas) a 5 altas. `npm audit --omit=dev` reporta 0 vulnerabilidades.
@@ -7,7 +13,7 @@
 - Los overrides de `package.json` fuerzan PostCSS >=8.5.28, DeepmergeTS >=8.0.2 dentro de Prisma y UUID >=11.1.1 dentro de ExcelJS. Revisarlos al actualizar esas dependencias para retirarlos cuando sus versiones originales incorporen las correcciones.
 - Se retiró Puppeteer, sin usos en el código; la automatización WhatsApp conserva Playwright. La exportación de registros reemplaza SheetJS (`xlsx`) por ExcelJS, manteniendo las hojas de registros y ranking, los valores numéricos y la alternativa CSV.
 - La versión mínima de Node.js es 20.9.0, por los requisitos de las dependencias actualizadas.
-- Las cinco alertas restantes corresponden a una única cadena de desarrollo: `eslint-config-next` → `@next/eslint-plugin-next` → `fast-glob` → `micromatch` → `braces`. El [aviso GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) no tiene versión corregida publicada. Los patrones de lint deben mantenerse como configuración confiable. No se rebajó ESLint a una configuración de Next.js 14 para ocultar estas alertas; siguen pendientes de corrección upstream.
+- En esta revisión quedaron cinco alertas correspondientes a una única cadena de desarrollo: `eslint-config-next` → `@next/eslint-plugin-next` → `fast-glob` → `micromatch` → `braces`. El [aviso GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) no tiene versión corregida publicada. No se rebajó ESLint a una configuración de Next.js 14 para ocultar estas alertas. La actualización del 4 de octubre descrita arriba elimina la cadena vulnerable mediante una sustitución compatible.
 - Validación: TypeScript, lint (0 errores y 61 advertencias), compilación de producción, 9 pruebas existentes, escritura/lectura Excel de ambas hojas, validación del esquema Prisma con URL ficticia, transporte local de Nodemailer sin envío y biblioteca nativa Sharp. La compilación conserva avisos de JOSE sobre APIs de compresión en Edge. No se probaron conexiones MySQL ni entregas SMTP reales.
 
 Fecha: 2 de septiembre de 2026.
