@@ -9,7 +9,7 @@ const secret = 'local-email-deletion-ui-test-secret';
 
 async function main() {
   const server = spawn(process.execPath, [require.resolve('next/dist/bin/next'), 'start', '-p', '3107', '-H', '127.0.0.1'], { windowsHide: true, stdio: 'ignore', env: { ...process.env, AUTH_SECRET: secret, NEXT_PHASE: 'phase-production-build', DATABASE_URL: 'mysql://test:test@127.0.0.1:1/test' } });
-  let browser;
+  let browser, page;
   try {
     let ready = false;
     for (let i = 0; i < 60; i++) {
@@ -19,6 +19,7 @@ async function main() {
     }
     assert.ok(ready, 'Next production server must start; run npm run build first.');
     assert.equal((await fetch(`${base}/api/admin/deletions`)).status, 401);
+    assert.equal((await fetch(`${base}/api/admin/deletions/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auditId: '1', evento: 0, tipo: 'pantalla', id: '2' }) })).status, 401);
     assert.equal((await fetch(`${base}/api/account-deletions`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ correos: [email] }) })).status, 401);
     const { SignJWT } = await import('jose');
     const token = await new SignJWT({}).setProtectedHeader({ alg: 'HS256' }).setSubject('1').setIssuedAt().setExpirationTime('1h').sign(new TextEncoder().encode(secret));
@@ -29,7 +30,7 @@ async function main() {
     const platform = { id: 1, nombre: 'MAX', cantidad_pantallas: 5 };
     const account = { id: 1, cuenta_id: 1, correo: email, contrasena: 'ui-original-key', plataforma_id: 1, contacto: '3001234567', nombre: 'Cliente prueba', fecha_compra: today, fecha_vencimiento: today, nro_pantalla: '1', meses_pagados: 1, total_ganado: 10, total_pagado: 20, total_pagado_proveedor: 10, total_pagado_completa: 20, total_pagado_proveedor_completa: 10 };
     const screen = { ...account, id: 2 };
-    let deleted = false, deleteCalls = 0, inventoryScenario = false, archived = false;
+    let deleted = false, deleteCalls = 0, inventoryScenario = false, archived = false, screenRestored = false, restoreCalls = 0;
     const audit = { id: '1', correo: email, clave: 'ui-original-key', plataformas: [platform], contactos: [account.contacto], eliminadoPor: 'Admin UI', motivo: 'Eliminación definitiva desde Vencimientos', identificadorOriginal: 'completa:1,compartida:1', primeraEliminacion: new Date().toISOString(), fechaEliminacion: new Date().toISOString(), registros: { eventos: [{ fechaEliminacion: new Date().toISOString(), eliminadoPor: 'Admin UI', cuentascompletas: [account], pantallas: [screen], inventario: [{ id: 3, correo: email, clave: account.contrasena }] }] } };
     const requests = [];
     await context.route('**/api/**', async route => {
@@ -38,13 +39,21 @@ async function main() {
       let data;
       if (path === '/api/session/me') data = { authenticated: true, usuario: 'Admin UI', expiresAt: Date.now() + 3600000 };
       else if (path === '/api/session/ping') data = { ok: true };
-      else if (path === '/api/account-data-revision') data = { revision: archived ? '2' : deleted || inventoryScenario ? '1' : '0', correos: deleted && url.searchParams.get('since') === '0' ? [email] : [] };
+      else if (path === '/api/account-data-revision') data = { revision: archived ? '3' : screenRestored || inventoryScenario ? '2' : deleted ? '1' : '0', correos: deleted && url.searchParams.get('since') === '0' ? [email] : [] };
+      else if (path === '/api/admin/deletions/restore') {
+        assert.equal(request.method(), 'POST');
+        assert.deepEqual(request.postDataJSON(), { auditId: '1', evento: 0, tipo: 'pantalla', id: '2' });
+        screenRestored = true; restoreCalls++;
+        audit.registros.restauraciones = [{ evento: 0, tipo: 'pantalla', id: '2', fechaRestauracion: new Date().toISOString(), restauradoPor: 'Admin UI' }];
+        data = { correos: [email], revision: '2', alreadyRestored: false };
+      }
       else if (path === '/api/cuentasvencidas/delete') {
         assert.equal(request.method(), 'DELETE'); assert.deepEqual(request.postDataJSON().targets, [{ tipo: 'completa', id: '1' }]);
         if (inventoryScenario) {
           assert.equal(request.postDataJSON().motivo, 'Última cuenta conservada');
           archived = true; deleted = true; deleteCalls++;
-          data = { correos: [email], revision: '2', audits: [] };
+          screenRestored = false;
+          data = { correos: [email], revision: '3', audits: [] };
         } else {
           assert.equal(request.postDataJSON().motivo, 'Eliminación desde Vencimientos');
           audit.motivo = request.postDataJSON().motivo;
@@ -56,17 +65,17 @@ async function main() {
       else if (path.endsWith('/stamp')) data = { stamp: 1 }; // Unchanged max stamp deliberately exercises cache invalidation.
       else if (path.includes('check-last')) data = { isLast: inventoryScenario, remaining: inventoryScenario ? 1 : 2 };
       else if (path === '/api/cuentascompletas') data = { items: deleted ? [] : inventoryScenario ? [account] : [account, { ...account, id: 3 }], nextCursor: null };
-      else if (path === '/api/pantallas') data = { items: deleted ? [] : [screen], nextCursor: null };
+      else if (path === '/api/pantallas') data = { items: deleted && !screenRestored ? [] : [screen], nextCursor: null };
       else if (path === '/api/inventario') data = deleted && !archived ? [] : [{ id: 3, correo: email, clave: account.contrasena, plataforma_id: 1 }];
-      else if (path === '/api/cuentascompartidas') data = deleted ? [] : [account];
-      else if (path === '/api/usuarios') data = deleted ? [] : [{ contacto: account.contacto, nombre: account.nombre }];
+      else if (path === '/api/cuentascompartidas') data = deleted && !screenRestored ? [] : [account];
+      else if (path === '/api/usuarios') data = deleted && !screenRestored ? [] : [{ contacto: account.contacto, nombre: account.nombre }];
       else if (path === '/api/dashboard') data = { salesToday: deleted ? 0 : 2, profitToday: 10, salesMonth: deleted ? 0 : 2, revenueMonth: 20, profitMonth: 10, activeScreens: deleted ? 0 : 1, expiringSoon: deleted ? 0 : 2, pendingAttention: 0, businessDate: today, topServices: [], lowStock: [], stockRotation: [] };
       else if (path === '/api/metricas-mensuales') data = { error: 'Sin snapshot de prueba' };
       else if (path === '/api/account-credentials') data = { found: !deleted, contrasena: deleted ? '' : account.contrasena };
       else data = { ok: true };
       await route.fulfill({ status: path === '/api/metricas-mensuales' ? 404 : 200, contentType: 'application/json', body: JSON.stringify(data) });
     });
-    const page = await context.newPage();
+    page = await context.newPage();
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.goto(base);
     const nav = page.getByRole('navigation', { name: 'Navegación principal' });
@@ -83,7 +92,7 @@ async function main() {
     await otherTab.getByRole('navigation', { name: 'Navegación principal' }).getByRole('button', { name: 'Pantallas', exact: true }).click();
     await otherTab.getByText(email, { exact: true }).filter({ visible: true }).first().waitFor();
     await nav.getByRole('button', { name: 'Vencimientos', exact: true }).click();
-    const target = page.getByRole('row').filter({ hasText: email }).first();
+    const target = page.getByRole('row').filter({ hasText: email }).filter({ hasText: 'Cuenta completa' }).first();
     await target.waitFor();
     await target.getByRole('button', { name: 'Eliminar', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Eliminar', exact: true }).click();
@@ -124,15 +133,37 @@ async function main() {
     assert.ok(await page.getByRole('heading', { name: 'Historial de eliminaciones', exact: true }).isVisible());
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Mobile layout must contain table overflow');
     await page.screenshot({ path: '.logs/email-deletion-audit-mobile-ui.png', fullPage: true });
+    await page.getByRole('button', { name: 'Restaurar', exact: true }).click();
+    const restorationDialog = page.getByRole('dialog');
+    await restorationDialog.getByRole('button', { name: 'Restaurar pantalla', exact: true }).click();
+    assert.equal(restoreCalls, 0, 'Restoration must wait for explicit confirmation in the UI');
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Mobile restoration dialog must fit the viewport');
+    await restorationDialog.getByRole('button', { name: 'Confirmar restauración', exact: true }).click();
+    await restorationDialog.getByRole('button', { name: 'Restaurado', exact: true }).waitFor();
+    assert.equal(restoreCalls, 1);
+    assert.ok(await restorationDialog.getByRole('button', { name: 'Restaurado', exact: true }).isDisabled());
+    await page.screenshot({ path: '.logs/account-restoration-mobile-ui.png', fullPage: true });
+    await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+    await otherTab.getByText(email, { exact: true }).filter({ visible: true }).first().waitFor();
+    await page.goto(base);
+    const restoredNav = page.getByRole('navigation', { name: 'Navegación principal' });
+    await restoredNav.waitFor();
+    if (await page.getByRole('button', { name: /Abrir cronómetro/ }).count() === 0) await page.getByTitle('Cerrar (solo oculta)').click();
+    await restoredNav.getByRole('button', { name: 'Pantallas', exact: true }).click();
+    await page.getByText(email, { exact: true }).filter({ visible: true }).first().waitFor();
+    await restoredNav.getByRole('button', { name: 'Vencimientos', exact: true }).click();
+    await page.getByText(email, { exact: true }).filter({ visible: true }).first().waitFor();
     // A recreated final relation uses the inventory branch and propagates its revision.
     inventoryScenario = true; deleted = false;
+    // Reset this isolated test browser's cached fixtures before simulating a new sale.
+    await page.evaluate(() => localStorage.clear());
     await page.setViewportSize({ width: 1500, height: 1000 });
     await page.goto(base);
     const newNav = page.getByRole('navigation', { name: 'Navegación principal' });
     await newNav.waitFor();
     if (await page.getByRole('button', { name: /Abrir cronómetro/ }).count() === 0) await page.getByTitle('Cerrar (solo oculta)').click();
     await newNav.getByRole('button', { name: 'Vencimientos', exact: true }).click();
-    await page.getByRole('row').filter({ hasText: email }).first().getByRole('button', { name: 'Eliminar', exact: true }).click();
+    await page.getByRole('row').filter({ hasText: email }).filter({ hasText: 'Cuenta completa' }).first().getByRole('button', { name: 'Eliminar', exact: true }).click();
     await page.getByLabel('Comentario / motivo (opcional)', { exact: true }).fill('Última cuenta conservada');
     assert.equal(await page.getByRole('dialog').getByRole('button', { name: 'Eliminar definitivamente', exact: true }).count(), 0);
     await page.getByRole('button', { name: 'Enviar al inventario y eliminar', exact: true }).click();
@@ -142,7 +173,14 @@ async function main() {
     await page.getByRole('button', { name: 'Inventario', exact: true }).click();
     await page.getByText(email, { exact: true }).filter({ visible: true }).first().waitFor();
     assert.deepEqual(errors, []);
-    console.log('UI PASS: deletion from Vencimientos, cached account/screen views, cross-tab refresh, inventory, Admin filters, detail and mobile layout. No MySQL used.');
+    console.log('UI PASS: deletion, original screen restoration with confirmation, cross-tab refresh, Vencimientos, inventory, audit filters/detail and mobile layout. No MySQL used.');
+  } catch (error) {
+    if (page) {
+      fs.mkdirSync('.logs', { recursive: true });
+      await page.screenshot({ path: '.logs/account-restoration-failure.png', fullPage: true }).catch(() => {});
+      console.error('UI failure context', { url: page.url(), detailsButton: await page.getByRole('button', { name: 'Ver detalles', exact: true }).first().boundingBox().catch(() => null) });
+    }
+    throw error;
   } finally {
     if (browser) await browser.close();
     server.kill();

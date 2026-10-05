@@ -111,7 +111,7 @@ export async function deleteEmails(db: PrismaClient, input: { adminId: number; m
         claves: previous?.dedupeKey == null && previous ? previous.claves : clave,
         clave,
         plataformas: json([...platforms.values()]), contactos: json([...new Set([...(Array.isArray(previous?.contactos) ? previous.contactos.filter((contact): contact is string => typeof contact === "string") : []), ...contactos])]),
-        registros: json({ eventos: [...oldEvents, event] }),
+        registros: json({ ...(previous && typeof previous.registros === "object" && previous.registros !== null && !Array.isArray(previous.registros) ? previous.registros : {}), eventos: [...oldEvents, event] }),
         identificadorOriginal: [...auditShared.map(row => `compartida:${row.id}`), ...auditComplete.map(row => `completa:${row.id}`), ...auditInventory.map(row => `inventario:${row.id}`)].join(",").slice(0, 255),
         adminId: input.adminId, eliminadoPor: actor.usuario, motivo: input.motivo ?? null, fechaEliminacion, revision,
       };
