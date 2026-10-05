@@ -86,15 +86,19 @@ export async function deleteEmails(db: PrismaClient, input: { adminId: number; m
         revision = next.revision;
       }
       const retainedKeys = new Set([...keep.values()].map(key => key ?? ""));
-      const keys = [...new Set([...complete.map(row => row.contrasena), ...shared.map(row => row.contrasena), ...inventory.map(row => row.clave ?? "")])].filter(key => !retainedKeys.has(key));
+      const auditEligible = <T extends { plataformas: { auditarEliminaciones?: boolean } | null }>(rows: T[]) => rows.filter(row => row.plataformas && row.plataformas.auditarEliminaciones !== false);
+      const eligibleComplete = auditEligible(complete), eligibleShared = auditEligible(shared), eligibleInventory = auditEligible(inventory);
+      const keys = [...new Set([...eligibleComplete.map(row => row.contrasena), ...eligibleShared.map(row => row.contrasena), ...eligibleInventory.map(row => row.clave ?? "")])].filter(key => !retainedKeys.has(key));
       for (const clave of keys) {
       const dedupeKey = auditIdentity(correo, clave);
       const previous = await tx.emailDeletionAudit.findUnique({ where: { dedupeKey } })
         ?? (await tx.emailDeletionAudit.findMany({ where: { correo, dedupeKey: null } })).find(row => (row.clave ?? "") === clave);
-      const auditShared = shared.filter(row => row.contrasena === clave);
-      const auditComplete = complete.filter(row => row.contrasena === clave);
-      const auditInventory = inventory.filter(row => (row.clave ?? "") === clave);
+      const auditShared = eligibleShared.filter(row => row.contrasena === clave);
+      const auditComplete = eligibleComplete.filter(row => row.contrasena === clave);
+      const auditInventory = eligibleInventory.filter(row => (row.clave ?? "") === clave);
       const auditScreens = screens.filter(row => auditShared.some(account => account.id === row.cuenta_id));
+      const auditContacts = [...new Set([...auditScreens, ...auditComplete].map(row => row.contacto))];
+      const auditClients = clients.filter(row => auditContacts.includes(row.contacto));
       const platforms = new Map<number, { id: number; nombre: string }>();
       if (Array.isArray(previous?.plataformas)) {
         for (const platform of previous.plataformas) {
@@ -105,12 +109,12 @@ export async function deleteEmails(db: PrismaClient, input: { adminId: number; m
         if (row.plataformas) platforms.set(row.plataformas.id, { id: row.plataformas.id, nombre: row.plataformas.nombre });
       }
       const fechaEliminacion = new Date();
-      const event = json({ fechaEliminacion, adminId: input.adminId, eliminadoPor: actor.usuario, motivo: input.motivo ?? null, cuentascompartidas: auditShared, cuentascompletas: auditComplete, pantallas: auditScreens, inventario: auditInventory, usuarios: clients });
+      const event = json({ fechaEliminacion, adminId: input.adminId, eliminadoPor: actor.usuario, motivo: input.motivo ?? null, cuentascompartidas: auditShared, cuentascompletas: auditComplete, pantallas: auditScreens, inventario: auditInventory, usuarios: auditClients });
       const oldEvents = previous && typeof previous.registros === "object" && previous.registros !== null && !Array.isArray(previous.registros) && Array.isArray(previous.registros.eventos) ? previous.registros.eventos : [];
       const data = {
         claves: previous?.dedupeKey == null && previous ? previous.claves : clave,
         clave,
-        plataformas: json([...platforms.values()]), contactos: json([...new Set([...(Array.isArray(previous?.contactos) ? previous.contactos.filter((contact): contact is string => typeof contact === "string") : []), ...contactos])]),
+        plataformas: json([...platforms.values()]), contactos: json([...new Set([...(Array.isArray(previous?.contactos) ? previous.contactos.filter((contact): contact is string => typeof contact === "string") : []), ...auditContacts])]),
         registros: json({ ...(previous && typeof previous.registros === "object" && previous.registros !== null && !Array.isArray(previous.registros) ? previous.registros : {}), eventos: [...oldEvents, event] }),
         identificadorOriginal: [...auditShared.map(row => `compartida:${row.id}`), ...auditComplete.map(row => `completa:${row.id}`), ...auditInventory.map(row => `inventario:${row.id}`)].join(",").slice(0, 255),
         adminId: input.adminId, eliminadoPor: actor.usuario, motivo: input.motivo ?? null, fechaEliminacion, revision,

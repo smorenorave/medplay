@@ -1,18 +1,11 @@
-import { jwtVerify } from "jose";
+import { getVerifiedAdminId } from "@/lib/requireAdmin";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 
 const Input = z.object({ email: z.string().trim().email().max(191) });
 
-async function adminId(req: NextRequest) {
-  const token = req.cookies.get("authToken")?.value;
-  const secret = process.env.AUTH_SECRET;
-  if (!token || !secret) return null;
-  const { payload } = await jwtVerify(token, new TextEncoder().encode(secret));
-  const id = Number(payload.sub);
-  return Number.isInteger(id) ? id : null;
-}
+const adminId = getVerifiedAdminId;
 
 export async function GET(req: NextRequest) {
   try {

@@ -7,7 +7,7 @@ const { deletionAuditFilters } = require('../lib/deletionAuditFilters.ts');
 
 // Transactional adapter, with simulated referential constraints; no MySQL required.
 function fixture() {
-  const p1 = { id: 1, nombre: 'MAX' }, p2 = { id: 2, nombre: 'Netflix' };
+  const p1 = { id: 1, nombre: 'MAX', auditarEliminaciones: true }, p2 = { id: 2, nombre: 'Netflix', auditarEliminaciones: true };
   let state = {
     admin: [{ id: 1, usuario: 'auditor' }],
     cuentascompartidas: [{ id: 1, correo: ' Test@Example.com ', contrasena: 'shared-key', plataformas: p1 }, { id: 2, correo: 'test@example.com', contrasena: 'duplicate-key', plataformas: p2 }, { id: 3, correo: 'other@example.com', contrasena: 'keep', plataformas: p1 }],
@@ -108,7 +108,7 @@ test('deletes duplicate email accounts across every live table/platform and reta
   assert.deepEqual(audit.plataformas.map(row => row.id), [2]);
   assert.equal(audit.claves, 'full-key');
   const event = audit.registros.eventos[0];
-  assert.equal(event.cuentascompletas[0].id, '10'); assert.equal(event.pantallas.length, 0); assert.equal(event.usuarios.length, 3);
+  assert.equal(event.cuentascompletas[0].id, '10'); assert.equal(event.pantallas.length, 0); assert.equal(event.usuarios.length, 1);
 });
 
 test('retries and simultaneous modules produce one audit and one deletion event', async () => {
@@ -324,4 +324,39 @@ test('revision endpoint reports committed deletions to other devices and no dupl
   assert.deepEqual(await (await route.GET(new Request('http://localhost/api/account-data-revision?since=1'))).json(), { revision: '1', correos: [] });
   assert.equal((await route.GET(new Request('http://localhost/api/account-data-revision?since=-1'))).status, 400);
   sessionId = null; assert.equal((await route.GET(new Request('http://localhost/api/account-data-revision'))).status, 401); sessionId = 1;
+});
+
+
+test('disabled platforms still delete globally and advance revision without creating audits', async () => {
+  const f = fixture();
+  for (const table of ['cuentascompartidas', 'cuentascompletas', 'inventario']) for (const row of f.state[table]) row.plataformas.auditarEliminaciones = false;
+  const result = await remove(f);
+  assert.equal(result.deleted.pantallas, 2); assert.equal(result.deleted.completas, 2);
+  assert.deepEqual(result.audits, []); assert.equal(f.state.emailDeletionAudit.length, 0);
+  assert.equal(result.revision, '1'); assert.equal(f.state.metricasmensuales.length, 0);
+});
+
+test('mixed enabled and disabled platforms with the same credentials only snapshot enabled records', async () => {
+  const f = fixture();
+  for (const table of ['cuentascompartidas', 'cuentascompletas', 'inventario']) for (const row of f.state[table]) {
+    if (row.correo.trim().toLowerCase() !== 'test@example.com') continue;
+    row.plataformas.auditarEliminaciones = row.plataforma_id === 1;
+    if ('contrasena' in row) row.contrasena = 'same'; else row.clave = 'same';
+  }
+  const result = await remove(f);
+  assert.equal(result.deleted.completas, 2); assert.equal(f.state.emailDeletionAudit.length, 1);
+  const audit = f.state.emailDeletionAudit[0], event = audit.registros.eventos[0];
+  assert.deepEqual(audit.plataformas.map(row => row.id), [1]);
+  assert.ok([...event.cuentascompartidas, ...event.cuentascompletas, ...event.inventario].every(row => row.plataforma_id === 1));
+  assert.deepEqual(event.pantallas.map(row => row.id), [1]);
+  assert.ok(!event.usuarios.some(row => row.contacto === 'only-full'));
+  assert.ok(!audit.contactos.includes('only-full'));
+});
+
+test('disabled audit leaves the last-record inventory rule intact', async () => {
+  const f = fixture();
+  for (const table of ['cuentascompartidas', 'cuentascompletas', 'inventario']) for (const row of f.state[table]) row.plataformas.auditarEliminaciones = false;
+  const result = await deleteEmails(f.db, { adminId: 1, expiredTargets: [{ tipo: 'completa', id: '10' }] });
+  assert.ok(f.state.inventario.some(row => row.correo === 'test@example.com' && row.plataforma_id === 2 && row.clave === 'full-key'));
+  assert.deepEqual(result.audits, []); assert.equal(result.deleted.completas, 2);
 });

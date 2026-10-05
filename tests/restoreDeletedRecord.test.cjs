@@ -6,7 +6,7 @@ const { restoreDeletedRecord, RestorationError } = require('../lib/restoreDelete
 const { deleteEmails } = require('../lib/emailDeletion.ts');
 
 function fixture() {
-  const platform = { id: 1, nombre: 'Disney' };
+  const platform = { id: 1, nombre: 'Disney', auditarEliminaciones: true };
   const shared = { id: 7, correo: ' Original@Example.com ', contrasena: 'Exact KEY ', proveedor: 'Proveedor', plataforma_id: 1, cuenta_caida: false, plataformas: platform };
   const screen = { id: 9, cuenta_id: 7, contacto: '3001234567', nro_pantalla: '2', pin: '1234', fecha_compra: '2026-09-01T00:00:00.000Z', fecha_vencimiento: '2026-10-01T00:00:00.000Z', estado: 'VENCIDA', comentario: 'Original', meses_pagados: 1, total_pagado: '20.00', total_pagado_proveedor: '8.00', total_ganado: '12.00' };
   const complete = { id: '21', correo: shared.correo, contrasena: shared.contrasena, plataforma_id: 1, contacto: screen.contacto, proveedor: 'Proveedor', plataformas: platform, fecha_compra: screen.fecha_compra, fecha_vencimiento: screen.fecha_vencimiento, estado: 'VENCIDA', comentario: 'Venta completa', meses_pagados: 1, total_pagado_completa: '50.00', total_pagado_proveedor_completa: '30.00', total_ganado: '20.00' };
@@ -25,7 +25,7 @@ function fixture() {
   for (const table of Object.keys(state)) {
     const check = operation => { if (fail === `${table}.${operation}`) throw Error('Injected failure'); };
     tx[table] = {
-      findMany: async ({ where } = {}) => structuredClone(state[table].filter(row => matches(row, where))),
+      findMany: async ({ where, include } = {}) => structuredClone(state[table].filter(row => matches(row, where)).map(row => include?.plataformas ? { ...row, plataformas: state.plataformas.find(platform => platform.id === row.plataforma_id) ?? null } : row)),
       findUnique: async ({ where }) => structuredClone(state[table].find(row => matches(row, where)) ?? null),
       create: async ({ data }) => {
         check('create');

@@ -8,7 +8,7 @@ const email = 'delete-ui@example.com';
 const secret = 'local-email-deletion-ui-test-secret';
 
 async function main() {
-  const server = spawn(process.execPath, [require.resolve('next/dist/bin/next'), 'start', '-p', '3107', '-H', '127.0.0.1'], { windowsHide: true, stdio: 'ignore', env: { ...process.env, AUTH_SECRET: secret, NEXT_PHASE: 'phase-production-build', DATABASE_URL: 'mysql://test:test@127.0.0.1:1/test' } });
+  const server = spawn(process.execPath, ['--require', require.resolve('./admin-ui-db.cjs'), require.resolve('next/dist/bin/next'), 'start', '-p', '3107', '-H', '127.0.0.1'], { windowsHide: true, stdio: 'ignore', env: { ...process.env, AUTH_SECRET: secret, NEXT_PHASE: 'phase-production-build', DATABASE_URL: 'mysql://test:test@127.0.0.1:1/test' } });
   let browser, page;
   try {
     let ready = false;
@@ -22,7 +22,14 @@ async function main() {
     assert.equal((await fetch(`${base}/api/admin/deletions/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auditId: '1', evento: 0, tipo: 'pantalla', id: '2' }) })).status, 401);
     assert.equal((await fetch(`${base}/api/account-deletions`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ correos: [email] }) })).status, 401);
     const { SignJWT } = await import('jose');
-    const token = await new SignJWT({}).setProtectedHeader({ alg: 'HS256' }).setSubject('1').setIssuedAt().setExpirationTime('1h').sign(new TextEncoder().encode(secret));
+    const normalToken = await new SignJWT({ role: 'user' }).setProtectedHeader({ alg: 'HS256' }).setSubject('1').setExpirationTime('1h').sign(new TextEncoder().encode(secret));
+    const normalHeaders = { cookie: 'authToken=' + normalToken + '; lastActivity=' + Date.now() };
+    for (const path of ['/api/admin/deletions', '/api/admin/settings/deletion-audit', '/api/admin/dashboard']) assert.equal((await fetch(base + path, { headers: normalHeaders })).status, 403);
+    for (const path of ['/admin', '/admin/settings', '/admin/deletions']) assert.equal((await fetch(base + path, { headers: normalHeaders, redirect: 'manual' })).status, 307);
+    assert.equal((await fetch(base + '/api/admin/settings/deletion-audit', { method: 'PUT', headers: { ...normalHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ plataformas: [] }) })).status, 403);
+
+    assert.equal((await fetch(base + '/api/admin/deletions/restore', { method: 'POST', headers: { ...normalHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ auditId: '1', evento: 0, tipo: 'pantalla', id: '2' }) })).status, 403);
+    const token = await new SignJWT({ role: "admin" }).setProtectedHeader({ alg: 'HS256' }).setSubject('1').setIssuedAt().setExpirationTime('1h').sign(new TextEncoder().encode(secret));
     browser = await chromium.launch({ channel: 'msedge', headless: true });
     const context = await browser.newContext({ viewport: { width: 1500, height: 1000 }, timezoneId: 'America/Bogota', locale: 'es-CO' });
     await context.addCookies([{ name: 'authToken', value: token, url: base }, { name: 'lastActivity', value: String(Date.now()), url: base }]);
@@ -61,6 +68,10 @@ async function main() {
         }
       }
       else if (path === '/api/admin/deletions') data = url.searchParams.has('facets') ? { plataformas: deleted ? [platform] : [] } : url.searchParams.has('id') ? { item: audit } : { items: deleted ? [audit] : [], total: deleted ? 1 : 0, pages: 1 };
+      else if (path === '/api/admin/settings/deletion-audit') {
+        if (request.method() === 'PUT') platform.auditarEliminaciones = request.postDataJSON().plataformas[0].habilitada;
+        data = { plataformas: [{ ...platform, auditarEliminaciones: platform.auditarEliminaciones !== false }] };
+      }
       else if (path === '/api/plataformas') data = [platform];
       else if (path.endsWith('/stamp')) data = { stamp: 1 }; // Unchanged max stamp deliberately exercises cache invalidation.
       else if (path.includes('check-last')) data = { isLast: inventoryScenario, remaining: inventoryScenario ? 1 : 2 };
@@ -69,7 +80,7 @@ async function main() {
       else if (path === '/api/inventario') data = deleted && !archived ? [] : [{ id: 3, correo: email, clave: account.contrasena, plataforma_id: 1 }];
       else if (path === '/api/cuentascompartidas') data = deleted && !screenRestored ? [] : [account];
       else if (path === '/api/usuarios') data = deleted && !screenRestored ? [] : [{ contacto: account.contacto, nombre: account.nombre }];
-      else if (path === '/api/dashboard') data = { salesToday: deleted ? 0 : 2, profitToday: 10, salesMonth: deleted ? 0 : 2, revenueMonth: 20, profitMonth: 10, activeScreens: deleted ? 0 : 1, expiringSoon: deleted ? 0 : 2, pendingAttention: 0, businessDate: today, topServices: [], lowStock: [], stockRotation: [] };
+      else if (path === '/api/admin/dashboard' || path === '/api/dashboard') data = { salesToday: deleted ? 0 : 2, profitToday: 10, salesMonth: deleted ? 0 : 2, revenueMonth: 20, profitMonth: 10, activeScreens: deleted ? 0 : 1, expiringSoon: deleted ? 0 : 2, pendingAttention: 0, businessDate: today, topServices: [], lowStock: [], stockRotation: [] };
       else if (path === '/api/metricas-mensuales') data = { error: 'Sin snapshot de prueba' };
       else if (path === '/api/account-credentials') data = { found: !deleted, contrasena: deleted ? '' : account.contrasena };
       else data = { ok: true };
@@ -77,9 +88,24 @@ async function main() {
     });
     page = await context.newPage();
     const errors = []; page.on('pageerror', error => errors.push(error.message));
+    await page.goto(base + '/admin/settings');
+    const auditCheckbox = page.getByRole('checkbox', { name: 'MAX', exact: true });
+    await auditCheckbox.uncheck();
+    await page.getByRole('button', { name: 'Guardar configuración', exact: true }).click();
+    await page.getByRole('status').waitFor();
+    await page.reload();
+    await auditCheckbox.waitFor();
+    assert.equal(await auditCheckbox.isChecked(), false);
+    await auditCheckbox.check();
+    await page.getByRole("button", { name: "Guardar configuración", exact: true }).click();
+    await page.getByRole("status").waitFor();
+    await page.goto(base + '/admin');
+    for (const label of ['Ventas hoy', 'Ganancia de hoy', 'Ventas del mes', 'Ingresos del mes', 'Ganancia del mes']) await page.getByText(label, { exact: true }).waitFor();
     await page.goto(base);
     const nav = page.getByRole('navigation', { name: 'Navegación principal' });
     await nav.waitFor();
+    await page.getByText('Ventas hoy', { exact: true }).waitFor();
+    for (const label of ['Ganancia de hoy', 'Ventas del mes', 'Ingresos del mes', 'Ganancia del mes']) assert.equal(await page.getByText(label, { exact: true }).count(), 0);
     if (await page.getByRole('button', { name: /Abrir cronómetro/ }).count() === 0) await page.getByTitle('Cerrar (solo oculta)').click();
     for (const name of ['Cuentas completas', 'Pantallas']) {
       await nav.getByRole('button', { name, exact: true }).click();
@@ -107,7 +133,9 @@ async function main() {
     await nav.getByRole('button', { name: 'Catálogos e inventario', exact: true }).click();
     await page.getByRole('button', { name: 'Inventario', exact: true }).click();
     assert.equal(await page.getByText(email, { exact: true }).count(), 0);
-    await nav.getByRole('link', { name: 'Historial de eliminaciones', exact: true }).click();
+    assert.equal(await nav.getByRole('link', { name: /Historial de eliminaciones/ }).count(), 0);
+    await page.goto(base + '/admin');
+    await page.getByRole('navigation', { name: 'Administración' }).getByRole('link', { name: /Historial de eliminaciones/ }).click();
     await page.getByText(email, { exact: true }).waitFor();
     await page.getByText('Eliminación desde Vencimientos', { exact: true }).waitFor();
     await page.getByLabel('Correo', { exact: true }).fill(email);
@@ -173,7 +201,7 @@ async function main() {
     await page.getByRole('button', { name: 'Inventario', exact: true }).click();
     await page.getByText(email, { exact: true }).filter({ visible: true }).first().waitFor();
     assert.deepEqual(errors, []);
-    console.log('UI PASS: deletion, original screen restoration with confirmation, cross-tab refresh, Vencimientos, inventory, audit filters/detail and mobile layout. No MySQL used.');
+    console.log('UI PASS: Admin permissions, platform settings saved/reloaded, separated sales metrics, deletion/restoration, cross-tab refresh, inventory and mobile layout. No MySQL used.');
   } catch (error) {
     if (page) {
       fs.mkdirSync('.logs', { recursive: true });

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import AdminSalesSummary from '@/components/AdminSalesSummary';
 import { useAccountDataRefresh } from '@/hooks/useAccountDataRefresh';
 import { readCurrentAccountData } from '@/lib/accountDataChanges';
 import { useEffect, useMemo, useState, useCallback } from 'react';
@@ -549,9 +550,11 @@ export default function AdminPanel() {
   /* ===================== UI ===================== */
   return (
     <div className="mx-auto max-w-[1250px] p-6 space-y-6">
+      <nav aria-label="Administración" className="flex flex-wrap gap-3 text-sky-300"><Link href="/admin">📊 Dashboard</Link><Link href="/">👥 Gestión de cuentas</Link><Link href="/admin/deletions">🗑️ Historial de eliminaciones</Link><Link href="/admin/settings">⚙️ Configuración</Link></nav>
+      <AdminSalesSummary />
       <header className="flex flex-wrap items-center gap-3 justify-between">
         <div className="flex items-end gap-3">
-          <Link href="/admin/deletions" className="rounded-md border border-neutral-700 px-3 py-2 text-sm text-sky-300">Historial de eliminaciones</Link>
+
           <h1 className="text-2xl font-bold text-neutral-100">Panel de Información (Admin)</h1>
           <span className="text-sm text-neutral-400">• {monthName(year, month)}</span>
         </div>

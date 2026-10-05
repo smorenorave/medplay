@@ -167,6 +167,7 @@ exports.Prisma.PantallasScalarFieldEnum = {
 
 exports.Prisma.PlataformasScalarFieldEnum = {
   id: 'id',
+  auditarEliminaciones: 'auditarEliminaciones',
   nombre: 'nombre',
   cantidad_pantallas: 'cantidad_pantallas',
   total_pagado_proveedor: 'total_pagado_proveedor',

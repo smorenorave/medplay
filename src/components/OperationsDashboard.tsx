@@ -3,11 +3,12 @@ import { useAccountDataRefresh } from "@/hooks/useAccountDataRefresh";
 import { readCurrentAccountData } from "@/lib/accountDataChanges";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, ArrowRight, BadgeDollarSign, CalendarClock, CircleDollarSign, HandCoins, PackageCheck, RefreshCw, ShoppingBag, Sparkles } from "lucide-react";
+import SalesMetricsPanel from "./SalesMetricsPanel";
+import { AlertTriangle, ArrowRight, CalendarClock, PackageCheck, RefreshCw, Sparkles } from "lucide-react";
 
 type StockRotation = { name: string; stock: number; sales: number; priority: "high" | "medium" | "normal" };
 type DashboardData = {
-  salesToday: number; profitToday: number; salesMonth: number; revenueMonth: number; profitMonth: number;
+  salesToday: number;
   activeScreens: number; expiringSoon: number; pendingAttention: number; businessDate: string;
   topServices: { name: string; count: number }[]; lowStock: { name: string; count: number }[];
   stockRotation: StockRotation[];
@@ -43,19 +44,11 @@ export default function OperationsDashboard({ onNavigate }: { onNavigate: (view:
   </div>;
   if (!data) return <DashboardSkeleton />;
 
-  const currency = (value: number) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(value);
-  const metrics = [
-    { label: "Ventas hoy", value: data.salesToday, icon: ShoppingBag, tone: "text-sky-300 bg-sky-400/10" },
-    { label: "Ganancia de hoy", value: currency(data.profitToday), icon: HandCoins, tone: "text-teal-300 bg-teal-400/10" },
-    { label: "Ventas del mes", value: data.salesMonth, icon: CalendarClock, tone: "text-violet-300 bg-violet-400/10" },
-    { label: "Ingresos del mes", value: currency(data.revenueMonth), icon: CircleDollarSign, tone: "text-emerald-300 bg-emerald-400/10" },
-    { label: "Ganancia del mes", value: currency(data.profitMonth), icon: BadgeDollarSign, tone: "text-amber-300 bg-amber-400/10" },
-  ];
 
   return <div className="space-y-6">
     <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><div className="inline-flex items-center gap-2 text-sm font-semibold text-sky-300"><Sparkles size={16} /> Resumen operativo</div><h2 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl">Centro de operación</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-neutral-400">Indicadores comerciales y alertas para decidir dónde enfocar el trabajo de hoy.</p></div><button type="button" onClick={load} disabled={refreshing} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-neutral-200 transition hover:border-white/20 hover:bg-white/10 disabled:opacity-50"><RefreshCw size={16} className={refreshing ? "animate-spin" : ""} /> Actualizar</button></header>
 
-    <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Indicadores comerciales">{metrics.map(({ label, value, icon: Icon, tone }) => <article key={label} className="group rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.07] to-white/[0.025] p-4 transition duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl sm:p-5"><div className={`inline-flex rounded-xl p-2.5 ${tone}`}><Icon size={20} /></div><p className="mt-4 text-sm font-medium text-neutral-400">{label}</p><p className="mt-1 break-words text-2xl font-bold tabular-nums text-white">{value}</p></article>)}</section>
+    <SalesMetricsPanel data={data} dailyOnly />
 
     <section className="grid gap-3 lg:grid-cols-3">
       <DashboardAction icon={<PackageCheck size={22} />} value={data.activeScreens} label="Pantallas activas" hint={`Vencen después de ${data.businessDate}`} tone="emerald" onClick={() => onNavigate("ver-pantalla")} />
@@ -83,5 +76,5 @@ function StockCard({ service }: { service: StockRotation }) {
 }
 
 function DashboardSkeleton() {
-  return <div className="animate-pulse space-y-5" aria-label="Cargando resumen operativo"><div className="h-24 rounded-2xl bg-white/5" /><div className="grid grid-cols-2 gap-3 xl:grid-cols-5">{Array.from({ length: 5 }, (_, index) => <div key={index} className="h-32 rounded-2xl bg-white/5" />)}</div><div className="h-64 rounded-2xl bg-white/5" /></div>;
+  return <div className="animate-pulse space-y-5" aria-label="Cargando resumen operativo"><div className="h-24 rounded-2xl bg-white/5" /><div className="grid grid-cols-2 gap-3 xl:grid-cols-5">{Array.from({ length: 1 }, (_, index) => <div key={index} className="h-32 rounded-2xl bg-white/5" />)}</div><div className="h-64 rounded-2xl bg-white/5" /></div>;
 }

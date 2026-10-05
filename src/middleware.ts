@@ -52,7 +52,13 @@ export async function middleware(req: NextRequest) {
 
   // Verificar JWT
   try {
-    await jwtVerify(token, getSecret());
+    const { payload } = await jwtVerify(token, getSecret());
+    const adminPath = pathname.startsWith("/admin") || (pathname.startsWith("/api/admin/") && !PUBLIC_API_PATHS.has(pathname));
+    if (adminPath && payload.role !== "admin") {
+      if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Permisos de administrador requeridos" }, { status: 403 });
+      const url = req.nextUrl.clone(); url.pathname = "/"; url.search = "?reason=admin-required";
+      return NextResponse.redirect(url);
+    }
   } catch {
     const res = unauthorized(req, "invalid-token");
     // limpiar cookies corruptas
