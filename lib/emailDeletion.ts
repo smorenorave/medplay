@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from "../src/generated/prisma";
+import { AccountSafetyError, ACTIVE_ACCOUNT_WARNING, hasActiveAssignment, type ConfirmedAccount } from "./expiredAccountSafety";
 import { createHash } from "node:crypto";
 
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
@@ -18,8 +19,9 @@ export async function serializable<T>(db: PrismaClient, work: (tx: Prisma.Transa
 
 /** Global removal; expired selections retain the last platform/type relation in inventory. */
 export type DeletionTarget = { tipo: "pantalla" | "completa" | "compartida" | "inventario"; id: string };
-export async function deleteEmails(db: PrismaClient, input: { adminId: number; motivo?: string; destino?: "inventario" | "eliminar" } & ({ correos: string[]; target?: never; expiredTargets?: never } | { target: DeletionTarget; correos?: never; expiredTargets?: never } | { expiredTargets: DeletionTarget[]; correos?: never; target?: never })) {
+export async function deleteEmails(db: PrismaClient, input: { adminId: number; motivo?: string; destino?: "inventario" | "eliminar"; scopedExpired?: boolean; expected?: ConfirmedAccount } & ({ correos: string[]; target?: never; expiredTargets?: never } | { target: DeletionTarget; correos?: never; expiredTargets?: never } | { expiredTargets: DeletionTarget[]; correos?: never; target?: never })) {
   if (input.correos && (!input.correos.length || input.correos.length > 100 || input.correos.some(email => !email.trim() || email.trim().length > 191))) throw new Error("invalid-emails");
+  if (input.destino === "eliminar" && (!input.scopedExpired || input.expiredTargets?.length !== 1 || !input.expected?.confirmado)) throw new AccountSafetyError("La eliminación definitiva requiere un único registro y la confirmación de su correo y clave.");
   return serializable(db, async tx => {
     const actor = await tx.admin.findUnique({ where: { id: input.adminId }, select: { usuario: true } });
     if (!actor) throw new Error("unauthorized");
@@ -35,6 +37,7 @@ export async function deleteEmails(db: PrismaClient, input: { adminId: number; m
             : await tx.inventario.findUnique({ where: { id: Number(id) }, select: { correo: true } });
       const email = row && ("correo" in row ? row.correo : row.cuentascompartidas.correo);
       if (email) correos.push(email);
+      else if (input.scopedExpired) throw new AccountSafetyError("El registro seleccionado ya no existe. Actualiza la lista.");
     }
     correos = [...new Set(correos.map(normalizeEmail))].sort();
     const deleted = { pantallas: 0, compartidas: 0, completas: 0, inventario: 0, clientes: 0 };
@@ -45,15 +48,39 @@ export async function deleteEmails(db: PrismaClient, input: { adminId: number; m
       const sharedIds = await tx.$queryRaw<{ id: number }[]>(Prisma.sql`SELECT id FROM cuentascompartidas WHERE LOWER(TRIM(correo)) = ${correo} FOR UPDATE`);
       const completeIds = await tx.$queryRaw<{ id: bigint }[]>(Prisma.sql`SELECT id FROM cuentascompletas WHERE LOWER(TRIM(correo)) = ${correo} FOR UPDATE`);
       const inventoryIds = await tx.$queryRaw<{ id: number }[]>(Prisma.sql`SELECT id FROM inventario WHERE LOWER(TRIM(correo)) = ${correo} FOR UPDATE`);
-      const shared = await tx.cuentascompartidas.findMany({ where: { id: { in: sharedIds.map(row => row.id) } }, include: { plataformas: true } });
-      const complete = await tx.cuentascompletas.findMany({ where: { id: { in: completeIds.map(row => row.id) } }, include: { plataformas: true } });
-      const inventory = await tx.inventario.findMany({ where: { id: { in: inventoryIds.map(row => row.id) } }, include: { plataformas: true } });
+      let shared = await tx.cuentascompartidas.findMany({ where: { id: { in: sharedIds.map(row => row.id) } }, include: { plataformas: true } });
+      let complete = await tx.cuentascompletas.findMany({ where: { id: { in: completeIds.map(row => row.id) } }, include: { plataformas: true } });
+      let inventory = await tx.inventario.findMany({ where: { id: { in: inventoryIds.map(row => row.id) } }, include: { plataformas: true } });
       if (!shared.length && !complete.length && !inventory.length) {
         const previous = await tx.emailDeletionAudit.findMany({ where: { correo } });
         audits.push(...previous.map(row => ({ id: String(row.id), correo })));
         continue; // Retrying a deletion must neither create nor modify its audit.
       }
-      const screens = await tx.pantallas.findMany({ where: { cuenta_id: { in: shared.map(row => row.id) } } });
+      let screens = await tx.pantallas.findMany({ where: { cuenta_id: { in: shared.map(row => row.id) } } });
+      const allComplete = complete, allScreens = screens;
+      if (input.scopedExpired && input.expiredTargets) {
+        const selectedScreens = new Set(input.expiredTargets.filter(row => row.tipo === "pantalla").map(row => Number(row.id)));
+        const selectedComplete = new Set(input.expiredTargets.filter(row => row.tipo === "completa").map(row => BigInt(row.id)));
+        const targetScreens = screens.filter(row => selectedScreens.has(row.id));
+        const targetComplete = complete.filter(row => selectedComplete.has(row.id));
+        if ([...targetScreens, ...targetComplete].some(hasActiveAssignment)) throw new AccountSafetyError(ACTIVE_ACCOUNT_WARNING);
+        if (input.destino === "eliminar" || input.expected) {
+          const selected = input.expiredTargets[0];
+          const account = selected.tipo === "completa" ? targetComplete[0] : shared.find(row => row.id === targetScreens[0]?.cuenta_id);
+          if (!account || account.correo !== input.expected!.correo || account.contrasena !== input.expected!.clave || account.plataforma_id !== input.expected!.plataformaId) throw new AccountSafetyError("La cuenta cambió o no corresponde al registro confirmado. Actualiza y vuelve a verificar.");
+          const relatedShared = shared.filter(row => row.plataforma_id === account.plataforma_id && row.contrasena === account.contrasena);
+          const relatedComplete = complete.filter(row => row.plataforma_id === account.plataforma_id && row.contrasena === account.contrasena);
+          const relatedScreens = screens.filter(row => relatedShared.some(parent => parent.id === row.cuenta_id));
+          if ([...relatedScreens, ...relatedComplete].some(hasActiveAssignment)) throw new AccountSafetyError(ACTIVE_ACCOUNT_WARNING);
+          const isLast = selected.tipo === "pantalla" ? relatedScreens.length === 1 && relatedComplete.length === 0 : relatedComplete.length === 1 && relatedScreens.length === 0;
+          if (!isLast) throw new AccountSafetyError("Solo se puede eliminar definitivamente el último registro de esta cuenta.");
+        }
+        // Retain parents with any unselected screen; delete only the explicit IDs.
+        shared = shared.filter(row => targetScreens.some(screen => screen.cuenta_id === row.id) && screens.filter(screen => screen.cuenta_id === row.id).every(screen => selectedScreens.has(screen.id)));
+        complete = targetComplete;
+        screens = targetScreens;
+        inventory = []; // Existing inventory and other accounts are never collateral deletions.
+      }
       // Preserve the existing last-record criterion: same type, platform and email.
       // Count the whole selection so a batch containing the final relations also archives.
       const keep = new Map<number, string | null>();
@@ -61,21 +88,26 @@ export async function deleteEmails(db: PrismaClient, input: { adminId: number; m
         const selectedScreens = new Set(input.expiredTargets.filter(row => row.tipo === "pantalla").map(row => Number(row.id)));
         const selectedComplete = new Set(input.expiredTargets.filter(row => row.tipo === "completa").map(row => BigInt(row.id)));
         for (const row of complete.filter(row => selectedComplete.has(row.id))) {
-          const pool = complete.filter(other => other.plataforma_id === row.plataforma_id);
+          const pool = (input.scopedExpired ? allComplete : complete).filter(other => other.plataforma_id === row.plataforma_id && (!input.scopedExpired || other.contrasena === row.contrasena));
           if (pool.every(other => selectedComplete.has(other.id))) keep.set(row.plataforma_id, row.contrasena);
         }
         for (const row of shared) {
           if (!screens.some(screen => screen.cuenta_id === row.id && selectedScreens.has(screen.id))) continue;
           const accountIds = new Set(shared.filter(other => other.plataforma_id === row.plataforma_id).map(other => other.id));
-          const pool = screens.filter(screen => accountIds.has(screen.cuenta_id));
+          const pool = (input.scopedExpired ? allScreens : screens).filter(screen => accountIds.has(screen.cuenta_id));
           if (pool.length && pool.some(screen => selectedScreens.has(screen.id)) && pool.every(screen => selectedScreens.has(screen.id))) {
             if (row.plataforma_id == null) throw new Error("No se puede enviar a Inventario una cuenta sin plataforma.");
             keep.set(row.plataforma_id, row.contrasena);
           }
         }
       }
+      if (input.scopedExpired && keep.size && (!input.expected?.confirmado || input.expiredTargets?.length !== 1)) throw new AccountSafetyError("El último registro requiere verificar correo y contraseña y confirmar su destino individualmente.");
       const keptInventoryIds: number[] = [];
       for (const [plataforma_id, clave] of keep) {
+        if (input.scopedExpired) {
+          const existing = await tx.inventario.findUnique({ where: { plataforma_id_correo: { plataforma_id, correo } } });
+          if (existing && existing.clave !== clave) throw new AccountSafetyError("Ya existe otra cuenta en Inventario con ese correo y plataforma. No se puede sobrescribir.");
+        }
         const kept = await tx.inventario.upsert({ where: { plataforma_id_correo: { plataforma_id, correo } }, create: { plataforma_id, correo, clave }, update: { clave } });
         keptInventoryIds.push(kept.id);
       }
@@ -122,11 +154,11 @@ export async function deleteEmails(db: PrismaClient, input: { adminId: number; m
       const audit = await tx.emailDeletionAudit.upsert({ where: previous ? { id: previous.id } : { dedupeKey }, create: { correo, dedupeKey, ...data }, update: { ...data, dedupeKey } });
       audits.push({ id: String(audit.id), correo });
       }
-      deleted.pantallas += (await tx.pantallas.deleteMany({ where: { cuenta_id: { in: shared.map(row => row.id) } } })).count;
+      deleted.pantallas += (await tx.pantallas.deleteMany({ where: input.scopedExpired ? { id: { in: screens.map(row => row.id) } } : { cuenta_id: { in: shared.map(row => row.id) } } })).count;
       deleted.compartidas += (await tx.cuentascompartidas.deleteMany({ where: { id: { in: shared.map(row => row.id) } } })).count;
       deleted.completas += (await tx.cuentascompletas.deleteMany({ where: { id: { in: complete.map(row => row.id) } } })).count;
       deleted.inventario += (await tx.inventario.deleteMany({ where: { id: { in: inventory.map(row => row.id).filter(id => !keptInventoryIds.includes(id)) } } })).count;
-      deleted.clientes += (await tx.usuarios.deleteMany({ where: { contacto: { in: contactos }, pantallas: { none: {} }, cuentascompletas: { none: {} } } })).count;
+      if (!input.scopedExpired) deleted.clientes += (await tx.usuarios.deleteMany({ where: { contacto: { in: contactos }, pantallas: { none: {} }, cuentascompletas: { none: {} } } })).count;
     }
     if (revision !== undefined) await tx.metricasmensuales.deleteMany({}); // Derived snapshots regenerate from live data.
     else revision = (await tx.accountDataRevision.findUnique({ where: { id: 1 } }))?.revision ?? 0n;

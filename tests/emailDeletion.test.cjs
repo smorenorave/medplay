@@ -274,7 +274,8 @@ test('expired endpoint authenticates, validates targets and preserves the last c
   assert.equal((await expiredRoute.DELETE(request({ targets: [{ tipo: 'completa', id: '10' }] }))).status, 401);
   sessionId = 1;
   for (const data of [{ targets: [] }, { targets: [{ tipo: 'inventario', id: '1' }] }, { targets: [{ tipo: 'pantalla', id: '2147483648' }] }, { targets: [{ tipo: 'completa', id: '18446744073709551616' }] }]) assert.equal((await expiredRoute.DELETE(request(data))).status, 400);
-  const response = await expiredRoute.DELETE(request({ targets: [{ tipo: 'completa', id: '10' }], motivo: 'Vencida' }));
+  routeFixture.state.cuentascompletas[0].fecha_vencimiento = new Date('2020-01-01');
+  const response = await expiredRoute.DELETE(request({ targets: [{ tipo: 'completa', id: '10' }], motivo: 'Vencida', expected: { correo: 'TEST@example.com', clave: 'full-key', plataformaId: 2, confirmado: true } }));
   assert.equal(response.status, 200);
   assert.ok(routeFixture.state.inventario.some(row => row.clave === 'full-key'));
   assert.equal(routeFixture.state.emailDeletionAudit.some(row => row.clave === 'full-key'), false);
@@ -363,9 +364,23 @@ test('disabled audit leaves the last-record inventory rule intact', async () => 
 
 test('expired endpoint forwards explicit definitive choice and rejects unknown destinations', async () => {
   routeFixture = fixture(); sessionId = 1;
-  const request = destino => new Request('http://localhost/api/cuentasvencidas/delete', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targets: [{ tipo: 'completa', id: '10' }], destino }) });
+  routeFixture.state.cuentascompletas[0].fecha_vencimiento = new Date('2020-01-01');
+  const request = destino => new Request('http://localhost/api/cuentasvencidas/delete', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targets: [{ tipo: 'completa', id: '10' }], destino, expected: { correo: 'TEST@example.com', clave: 'full-key', plataformaId: 2, confirmado: true } }) });
   assert.equal((await expiredRoute.DELETE(request('unknown'))).status, 400);
   assert.equal((await expiredRoute.DELETE(request('eliminar'))).status, 200);
-  assert.equal(routeFixture.state.inventario.some(row => row.correo.trim().toLowerCase() === 'test@example.com'), false);
+  assert.equal(routeFixture.state.inventario.filter(row => row.correo.trim().toLowerCase() === 'test@example.com').length, 2);
+  assert.equal(routeFixture.state.cuentascompletas.length, 2); assert.equal(routeFixture.state.pantallas.length, 3);
   assert.ok(routeFixture.state.emailDeletionAudit.some(row => row.clave === 'full-key'));
+});
+
+test('backend blocks active assignments, bypassed confirmation, mixed batches and stale identities without mutation', async () => {
+  routeFixture = fixture(); sessionId = 1;
+  const req = data => new Request('http://localhost/api/cuentasvencidas/delete', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  const confirmed = { targets: [{ tipo: 'completa', id: '10' }], destino: 'eliminar', expected: { correo: 'TEST@example.com', clave: 'full-key', plataformaId: 2, confirmado: true } };
+  let before = structuredClone(routeFixture.state);
+  assert.equal((await expiredRoute.DELETE(req(confirmed))).status, 409); assert.deepEqual(routeFixture.state, before);
+  routeFixture.state.cuentascompletas[0].fecha_vencimiento = new Date('2020-01-01'); before = structuredClone(routeFixture.state);
+  for (const body of [{ ...confirmed, expected: undefined }, { ...confirmed, expected: { ...confirmed.expected, clave: 'changed' } }, { ...confirmed, targets: [...confirmed.targets, { tipo: 'completa', id: '11' }] }]) {
+    assert.equal((await expiredRoute.DELETE(req(body))).status, 409); assert.deepEqual(routeFixture.state, before);
+  }
 });

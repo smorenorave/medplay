@@ -37,7 +37,7 @@ async function main() {
     const platform = { id: 1, nombre: 'MAX', cantidad_pantallas: 5 };
     const account = { id: 1, cuenta_id: 1, correo: email, contrasena: 'ui-original-key', plataforma_id: 1, contacto: '3001234567', nombre: 'Cliente prueba', fecha_compra: today, fecha_vencimiento: today, nro_pantalla: '1', meses_pagados: 1, total_ganado: 10, total_pagado: 20, total_pagado_proveedor: 10, total_pagado_completa: 20, total_pagado_proveedor_completa: 10 };
     const screen = { ...account, id: 2 };
-    let definitiveScenario = false;
+    let definitiveScenario = false, activeScenario = false;
     let deleted = false, deleteCalls = 0, inventoryScenario = false, archived = false, screenRestored = false, restoreCalls = 0;
     const audit = { id: '1', correo: email, clave: 'ui-original-key', plataformas: [platform], contactos: [account.contacto], eliminadoPor: 'Admin UI', motivo: 'Eliminación definitiva desde Vencimientos', identificadorOriginal: 'completa:1,compartida:1', primeraEliminacion: new Date().toISOString(), fechaEliminacion: new Date().toISOString(), registros: { eventos: [{ fechaEliminacion: new Date().toISOString(), eliminadoPor: 'Admin UI', cuentascompletas: [account], pantallas: [screen], inventario: [{ id: 3, correo: email, clave: account.contrasena }] }] } };
     const requests = [];
@@ -55,6 +55,7 @@ async function main() {
         audit.registros.restauraciones = [{ evento: 0, tipo: 'pantalla', id: '2', fechaRestauracion: new Date().toISOString(), restauradoPor: 'Admin UI' }];
         data = { correos: [email], revision: '2', alreadyRestored: false };
       }
+      else if (path === '/api/cuentasvencidas/delete' && request.method() === 'GET') data = { isLast: inventoryScenario, remaining: inventoryScenario ? 1 : 2, active: activeScenario, warning: activeScenario ? 'No se puede eliminar esta cuenta porque tiene usuarios activos asociados. Debes verificar y resolver estas asignaciones antes de continuar.' : null, correo: email, clave: account.contrasena, plataformaId: 1 };
       else if (path === '/api/cuentasvencidas/delete') {
         assert.equal(request.method(), 'DELETE'); assert.deepEqual(request.postDataJSON().targets, [{ tipo: 'completa', id: '1' }]);
         if (inventoryScenario && !definitiveScenario) {
@@ -65,6 +66,7 @@ async function main() {
           data = { correos: [email], revision: '3', audits: [] };
         } else {
           assert.equal(request.postDataJSON().destino, definitiveScenario ? 'eliminar' : 'inventario');
+          if (definitiveScenario) assert.deepEqual(request.postDataJSON().expected, { correo: email, clave: account.contrasena, plataformaId: 1, confirmado: true });
           assert.equal(request.postDataJSON().motivo, 'Eliminación desde Vencimientos');
           audit.motivo = request.postDataJSON().motivo;
           deleted = true; if (definitiveScenario) screenRestored = false; deleteCalls++; data = { correos: [email], revision: '1', audits: [{ id: '1', correo: email }] };
@@ -197,6 +199,7 @@ async function main() {
     if (await page.getByRole('button', { name: /Abrir cronómetro/ }).count() === 0) await page.getByTitle('Cerrar (solo oculta)').click();
     await newNav.getByRole('button', { name: 'Vencimientos', exact: true }).click();
     await page.getByRole('row').filter({ hasText: email }).filter({ hasText: 'Cuenta completa' }).first().getByRole('button', { name: 'Eliminar', exact: true }).click();
+    await page.getByText('Correo:', { exact: false }).filter({ visible: true }).first().waitFor();
     await page.getByLabel('Comentario / motivo (opcional)', { exact: true }).fill('Última cuenta conservada');
     assert.equal(await page.getByRole('dialog').getByRole('button', { name: 'Eliminar definitivamente', exact: true }).count(), 1);
     await page.getByRole('button', { name: 'Enviar al inventario y eliminar', exact: true }).click();
@@ -213,6 +216,14 @@ async function main() {
     await finalNav.waitFor();
     if (await page.getByRole('button', { name: /Abrir cronómetro/ }).count() === 0) await page.getByTitle('Cerrar (solo oculta)').click();
     await finalNav.getByRole('button', { name: 'Vencimientos', exact: true }).click();
+    activeScenario = true;
+    let activeWarning = '';
+    page.once('dialog', async dialog => { activeWarning = dialog.message(); await dialog.accept(); });
+    await page.getByRole('row').filter({ hasText: email }).filter({ hasText: 'Cuenta completa' }).first().getByRole('button', { name: 'Eliminar', exact: true }).click();
+    await page.waitForTimeout(250);
+    assert.match(activeWarning, /usuarios activos asociados/); assert.equal(deleteCalls, 2);
+    assert.equal(await page.getByRole('dialog').count(), 0);
+    activeScenario = false;
     await page.getByRole('row').filter({ hasText: email }).filter({ hasText: 'Cuenta completa' }).first().getByRole('button', { name: 'Eliminar', exact: true }).click();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('dialog').getByRole('button', { name: 'Eliminar definitivamente', exact: true }).waitFor();
@@ -224,7 +235,9 @@ async function main() {
     await page.getByRole('dialog').getByRole('button', { name: 'Cancelar', exact: true }).click();
     assert.equal(deleteCalls, 2);
     await page.setViewportSize({ width: 1500, height: 1000 });
-    await page.getByRole('row').filter({ hasText: email }).filter({ hasText: 'Cuenta completa' }).first().getByRole('button', { name: 'Eliminar definitivamente', exact: true }).click();
+    assert.equal(await page.getByRole('row').filter({ hasText: email }).getByRole('button', { name: 'Eliminar definitivamente', exact: true }).count(), 0);
+    await page.getByRole('row').filter({ hasText: email }).filter({ hasText: 'Cuenta completa' }).first().getByRole('button', { name: 'Eliminar', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Eliminar definitivamente', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Eliminar definitivamente', exact: true }).click();
     await page.waitForFunction(() => !document.getElementById('action-panel').textContent.includes('delete-ui@example.com'));
     assert.equal(deleteCalls, 3); assert.equal(archived, false);
