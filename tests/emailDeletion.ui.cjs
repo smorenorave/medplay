@@ -37,7 +37,7 @@ async function main() {
     const platform = { id: 1, nombre: 'MAX', cantidad_pantallas: 5 };
     const account = { id: 1, cuenta_id: 1, correo: email, contrasena: 'ui-original-key', plataforma_id: 1, contacto: '3001234567', nombre: 'Cliente prueba', fecha_compra: today, fecha_vencimiento: today, nro_pantalla: '1', meses_pagados: 1, total_ganado: 10, total_pagado: 20, total_pagado_proveedor: 10, total_pagado_completa: 20, total_pagado_proveedor_completa: 10 };
     const screen = { ...account, id: 2 };
-    let definitiveScenario = false, activeScenario = false;
+    let emptySettings = false, definitiveScenario = false, activeScenario = false;
     let deleted = false, deleteCalls = 0, inventoryScenario = false, archived = false, screenRestored = false, restoreCalls = 0;
     const audit = { id: '1', correo: email, clave: 'ui-original-key', plataformas: [platform], contactos: [account.contacto], eliminadoPor: 'Admin UI', motivo: 'Eliminación definitiva desde Vencimientos', identificadorOriginal: 'completa:1,compartida:1', primeraEliminacion: new Date().toISOString(), fechaEliminacion: new Date().toISOString(), registros: { eventos: [{ fechaEliminacion: new Date().toISOString(), eliminadoPor: 'Admin UI', cuentascompletas: [account], pantallas: [screen], inventario: [{ id: 3, correo: email, clave: account.contrasena }] }] } };
     const requests = [];
@@ -74,6 +74,7 @@ async function main() {
       }
       else if (path === '/api/admin/deletions') data = url.searchParams.has('facets') ? { plataformas: deleted ? [platform] : [] } : url.searchParams.has('id') ? { item: audit } : { items: deleted ? [audit] : [], total: deleted ? 1 : 0, pages: 1 };
       else if (path === '/api/admin/settings/deletion-audit') {
+        if (emptySettings) return route.fulfill({ status: 500, contentType: 'application/json', body: '' });
         if (request.method() === 'PUT') platform.auditarEliminaciones = request.postDataJSON().plataformas[0].habilitada;
         data = { plataformas: [{ ...platform, auditarEliminaciones: platform.auditarEliminaciones !== false }] };
       }
@@ -95,7 +96,14 @@ async function main() {
     page.setDefaultTimeout(15000);
     page.setDefaultNavigationTimeout(15000);
     const errors = []; page.on('pageerror', error => errors.push(error.message));
+    emptySettings = true;
     await page.goto(base + '/admin/settings');
+    await page.locator('p[role=alert]').waitFor();
+    assert.ok(!(await page.locator('p[role=alert]').innerText()).includes('Unexpected end'));
+    assert.equal(await page.getByText('No hay plataformas registradas.', { exact: true }).count(), 0);
+    assert.ok(await page.getByRole('button', { name: 'Guardar configuración', exact: true }).isDisabled());
+    emptySettings = false;
+    await page.getByRole('button', { name: 'Actualizar plataformas', exact: true }).click();
     const auditCheckbox = page.getByRole('checkbox', { name: 'MAX', exact: true });
     await auditCheckbox.uncheck();
     await page.getByRole('button', { name: 'Guardar configuración', exact: true }).click();

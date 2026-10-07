@@ -73,3 +73,15 @@ test('daily summary keeps operational data while administrative endpoint retains
   for (const key of ['profitToday', 'salesMonth', 'revenueMonth', 'profitMonth']) assert.ok(!(key in daily));
   for (const key of ['salesToday', 'activeScreens', 'expiringSoon', 'pendingAttention', 'topServices', 'lowStock', 'stockRotation', 'businessDate']) assert.deepEqual(daily[key], full[key]);
 });
+
+test('failed catalog reads and saves return JSON instead of an empty server response', async () => {
+  const original = db.plataformas.findMany;
+  db.plataformas.findMany = async () => { throw Object.assign(new Error('Missing column'), { code: 'P2022' }); };
+  try {
+    for (const response of [await settings.GET(await request()), await settings.PUT(await request('admin', { plataformas: [] }))]) {
+      assert.equal(response.status, 500);
+      assert.match(response.headers.get('Content-Type'), /application\/json/);
+      assert.match((await response.json()).error, /migraciones/);
+    }
+  } finally { db.plataformas.findMany = original; }
+});
