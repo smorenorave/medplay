@@ -96,9 +96,8 @@ test('an active assignment of the same credentials on another account ID blocks 
   f.state.pantallas.push({ id: 8, cuenta_id: 5, contacto: 'cliente', fecha_vencimiento: new Date('2099-01-01') });
   const before = structuredClone(f.state); await assert.rejects(safeRemove(f, 'completa'), /usuarios activos/); assert.deepEqual(f.state, before);
 });
-test('unknown or current-day expiry cannot authorize irreversible removal', async () => {
-  const { todayYMDBogota } = require('../lib/bogotaDate.ts');
-  for (const expiry of [null, todayYMDBogota(), 'invalid']) {
+test('unknown expiry cannot authorize irreversible removal', async () => {
+  for (const expiry of [null, 'invalid']) {
     const f = fixture('completa'); f.state.cuentascompletas[0].fecha_vencimiento = expiry;
     const before = structuredClone(f.state); await assert.rejects(safeRemove(f, 'completa'), /usuarios activos/); assert.deepEqual(f.state, before);
   }
@@ -160,4 +159,14 @@ test("ordinary deletion refuses a record that became final after inspection", as
  const f = fixture("completa"), before = structuredClone(f.state);
  await assert.rejects(deleteEmails(f.db, { expiredTargets: [{ tipo: "completa", id: "1" }], scopedExpired: true, destino: "registro", adminId: 1 }), /último registro/);
  assert.deepEqual(f.state, before);
+});
+
+for (const kind of ["completa", "pantalla"]) for (const destino of ["eliminar", "inventario"]) test("today expiry permits " + destino + " for " + kind + " with active status", async () => {
+  const { todayYMDBogota } = require("../lib/bogotaDate.ts");
+  const f = fixture(kind);
+  const row = kind === "completa" ? f.state.cuentascompletas[0] : f.state.pantallas[0];
+  row.fecha_vencimiento = todayYMDBogota(); row.estado = "ACTIVA";
+  await safeRemove(f, kind, { destino });
+  assert.equal(f.state.cuentascompletas.length + f.state.pantallas.length, 0);
+  assert.equal(f.state.inventario.length, destino === "inventario" ? 1 : 0);
 });
