@@ -42,3 +42,17 @@ test('definitive deletion clears all relations and repeated request cannot dupli
 test('failed inventory transfer rolls back live data and audit',async()=>{
   const f=fixture('pantalla');const before=structuredClone(f.state);f.fail();await assert.rejects(deleteEmails(f.db,{expiredTargets:[{tipo:'pantalla',id:'1'}],adminId:1}),/Inventory unavailable/);assert.deepEqual(f.state,before);
 });
+
+for (const kind of ['completa', 'pantalla']) for (const enabled of [true, false]) test('explicit definitive deletion of final ' + kind + ' honors audit setting ' + enabled, async () => {
+  const f = fixture(kind);
+  for (const row of [...f.state.cuentascompletas, ...f.state.cuentascompartidas]) row.plataformas.auditarEliminaciones = enabled;
+  await deleteEmails(f.db, { expiredTargets: [{ tipo: kind, id: '1' }], destino: 'eliminar', adminId: 1 });
+  assert.equal(f.state.inventario.length, 0);
+  assert.equal(f.state.cuentascompletas.length + f.state.cuentascompartidas.length + f.state.pantallas.length, 0);
+  assert.equal(f.state.emailDeletionAudit.length, enabled ? 1 : 0);
+});
+test('explicit definitive batch does not retain final screens in inventory', async () => {
+  const f = fixture('pantalla', 2);
+  await deleteEmails(f.db, { expiredTargets: [{ tipo: 'pantalla', id: '1' }, { tipo: 'pantalla', id: '2' }], destino: 'eliminar', adminId: 1 });
+  assert.equal(f.state.inventario.length, 0); assert.equal(f.state.pantallas.length, 0); assert.equal(f.state.emailDeletionAudit.length, 1);
+});

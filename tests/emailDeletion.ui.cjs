@@ -37,6 +37,7 @@ async function main() {
     const platform = { id: 1, nombre: 'MAX', cantidad_pantallas: 5 };
     const account = { id: 1, cuenta_id: 1, correo: email, contrasena: 'ui-original-key', plataforma_id: 1, contacto: '3001234567', nombre: 'Cliente prueba', fecha_compra: today, fecha_vencimiento: today, nro_pantalla: '1', meses_pagados: 1, total_ganado: 10, total_pagado: 20, total_pagado_proveedor: 10, total_pagado_completa: 20, total_pagado_proveedor_completa: 10 };
     const screen = { ...account, id: 2 };
+    let definitiveScenario = false;
     let deleted = false, deleteCalls = 0, inventoryScenario = false, archived = false, screenRestored = false, restoreCalls = 0;
     const audit = { id: '1', correo: email, clave: 'ui-original-key', plataformas: [platform], contactos: [account.contacto], eliminadoPor: 'Admin UI', motivo: 'Eliminación definitiva desde Vencimientos', identificadorOriginal: 'completa:1,compartida:1', primeraEliminacion: new Date().toISOString(), fechaEliminacion: new Date().toISOString(), registros: { eventos: [{ fechaEliminacion: new Date().toISOString(), eliminadoPor: 'Admin UI', cuentascompletas: [account], pantallas: [screen], inventario: [{ id: 3, correo: email, clave: account.contrasena }] }] } };
     const requests = [];
@@ -56,15 +57,17 @@ async function main() {
       }
       else if (path === '/api/cuentasvencidas/delete') {
         assert.equal(request.method(), 'DELETE'); assert.deepEqual(request.postDataJSON().targets, [{ tipo: 'completa', id: '1' }]);
-        if (inventoryScenario) {
+        if (inventoryScenario && !definitiveScenario) {
+          assert.equal(request.postDataJSON().destino, 'inventario');
           assert.equal(request.postDataJSON().motivo, 'Última cuenta conservada');
           archived = true; deleted = true; deleteCalls++;
           screenRestored = false;
           data = { correos: [email], revision: '3', audits: [] };
         } else {
+          assert.equal(request.postDataJSON().destino, definitiveScenario ? 'eliminar' : 'inventario');
           assert.equal(request.postDataJSON().motivo, 'Eliminación desde Vencimientos');
           audit.motivo = request.postDataJSON().motivo;
-          deleted = true; deleteCalls++; data = { correos: [email], revision: '1', audits: [{ id: '1', correo: email }] };
+          deleted = true; if (definitiveScenario) screenRestored = false; deleteCalls++; data = { correos: [email], revision: '1', audits: [{ id: '1', correo: email }] };
         }
       }
       else if (path === '/api/admin/deletions') data = url.searchParams.has('facets') ? { plataformas: deleted ? [platform] : [] } : url.searchParams.has('id') ? { item: audit } : { items: deleted ? [audit] : [], total: deleted ? 1 : 0, pages: 1 };
@@ -87,6 +90,8 @@ async function main() {
       await route.fulfill({ status: path === '/api/metricas-mensuales' ? 404 : 200, contentType: 'application/json', body: JSON.stringify(data) });
     });
     page = await context.newPage();
+    page.setDefaultTimeout(15000);
+    page.setDefaultNavigationTimeout(15000);
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.goto(base + '/admin/settings');
     const auditCheckbox = page.getByRole('checkbox', { name: 'MAX', exact: true });
@@ -193,13 +198,36 @@ async function main() {
     await newNav.getByRole('button', { name: 'Vencimientos', exact: true }).click();
     await page.getByRole('row').filter({ hasText: email }).filter({ hasText: 'Cuenta completa' }).first().getByRole('button', { name: 'Eliminar', exact: true }).click();
     await page.getByLabel('Comentario / motivo (opcional)', { exact: true }).fill('Última cuenta conservada');
-    assert.equal(await page.getByRole('dialog').getByRole('button', { name: 'Eliminar definitivamente', exact: true }).count(), 0);
+    assert.equal(await page.getByRole('dialog').getByRole('button', { name: 'Eliminar definitivamente', exact: true }).count(), 1);
     await page.getByRole('button', { name: 'Enviar al inventario y eliminar', exact: true }).click();
     await page.waitForFunction(() => !document.getElementById('action-panel').textContent.includes('delete-ui@example.com'));
     assert.equal(deleteCalls, 2); assert.equal(audit.motivo, 'Eliminación desde Vencimientos');
     await newNav.getByRole('button', { name: 'Catálogos e inventario', exact: true }).click();
     await page.getByRole('button', { name: 'Inventario', exact: true }).click();
     await page.getByText(email, { exact: true }).filter({ visible: true }).first().waitFor();
+    // The same final-record dialog also supports an explicit definitive removal.
+    definitiveScenario = true; deleted = false; archived = false;
+    await page.evaluate(() => localStorage.clear());
+    await page.goto(base);
+    const finalNav = page.getByRole('navigation', { name: 'Navegación principal' });
+    await finalNav.waitFor();
+    if (await page.getByRole('button', { name: /Abrir cronómetro/ }).count() === 0) await page.getByTitle('Cerrar (solo oculta)').click();
+    await finalNav.getByRole('button', { name: 'Vencimientos', exact: true }).click();
+    await page.getByRole('row').filter({ hasText: email }).filter({ hasText: 'Cuenta completa' }).first().getByRole('button', { name: 'Eliminar', exact: true }).click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('dialog').getByRole('button', { name: 'Eliminar definitivamente', exact: true }).waitFor();
+    const modalBounds = await page.getByRole('dialog').boundingBox();
+    assert.ok(modalBounds.x >= 0 && modalBounds.x + modalBounds.width <= 390);
+    await page.getByRole('dialog').getByRole('button', { name: 'Eliminar definitivamente', exact: true }).click();
+    await page.getByText('¿Estás seguro de que deseas eliminar esta cuenta definitivamente? Esta acción no se puede deshacer y la cuenta NO será enviada al inventario.', { exact: true }).waitFor();
+    assert.equal(deleteCalls, 2, 'Choosing definitive removal must wait for confirmation');
+    await page.getByRole('dialog').getByRole('button', { name: 'Cancelar', exact: true }).click();
+    assert.equal(deleteCalls, 2);
+    await page.setViewportSize({ width: 1500, height: 1000 });
+    await page.getByRole('row').filter({ hasText: email }).filter({ hasText: 'Cuenta completa' }).first().getByRole('button', { name: 'Eliminar definitivamente', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Eliminar definitivamente', exact: true }).click();
+    await page.waitForFunction(() => !document.getElementById('action-panel').textContent.includes('delete-ui@example.com'));
+    assert.equal(deleteCalls, 3); assert.equal(archived, false);
     assert.deepEqual(errors, []);
     console.log('UI PASS: Admin permissions, platform settings saved/reloaded, separated sales metrics, deletion/restoration, cross-tab refresh, inventory and mobile layout. No MySQL used.');
   } catch (error) {

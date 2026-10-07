@@ -18,7 +18,7 @@ export async function serializable<T>(db: PrismaClient, work: (tx: Prisma.Transa
 
 /** Global removal; expired selections retain the last platform/type relation in inventory. */
 export type DeletionTarget = { tipo: "pantalla" | "completa" | "compartida" | "inventario"; id: string };
-export async function deleteEmails(db: PrismaClient, input: { adminId: number; motivo?: string } & ({ correos: string[]; target?: never; expiredTargets?: never } | { target: DeletionTarget; correos?: never; expiredTargets?: never } | { expiredTargets: DeletionTarget[]; correos?: never; target?: never })) {
+export async function deleteEmails(db: PrismaClient, input: { adminId: number; motivo?: string; destino?: "inventario" | "eliminar" } & ({ correos: string[]; target?: never; expiredTargets?: never } | { target: DeletionTarget; correos?: never; expiredTargets?: never } | { expiredTargets: DeletionTarget[]; correos?: never; target?: never })) {
   if (input.correos && (!input.correos.length || input.correos.length > 100 || input.correos.some(email => !email.trim() || email.trim().length > 191))) throw new Error("invalid-emails");
   return serializable(db, async tx => {
     const actor = await tx.admin.findUnique({ where: { id: input.adminId }, select: { usuario: true } });
@@ -57,7 +57,7 @@ export async function deleteEmails(db: PrismaClient, input: { adminId: number; m
       // Preserve the existing last-record criterion: same type, platform and email.
       // Count the whole selection so a batch containing the final relations also archives.
       const keep = new Map<number, string | null>();
-      if (input.expiredTargets) {
+      if (input.expiredTargets && input.destino !== "eliminar") {
         const selectedScreens = new Set(input.expiredTargets.filter(row => row.tipo === "pantalla").map(row => Number(row.id)));
         const selectedComplete = new Set(input.expiredTargets.filter(row => row.tipo === "completa").map(row => BigInt(row.id)));
         for (const row of complete.filter(row => selectedComplete.has(row.id))) {

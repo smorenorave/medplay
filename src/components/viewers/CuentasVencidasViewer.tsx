@@ -364,11 +364,14 @@ export default function CuentasPantallasVencidasPage() {
   const pwInputRef = useRef<HTMLInputElement | null>(null);
   const refreshSeq = useRef(0);
   const dateRef = useRef<HTMLInputElement | null>(null);
+  const definitiveWarning = "¿Estás seguro de que deseas eliminar esta cuenta definitivamente? Esta acción no se puede deshacer y la cuenta NO será enviada al inventario.";
   // Eliminar simple
   const [delModal, setDelModal] = useState<{
     open: boolean;
     row: Registro | null;
     busy?: boolean;
+    definitive?: boolean;
+    comment?: string;
   }>({
     open: false,
     row: null,
@@ -383,6 +386,8 @@ export default function CuentasPantallasVencidasPage() {
     remaining?: number;
     comment?: string;
   }>({ open: false, row: null, busy: false, comment: "" });
+
+  const [bulkDestino, setBulkDestino] = useState<"inventario" | "eliminar">("inventario");
 
   // Bulk
   const [bulkModal, setBulkModal] = useState<{
@@ -623,8 +628,8 @@ export default function CuentasPantallasVencidasPage() {
 
   useAccountDataRefresh(forceRefresh);
 
-  const deleteRowDirect = async (r: Registro, motivo?: string) => {
-    await deleteExpiredAccounts([{ tipo: r.tipo === "cuenta" ? "completa" : "pantalla", id: String(r.id) }], motivo?.trim() || "Eliminación desde Vencimientos");
+  const deleteRowDirect = async (r: Registro, motivo?: string, destino: "inventario" | "eliminar" = "inventario") => {
+    await deleteExpiredAccounts([{ tipo: r.tipo === "cuenta" ? "completa" : "pantalla", id: String(r.id) }], motivo?.trim() || "Eliminación desde Vencimientos", destino);
     await forceRefresh();
     setSelected(new Set());
   };
@@ -654,6 +659,7 @@ export default function CuentasPantallasVencidasPage() {
       alert("No hay filas seleccionadas.");
       return;
     }
+    setBulkDestino("inventario");
     // Pre-chequeo de "últimos"
     const checks = await Promise.all(
       list.map(async (r) => {
@@ -681,7 +687,7 @@ export default function CuentasPantallasVencidasPage() {
     const list = bulkModal.rows;
     setBulkModal(m => ({ ...m, busy: true, progress: 0 }));
     try {
-      await deleteExpiredAccounts(list.map(r => ({ tipo: r.tipo === "cuenta" ? "completa" : "pantalla", id: String(r.id) })), bulkModal.invComment || "Eliminación masiva desde Vencidos");
+      await deleteExpiredAccounts(list.map(r => ({ tipo: r.tipo === "cuenta" ? "completa" : "pantalla", id: String(r.id) })), bulkModal.invComment || "Eliminación masiva desde Vencidos", bulkDestino);
       await forceRefresh();
       setSelected(new Set());
       setBulkModal(m => ({ ...m, open: false, busy: false, progress: list.length }));
@@ -961,7 +967,7 @@ export default function CuentasPantallasVencidasPage() {
           <div className="text-sm font-semibold text-neutral-200">
             Correos con <em>cambio de clave</em> ({pwChangedEmails.length})
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
             <button
               onClick={copyEmails}
               disabled={pwChangedEmails.length === 0}
@@ -1042,7 +1048,7 @@ export default function CuentasPantallasVencidasPage() {
             </span>
           ) : (
             pwChangedEmails.map((email) => (
-              <div key={email} className="flex flex-wrap items-center gap-2">
+              <div key={email} className="flex items-center gap-2">
                 <span className="inline-flex items-center gap-2 rounded-full border border-neutral-700 px-3 py-1 text-sm text-neutral-200">
                   {email}
                   <button
@@ -1141,6 +1147,7 @@ export default function CuentasPantallasVencidasPage() {
             <dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-neutral-500">Vencimiento</dt><dd className="mt-0.5 font-medium text-rose-200">{r.fecha_vencimiento || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Contacto</dt><dd className="mt-0.5 truncate font-medium text-neutral-200">{r.contacto || "—"}</dd></div></dl>
             {r.comentario && <p className="mt-4 line-clamp-2 rounded-xl bg-white/[0.035] p-3 text-xs leading-5 text-neutral-400">{r.comentario}</p>}
             <button type="button" onClick={() => openEdit(r)} className="mt-4 min-h-11 w-full rounded-xl bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98]">Ver y editar</button>
+            <button type="button" onClick={() => setDelModal({ open: true, row: r, definitive: true })} className="mt-2 min-h-11 w-full rounded-xl border border-rose-700 bg-rose-900/40 px-3 py-2 text-sm font-semibold text-rose-200">Eliminar definitivamente</button>
           </article>)}
           {!filtered.length && <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-neutral-400">No se encontraron resultados.</div>}
         </div>
@@ -1218,6 +1225,7 @@ export default function CuentasPantallasVencidasPage() {
                           <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
                         </svg>
                       </button>
+                      <button type="button" onClick={() => setDelModal({ open: true, row: r, definitive: true })} className="text-rose-300 hover:text-rose-200 rounded-md p-1 text-xs">Eliminar definitivamente</button>
                       <button
                         title="Eliminar"
                         onClick={() => onAskDelete(r)}
@@ -1308,7 +1316,8 @@ export default function CuentasPantallasVencidasPage() {
               </button>
             </div>
             <div className="p-5 space-y-3 text-sm">
-              <p className="text-rose-200">Eliminar definitivamente borra todos los registros del correo en todas las plataformas: cuentas, pantallas e inventario. La operación queda auditada.</p>
+              {delModal.definitive && <p className="text-rose-200">{definitiveWarning}</p>}
+              <p className="text-rose-200">Eliminar definitivamente borra todos los registros del correo en todas las plataformas: cuentas, pantallas e inventario. Se guarda en auditoría solo para las plataformas habilitadas en Configuración.</p>
               <p>
                 ¿Seguro que deseas eliminar este registro{" "}
                 <b>
@@ -1334,7 +1343,7 @@ export default function CuentasPantallasVencidasPage() {
                   if (!delModal.row) return;
                   setDelModal((m) => ({ ...m, busy: true }));
                   try {
-                    await deleteRowDirect(delModal.row);
+                    await deleteRowDirect(delModal.row, delModal.comment, delModal.definitive ? "eliminar" : "inventario");
                     setDelModal({ open: false, row: null });
                   } catch (e: any) {
                     alert(e?.message ?? "Error al eliminar");
@@ -1343,7 +1352,7 @@ export default function CuentasPantallasVencidasPage() {
                 }}
                 disabled={!!delModal.busy}
               >
-                {delModal.busy ? "Eliminando…" : "Eliminar"}
+                {delModal.busy ? "Eliminando…" : delModal.definitive ? "Eliminar definitivamente" : "Eliminar"}
               </button>
             </div>
           </div>
@@ -1398,11 +1407,11 @@ export default function CuentasPantallasVencidasPage() {
                 />
               </label>
               <p>
-                El último registro se conserva en <b>Inventario</b>.
+                Puedes conservarlo en <b>Inventario</b> o eliminarlo definitivamente. La eliminación definitiva se guarda en auditoría solo para las plataformas habilitadas en Configuración.
               </p>
               <p className="text-rose-200">La operación verifica nuevamente los registros existentes antes de confirmar el destino.</p>
             </div>
-            <div className="px-5 py-3 border-t border-neutral-800 flex items-center justify-between gap-2">
+            <div className="px-5 py-3 border-t border-neutral-800 flex flex-wrap items-center justify-between gap-2">
               <button
                 className="px-3 py-2 rounded-lg border border-neutral-600 hover:bg-neutral-800"
                 onClick={() => setInvModal({ open: false, row: null })}
@@ -1411,7 +1420,16 @@ export default function CuentasPantallasVencidasPage() {
                 Cancelar
               </button>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  className="px-3 py-2 rounded-lg border border-rose-700 bg-rose-900/40 hover:bg-rose-900/60 disabled:opacity-60"
+                  disabled={!!invModal.busy}
+                  onClick={() => {
+                    if (!invModal.row) return;
+                    setDelModal({ open: true, row: invModal.row, definitive: true, comment: invModal.comment });
+                    setInvModal({ open: false, row: null });
+                  }}
+                >Eliminar definitivamente</button>
                 {/* Enviar a inventario y eliminar */}
                 <button
                   className="px-3 py-2 rounded-lg border border-amber-700 bg-amber-800/40 hover:bg-amber-800/60 disabled:opacity-60"
@@ -1420,7 +1438,7 @@ export default function CuentasPantallasVencidasPage() {
                     setInvModal((m) => ({ ...m, busy: true }));
                     try {
                       const r = invModal.row;
-                      await deleteRowDirect(r, invModal.comment);
+                      await deleteRowDirect(r, invModal.comment, "inventario");
                       setInvModal({ open: false, row: null });
                     } catch (e: any) {
                       alert(
@@ -1483,7 +1501,7 @@ export default function CuentasPantallasVencidasPage() {
               </button>
             </div>
             <div className="p-5 space-y-3 text-sm">
-              <p className="text-rose-200">La eliminación actualiza todas las vistas. Si la selección incluye los últimos registros de una cuenta, se conserva en Inventario sin generar auditoría.</p>
+              <p className="text-rose-200">Elige el destino de los últimos registros. Enviar a Inventario los conserva sin auditoría. Eliminar definitivamente borra todos los registros de los correos seleccionados y genera auditoría solo para las plataformas habilitadas.</p>
               <p>
                 Total a procesar: <b>{bulkModal.total}</b>
               </p>
@@ -1544,6 +1562,11 @@ export default function CuentasPantallasVencidasPage() {
                 );
               })()}
 
+              <fieldset disabled={!!bulkModal.busy} className="space-y-2">
+                <legend>Destino de los últimos registros</legend>
+                <label className="flex gap-2"><input type="radio" name="bulk-destino" checked={bulkDestino === "inventario"} onChange={() => setBulkDestino("inventario")} />Enviar a Inventario</label>
+                <label className="flex gap-2"><input type="radio" name="bulk-destino" checked={bulkDestino === "eliminar"} onChange={() => setBulkDestino("eliminar")} />Eliminar definitivamente</label>
+              </fieldset>
               {/* Comentario común para inventario en lote */}
               <label className="grid gap-1">
                 <span className="text-sm text-neutral-300">
@@ -1589,7 +1612,7 @@ export default function CuentasPantallasVencidasPage() {
               </button>
               <button
                 className="px-3 py-2 rounded-lg border border-rose-800 bg-rose-900/40 hover:bg-rose-900/60 disabled:opacity-60"
-                onClick={() => processBulk()}
+                onClick={() => { if (bulkDestino !== "eliminar" || window.confirm(definitiveWarning)) void processBulk(); }}
                 disabled={!!bulkModal.busy}
               >
                 {bulkModal.busy ? "Eliminando…" : "Eliminar selección"}

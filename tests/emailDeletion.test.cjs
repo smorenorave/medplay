@@ -360,3 +360,12 @@ test('disabled audit leaves the last-record inventory rule intact', async () => 
   assert.ok(f.state.inventario.some(row => row.correo === 'test@example.com' && row.plataforma_id === 2 && row.clave === 'full-key'));
   assert.deepEqual(result.audits, []); assert.equal(result.deleted.completas, 2);
 });
+
+test('expired endpoint forwards explicit definitive choice and rejects unknown destinations', async () => {
+  routeFixture = fixture(); sessionId = 1;
+  const request = destino => new Request('http://localhost/api/cuentasvencidas/delete', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targets: [{ tipo: 'completa', id: '10' }], destino }) });
+  assert.equal((await expiredRoute.DELETE(request('unknown'))).status, 400);
+  assert.equal((await expiredRoute.DELETE(request('eliminar'))).status, 200);
+  assert.equal(routeFixture.state.inventario.some(row => row.correo.trim().toLowerCase() === 'test@example.com'), false);
+  assert.ok(routeFixture.state.emailDeletionAudit.some(row => row.clave === 'full-key'));
+});
