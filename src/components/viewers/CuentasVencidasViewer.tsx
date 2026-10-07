@@ -362,6 +362,8 @@ export default function CuentasPantallasVencidasPage() {
   const pwInputRef = useRef<HTMLInputElement | null>(null);
   const refreshSeq = useRef(0);
   const dateRef = useRef<HTMLInputElement | null>(null);
+  const [deletionError, setDeletionError] = useState("");
+  const [checkingDeletion, setCheckingDeletion] = useState(false);
   const definitiveWarning = "¿Estás seguro de que deseas eliminar esta cuenta definitivamente? Esta acción no se puede deshacer y la cuenta NO será enviada al inventario.";
   // Eliminar simple
   const [delModal, setDelModal] = useState<{
@@ -594,21 +596,27 @@ export default function CuentasPantallasVencidasPage() {
     const response = await fetch("/api/cuentasvencidas/delete?tipo=" + (r.tipo === "cuenta" ? "completa" : "pantalla") + "&id=" + encodeURIComponent(String(r.id)), { cache: "no-store" });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "No se pudo verificar la cuenta. No se realizó ningún cambio.");
-    return data as { isLast: boolean; remaining: number; active: boolean; warning?: string; correo: string; clave: string; plataformaId: number };
+    return data as { selectedId: string; selectedType: "pantalla" | "completa"; expired: boolean; selectedActive: boolean; isLast: boolean; remaining: number; active: boolean; warning?: string; correo: string; clave: string; plataformaId: number };
   };
 
   useAccountDataRefresh(forceRefresh);
 
-  const deleteRowDirect = async (r: Registro, motivo?: string, destino: "inventario" | "eliminar" = "inventario", identity?: { correo: string; clave: string; plataformaId: number; confirmado: true }) => {
+  const deleteRowDirect = async (r: Registro, motivo?: string, destino: "inventario" | "eliminar" | "registro" = "inventario", identity?: { correo: string; clave: string; plataformaId: number; confirmado: true }) => {
     await deleteExpiredAccounts([{ tipo: r.tipo === "cuenta" ? "completa" : "pantalla", id: String(r.id) }], motivo?.trim() || "Eliminación desde Vencimientos", destino, identity);
     await forceRefresh();
     setSelected(new Set());
   };
 
   const onAskDelete = async (r: Registro) => {
+    if (checkingDeletion) return;
+    setDeletionError(""); setCheckingDeletion(true);
     let chk;
-    try { chk = await serverCheckIsLast(r); } catch (error) { alert((error as Error).message); return; }
-    if (chk.active) { alert(chk.warning || "No se puede eliminar esta cuenta porque tiene usuarios activos asociados. Debes verificar y resolver estas asignaciones antes de continuar."); return; }
+    try {
+      chk = await serverCheckIsLast(r);
+      if (chk.selectedId !== String(r.id) || chk.selectedType !== (r.tipo === "cuenta" ? "completa" : "pantalla")) throw new Error("La respuesta no corresponde al registro seleccionado. Actualiza la lista.");
+      if (!chk.expired || chk.selectedActive) throw new Error(chk.warning || "El registro seleccionado no está vencido. No se realizó ningún cambio.");
+    } catch (error) { setDeletionError((error as Error).message); return; }
+    finally { setCheckingDeletion(false); }
     if (chk.isLast) {
       setInvModal({
         open: true,
@@ -1274,12 +1282,19 @@ export default function CuentasPantallasVencidasPage() {
         </div>
       </section>
 
+      {deletionError && <Modal onClose={() => setDeletionError("")}>
+        <div className="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-900 text-neutral-100 shadow-xl">
+          <div className="px-5 py-3 border-b border-neutral-800"><h3 className="font-semibold">Eliminar registro</h3></div>
+          <div className="p-5 space-y-3 text-sm"><p role="alert" className="text-rose-200">{deletionError}</p></div>
+          <div className="px-5 py-3 border-t border-neutral-800 flex justify-end"><button className="px-3 py-2 rounded-lg border border-neutral-600 hover:bg-neutral-800" onClick={() => setDeletionError("")}>Cerrar</button></div>
+        </div>
+      </Modal>}
       {/* Modal eliminar simple */}
       {delModal.open && delModal.row && (
         <Modal onClose={() => setDelModal({ open: false, row: null })}>
           <div className="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-900 text-neutral-100 shadow-xl">
             <div className="px-5 py-3 border-b border-neutral-800 flex items-center justify-between">
-              <h3 className="font-semibold">Confirmar eliminación</h3>
+              <h3 className="font-semibold">Eliminar registro</h3>
               <button
                 className="px-2 py-1 hover:text-white"
                 onClick={() => setDelModal({ open: false, row: null })}
@@ -1290,7 +1305,8 @@ export default function CuentasPantallasVencidasPage() {
             </div>
             <div className="p-5 space-y-3 text-sm">
               {delModal.definitive && <p className="text-rose-200">{definitiveWarning}</p>}
-              <p className="text-rose-200">La eliminación afecta exclusivamente al registro confirmado. No elimina usuarios, otras cuentas ni información compartida. Se registra en auditoría según la configuración de la plataforma.</p>
+              {!delModal.definitive && <p>Este registro está vencido y tiene otros registros asociados. Se eliminará únicamente este registro y los demás permanecerán sin cambios.</p>}
+              <p className="text-neutral-400">La eliminación afecta exclusivamente al registro confirmado. No elimina usuarios, otras cuentas ni información compartida. Se registra en auditoría según la configuración de la plataforma.</p>
               <p>
                 ¿Seguro que deseas eliminar este registro{" "}
                 <b>
@@ -1316,16 +1332,17 @@ export default function CuentasPantallasVencidasPage() {
                   if (!delModal.row) return;
                   setDelModal((m) => ({ ...m, busy: true }));
                   try {
-                    await deleteRowDirect(delModal.row, delModal.comment, delModal.definitive ? "eliminar" : "inventario", delModal.identity);
+                    await deleteRowDirect(delModal.row, delModal.comment, delModal.definitive ? "eliminar" : "registro", delModal.identity);
                     setDelModal({ open: false, row: null });
                   } catch (e: any) {
-                    alert(e?.message ?? "Error al eliminar");
+                    setDeletionError(e?.message ?? "Error al eliminar");
+                    setDelModal({ open: false, row: null });
                     setDelModal((m) => ({ ...m, busy: false }));
                   }
                 }}
                 disabled={!!delModal.busy}
               >
-                {delModal.busy ? "Eliminando…" : delModal.definitive ? "Eliminar definitivamente" : "Eliminar"}
+                {delModal.busy ? "Eliminando…" : "Eliminar definitivamente"}
               </button>
             </div>
           </div>
@@ -1338,7 +1355,7 @@ export default function CuentasPantallasVencidasPage() {
           <div className="w-full max-w-lg rounded-2xl border border-neutral-800 bg-neutral-900 text-neutral-100 shadow-xl">
             <div className="px-5 py-3 border-b border-neutral-800 flex items-center justify-between">
               <h3 className="font-semibold">
-                ¿Qué deseas hacer con esta cuenta?
+                Último registro asociado
               </h3>
               <button
                 className="px-2 py-1 hover:text-white"
@@ -1350,7 +1367,7 @@ export default function CuentasPantallasVencidasPage() {
             </div>
             <div className="p-5 space-y-3 text-sm">
               <p>
-                Se está eliminando el <b>último registro</b> para el correo{" "}
+                Este es el último registro asociado a esta cuenta. Selecciona qué deseas hacer. Correo:{" "}
                 <b>{invModal.row.correo}</b> en la plataforma{" "}
                 <b>{platformName(invModal.row.plataforma_id)}</b> dentro de{" "}
                 <b>
@@ -1415,9 +1432,8 @@ export default function CuentasPantallasVencidasPage() {
                       await deleteRowDirect(r, invModal.comment, "inventario", invModal.identity);
                       setInvModal({ open: false, row: null });
                     } catch (e: any) {
-                      alert(
-                        e?.message ?? "Error al procesar inventario/eliminar"
-                      );
+                      setDeletionError(e?.message ?? "Error al procesar inventario/eliminar");
+                      setInvModal({ open: false, row: null });
                       setInvModal((m) => ({ ...m, busy: false }));
                     }
                   }}
@@ -1425,7 +1441,7 @@ export default function CuentasPantallasVencidasPage() {
                 >
                   {invModal.busy
                     ? "Procesando…"
-                    : "Enviar al inventario y eliminar"}
+                    : "Enviar al inventario"}
                 </button>
               </div>
             </div>

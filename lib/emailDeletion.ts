@@ -19,7 +19,7 @@ export async function serializable<T>(db: PrismaClient, work: (tx: Prisma.Transa
 
 /** Global removal; expired selections retain the last platform/type relation in inventory. */
 export type DeletionTarget = { tipo: "pantalla" | "completa" | "compartida" | "inventario"; id: string };
-export async function deleteEmails(db: PrismaClient, input: { adminId: number; motivo?: string; destino?: "inventario" | "eliminar"; scopedExpired?: boolean; expected?: ConfirmedAccount } & ({ correos: string[]; target?: never; expiredTargets?: never } | { target: DeletionTarget; correos?: never; expiredTargets?: never } | { expiredTargets: DeletionTarget[]; correos?: never; target?: never })) {
+export async function deleteEmails(db: PrismaClient, input: { adminId: number; motivo?: string; destino?: "inventario" | "eliminar" | "registro"; scopedExpired?: boolean; expected?: ConfirmedAccount } & ({ correos: string[]; target?: never; expiredTargets?: never } | { target: DeletionTarget; correos?: never; expiredTargets?: never } | { expiredTargets: DeletionTarget[]; correos?: never; target?: never })) {
   if (input.correos && (!input.correos.length || input.correos.length > 100 || input.correos.some(email => !email.trim() || email.trim().length > 191))) throw new Error("invalid-emails");
   if (input.destino === "eliminar" && (!input.scopedExpired || input.expiredTargets?.length !== 1 || !input.expected?.confirmado)) throw new AccountSafetyError("La eliminación definitiva requiere un único registro y la confirmación de su correo y clave.");
   return serializable(db, async tx => {
@@ -75,6 +75,14 @@ export async function deleteEmails(db: PrismaClient, input: { adminId: number; m
           const isLast = selected.tipo === "pantalla" ? relatedScreens.length === 1 && relatedComplete.length === 0 : relatedComplete.length === 1 && relatedScreens.length === 0;
           if (!isLast) throw new AccountSafetyError("Solo se puede eliminar definitivamente el último registro de esta cuenta.");
         }
+        if (input.destino === "registro") {
+          for (const selected of input.expiredTargets) {
+            const account = selected.tipo === "completa" ? targetComplete.find(row => row.id === BigInt(selected.id)) : shared.find(row => row.id === targetScreens.find(screen => screen.id === Number(selected.id))?.cuenta_id);
+            if (!account) throw new AccountSafetyError("El registro seleccionado ya no existe. Actualiza la lista.");
+            const related = complete.filter(row => row.plataforma_id === account.plataforma_id && row.contrasena === account.contrasena).length + screens.filter(screen => shared.some(parent => parent.id === screen.cuenta_id && parent.plataforma_id === account.plataforma_id && parent.contrasena === account.contrasena)).length;
+            if (related === 1) throw new AccountSafetyError("Ahora es el último registro asociado. Actualiza y selecciona su destino.");
+          }
+        }
         // Retain parents with any unselected screen; delete only the explicit IDs.
         shared = shared.filter(row => targetScreens.some(screen => screen.cuenta_id === row.id) && screens.filter(screen => screen.cuenta_id === row.id).every(screen => selectedScreens.has(screen.id)));
         complete = targetComplete;
@@ -84,7 +92,7 @@ export async function deleteEmails(db: PrismaClient, input: { adminId: number; m
       // Preserve the existing last-record criterion: same type, platform and email.
       // Count the whole selection so a batch containing the final relations also archives.
       const keep = new Map<number, string | null>();
-      if (input.expiredTargets && input.destino !== "eliminar") {
+      if (input.expiredTargets && input.destino !== "eliminar" && input.destino !== "registro") {
         const selectedScreens = new Set(input.expiredTargets.filter(row => row.tipo === "pantalla").map(row => Number(row.id)));
         const selectedComplete = new Set(input.expiredTargets.filter(row => row.tipo === "completa").map(row => BigInt(row.id)));
         for (const row of complete.filter(row => selectedComplete.has(row.id))) {

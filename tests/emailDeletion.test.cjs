@@ -384,3 +384,16 @@ test('backend blocks active assignments, bypassed confirmation, mixed batches an
     assert.equal((await expiredRoute.DELETE(req(body))).status, 409); assert.deepEqual(routeFixture.state, before);
   }
 });
+
+test('inspection distinguishes selected expired record from active siblings using normalized email', async () => {
+  routeFixture = fixture(); sessionId = 1;
+  const parent = routeFixture.state.cuentascompartidas[0];
+  routeFixture.state.pantallas[0].fecha_vencimiento = '2000-01-01';
+  routeFixture.state.pantallas.push({ id: 99, cuenta_id: parent.id, contacto: 'active-client', fecha_vencimiento: '2099-01-01' });
+  const response = await expiredRoute.GET(new Request('http://localhost/api/cuentasvencidas/delete?tipo=pantalla&id=1'));
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.selectedId, '1'); assert.equal(data.selectedType, 'pantalla');
+  assert.equal(data.expired, true); assert.equal(data.selectedActive, false);
+  assert.equal(data.active, true); assert.equal(data.isLast, false); assert.equal(data.warning, null);
+});

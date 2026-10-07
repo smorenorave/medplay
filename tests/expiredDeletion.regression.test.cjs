@@ -138,3 +138,26 @@ test('ordinary non-final complete deletion affects only its selected expired rec
   await deleteEmails(f.db, { expiredTargets: [{ tipo: 'completa', id: '1' }], scopedExpired: true, adminId: 1 });
   assert.deepEqual(f.state.cuentascompletas.map(row => row.id), [2n]); assert.equal(f.state.usuarios.length, 1); assert.equal(f.state.inventario.length, 0);
 });
+
+test('expired A deletion preserves active B and C and their shared parent unchanged', async () => {
+  const f = fixture('pantalla', 3);
+  for (const row of f.state.pantallas.slice(1)) row.fecha_vencimiento = '2099-01-01';
+  const others = structuredClone(f.state.pantallas.slice(1));
+  const parent = structuredClone(f.state.cuentascompartidas);
+  await deleteEmails(f.db, { expiredTargets: [{ tipo: 'pantalla', id: '1' }], scopedExpired: true, adminId: 1 });
+  assert.deepEqual(f.state.pantallas, others); assert.deepEqual(f.state.cuentascompartidas, parent);
+  assert.equal(f.state.inventario.length, 0); assert.equal(f.state.usuarios.length, 1);
+});
+
+test("ordinary selected deletion never transfers credentials used by an active complete account", async () => {
+ const f = fixture("pantalla");
+ f.state.cuentascompletas.push({ id: 9n, correo: "example@test.com", contrasena: "Exact KEY ", plataforma_id: 1, plataformas: { id: 1, nombre: "MAX" }, fecha_vencimiento: "2099-01-01", contacto: "cliente" });
+ const others = structuredClone(f.state.cuentascompletas);
+ await deleteEmails(f.db, { expiredTargets: [{ tipo: "pantalla", id: "1" }], scopedExpired: true, destino: "registro", adminId: 1 });
+ assert.deepEqual(f.state.cuentascompletas, others); assert.equal(f.state.inventario.length, 0); assert.equal(f.state.pantallas.length, 0);
+});
+test("ordinary deletion refuses a record that became final after inspection", async () => {
+ const f = fixture("completa"), before = structuredClone(f.state);
+ await assert.rejects(deleteEmails(f.db, { expiredTargets: [{ tipo: "completa", id: "1" }], scopedExpired: true, destino: "registro", adminId: 1 }), /último registro/);
+ assert.deepEqual(f.state, before);
+});
