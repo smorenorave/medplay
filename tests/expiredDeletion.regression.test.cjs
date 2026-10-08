@@ -3,6 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 require('ts-node').register({ transpileOnly: true, compilerOptions: { module: 'CommonJS', moduleResolution: 'node' } });
 const { deleteEmails } = require('../lib/emailDeletion.ts');
+const { deleteExpiredBulk } = require('../lib/expiredBulkDeletion.ts');
 function fixture(kind, count = 1) {
   const platform = { id: 1, nombre: 'MAX' };
   let state = { admin: [{ id: 1, usuario: 'Admin' }], cuentascompletas: [], cuentascompartidas: [], pantallas: [], inventario: [], usuarios: [{ contacto: 'cliente' }], emailDeletionAudit: [], accountDataRevision: [], metricasmensuales: [] };
@@ -169,4 +170,58 @@ for (const kind of ["completa", "pantalla"]) for (const destino of ["eliminar", 
   await safeRemove(f, kind, { destino });
   assert.equal(f.state.cuentascompletas.length + f.state.pantallas.length, 0);
   assert.equal(f.state.inventario.length, destino === "inventario" ? 1 : 0);
+});
+
+const bulk = (f, targets, extra = {}) => deleteExpiredBulk(f.db, { adminId: 1, targets, confirmed: true, ...extra });
+for (const kind of ['completa', 'pantalla']) test('confirmed bulk removes eight final ' + kind + ' records without credentials in audit', async () => {
+  const f = fixture(kind, 8);
+  if (kind === 'completa') f.state.cuentascompletas.forEach((row, i) => { row.correo = `last${i}@example.com`; row.plataformas.auditarEliminaciones = false; });
+  else {
+    const parent = f.state.cuentascompartidas[0];
+    f.state.cuentascompartidas = f.state.pantallas.map((row, i) => ({ ...parent, id: i + 1, correo: `last${i}@example.com` }));
+    f.state.pantallas.forEach((row, i) => { row.cuenta_id = i + 1; });
+  }
+  const targets = Array.from({ length: 8 }, (_, i) => ({ tipo: kind, id: String(i + 1) }));
+  const result = await bulk(f, targets);
+  assert.equal(result.eliminated, 8); assert.deepEqual(result.skipped, []);
+  assert.equal(f.state.inventario.length, 0); assert.equal(f.state.usuarios.length, 1);
+  assert.equal(f.state.pantallas.length + f.state.cuentascompletas.length + f.state.cuentascompartidas.length, 0);
+  assert.equal(f.state.emailDeletionAudit.length, 8);
+  for (const audit of f.state.emailDeletionAudit) {
+    assert.equal(audit.adminId, 1); assert.equal(audit.eliminadoPor, 'Admin'); assert.ok(audit.fechaEliminacion instanceof Date);
+    assert.equal(audit.clave, null); assert.equal(audit.claves, '');
+    assert.ok(!JSON.stringify(audit.registros).includes('Exact KEY')); assert.ok(!JSON.stringify(audit.registros).includes('contrasena'));
+  }
+  const again = await bulk(f, targets);
+  assert.equal(again.eliminated, 0); assert.equal(again.skipped.length, 8); assert.equal(f.state.emailDeletionAudit.length, 8);
+});
+test('bulk skips only active selected assignments, preserves parents and deduplicates IDs', async () => {
+  const f = fixture('pantalla', 3);
+  f.state.pantallas[1].fecha_vencimiento = new Date('2099-01-01');
+  f.state.cuentascompletas.push({ id: 4n, correo: 'other@example.com', contrasena: 'secret', plataforma_id: 1, plataformas: { id: 1, nombre: 'MAX' }, fecha_vencimiento: new Date('2020-01-01'), contacto: 'cliente' });
+  f.state.inventario.push({ id: 5, correo: 'other@example.com', clave: 'untouched' });
+  const result = await bulk(f, [{ tipo: 'pantalla', id: '1' }, { tipo: 'pantalla', id: '1' }, { tipo: 'pantalla', id: '2' }, { tipo: 'completa', id: '4' }, { tipo: 'completa', id: '99' }]);
+  assert.equal(result.eliminated, 2); assert.equal(result.skipped.length, 2);
+  assert.match(result.skipped.find(row => row.id === '2').reason, /activas/);
+  assert.match(result.skipped.find(row => row.id === '99').reason, /no existe/);
+  assert.deepEqual(f.state.pantallas.map(row => row.id), [2, 3]); assert.equal(f.state.cuentascompartidas.length, 1);
+  assert.equal(f.state.inventario[0].clave, 'untouched'); assert.equal(f.state.emailDeletionAudit.length, 2);
+});
+test('bulk requires explicit confirmation and an existing administrator', async () => {
+  const f = fixture('completa'), before = structuredClone(f.state);
+  for (const confirmed of [false, undefined]) await assert.rejects(bulk(f, [{ tipo: 'completa', id: '1' }], { confirmed }), /confirmar/);
+  await assert.rejects(bulk(f, [{ tipo: 'completa', id: '1' }], { adminId: 9 }), /unauthorized/);
+  assert.deepEqual(f.state, before);
+});
+test('bulk rolls back deletions if audit persistence fails', async () => {
+  const f = fixture('completa', 2), before = structuredClone(f.state);
+  const db = { $transaction: work => f.db.$transaction(tx => work({ ...tx, emailDeletionAudit: { upsert: async () => { throw Error('Audit unavailable'); } } })) };
+  await assert.rejects(deleteExpiredBulk(db, { adminId: 1, confirmed: true, targets: [{ tipo: 'completa', id: '1' }, { tipo: 'completa', id: '2' }] }), /Audit unavailable/);
+  assert.deepEqual(f.state, before);
+});
+test('all blocked bulk does not write audit or revision', async () => {
+  const f = fixture('completa', 2); f.state.cuentascompletas[0].estado = 'ACTIVA'; f.state.cuentascompletas[1].fecha_vencimiento = null;
+  const before = structuredClone(f.state);
+  const result = await bulk(f, [{ tipo: 'completa', id: '1' }, { tipo: 'completa', id: '2' }]);
+  assert.equal(result.eliminated, 0); assert.equal(result.skipped.length, 2); assert.deepEqual(f.state, before);
 });

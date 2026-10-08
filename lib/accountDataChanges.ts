@@ -68,10 +68,10 @@ export async function deleteEmailsGlobally(correos: (string | null | undefined)[
   return result as { correos: string[]; revision: string };
 }
 
-export async function deleteExpiredAccounts(targets: { tipo: "pantalla" | "completa"; id: string }[], motivo: string, destino: "inventario" | "eliminar" | "registro" = "inventario", expected?: { correo: string; clave: string; plataformaId: number; confirmado: true }) {
-  const response = await fetch("/api/cuentasvencidas/delete", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targets, motivo, destino, expected }) });
+export async function deleteExpiredAccounts(targets: { tipo: "pantalla" | "completa"; id: string }[], motivo: string, destino: "inventario" | "eliminar" | "registro" = "inventario", expected?: { correo: string; clave: string; plataformaId: number; confirmado: true }, bulkConfirmed?: true) {
+  const response = await fetch("/api/cuentasvencidas/delete", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targets, motivo, destino, expected, bulkConfirmed }) });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error ?? "No se pudo completar la operación.");
   applyAccountDeletion(result);
-  return result as { correos: string[]; revision: string };
+  return result as { correos: string[]; revision: string; eliminated?: number; skipped?: { tipo: string; id: string; correo?: string; reason: string }[] };
 }

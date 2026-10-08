@@ -389,9 +389,8 @@ export default function CuentasPantallasVencidasPage() {
     comment?: string;
   }>({ open: false, row: null, busy: false, comment: "" });
 
-  const bulkDestino = "inventario" as const;
-
   // Bulk
+  const bulkInFlight = useRef(false);
   const [bulkModal, setBulkModal] = useState<{
     open: boolean;
     rows: Registro[];
@@ -401,7 +400,10 @@ export default function CuentasPantallasVencidasPage() {
     busy?: boolean;
     progress?: number;
     total?: number;
-    invComment?: string; // (3) comentario para inventario en lote
+    confirmed?: boolean;
+    error?: string;
+    result?: { eliminated: number; skipped: { tipo: string; id: string; correo?: string; reason: string }[] };
+    blocked?: { key: string; correo: string }[];
   }>({
     open: false,
     rows: [],
@@ -411,7 +413,6 @@ export default function CuentasPantallasVencidasPage() {
     busy: false,
     progress: 0,
     total: 0,
-    invComment: "",
   });
 
   /* Boot con caché */
@@ -636,47 +637,56 @@ export default function CuentasPantallasVencidasPage() {
     rows.filter((r) => selected.has(`${r.tipo}:${r.id}`));
 
   const askBulkDelete = async () => {
+    if (checkingDeletion) return;
     const list = collectRows();
     if (list.length === 0) {
       alert("No hay filas seleccionadas.");
       return;
     }
 
-    // Pre-chequeo de "últimos"
-    const checks = await Promise.all(
-      list.map(async (r) => {
-        const chk = await serverCheckIsLast(r);
-        return { r, k: `${r.tipo}:${r.id}`, isLast: chk.isLast };
-      })
-    );
-    const lastKeys = new Set(checks.filter((c) => c.isLast).map((c) => c.k));
-    const normalKeys = new Set(checks.filter((c) => !c.isLast).map((c) => c.k));
-    setBulkModal({
-      open: true,
-      rows: list,
-      lastKeys,
-      normalKeys,
-      scope: "selected",
-      busy: false,
-      progress: 0,
-      total: list.length,
-      invComment: "",
-    });
+    if (list.length > 100) { setDeletionError("Selecciona como máximo 100 registros por lote."); return; }
+    setCheckingDeletion(true);
+    setDeletionError("");
+    try {
+      // La verificación no bloquea el lote por asignaciones activas individuales.
+      const checks = await Promise.all(
+        list.map(async (r) => {
+          const chk = await serverCheckIsLast(r);
+          return { r, k: `${r.tipo}:${r.id}`, isLast: chk.isLast, active: chk.selectedActive };
+        })
+      );
+      const lastKeys = new Set(checks.filter((c) => c.isLast).map((c) => c.k));
+      const normalKeys = new Set(checks.filter((c) => !c.isLast).map((c) => c.k));
+      setBulkModal({
+        open: true,
+        rows: list,
+        lastKeys,
+        normalKeys,
+        scope: "selected",
+        busy: false,
+        progress: 0,
+        total: list.length,
+        confirmed: false,
+        blocked: checks.filter(c => c.active).map(c => ({ key: c.k, correo: c.r.correo || "—" })),
+      });
+    } catch (error) { setDeletionError((error as Error).message); }
+    finally { setCheckingDeletion(false); }
   };
 
   const processBulk = async () => {
-    if (!bulkModal.open) return;
+    if (!bulkModal.open || bulkInFlight.current || bulkModal.busy || !bulkModal.confirmed || bulkModal.result) return;
+    bulkInFlight.current = true;
     const list = bulkModal.rows;
-    setBulkModal(m => ({ ...m, busy: true, progress: 0 }));
+    setBulkModal(m => ({ ...m, busy: true, progress: 0, error: undefined }));
     try {
-      await deleteExpiredAccounts(list.map(r => ({ tipo: r.tipo === "cuenta" ? "completa" : "pantalla", id: String(r.id) })), bulkModal.invComment || "Eliminación masiva desde Vencidos", bulkDestino);
-      await forceRefresh();
+      const result = await deleteExpiredAccounts(list.map(r => ({ tipo: r.tipo === "cuenta" ? "completa" : "pantalla", id: String(r.id) })), "Eliminación masiva desde Vencimientos", "eliminar", undefined, true);
+      setBulkModal(m => ({ ...m, busy: false, progress: list.length, result: { eliminated: result.eliminated ?? 0, skipped: result.skipped ?? [] } }));
       setSelected(new Set());
-      setBulkModal(m => ({ ...m, open: false, busy: false, progress: list.length }));
+      try { await forceRefresh(); }
+      catch { setBulkModal(m => ({ ...m, error: "La operación terminó, pero no se pudo actualizar la lista. Recarga la vista." })); }
     } catch (error) {
-      alert((error as Error).message);
-      setBulkModal(m => ({ ...m, busy: false }));
-    }
+      setBulkModal(m => ({ ...m, busy: false, error: (error as Error).message }));
+    } finally { bulkInFlight.current = false; }
   };
 
   /* ====== Notificaciones (cola) ====== */
@@ -1463,11 +1473,10 @@ export default function CuentasPantallasVencidasPage() {
               busy: false,
               progress: 0,
               total: 0,
-              invComment: "",
             })
           }
         >
-          <div className="w-full max-w-lg rounded-2xl border border-neutral-800 bg-neutral-900 text-neutral-100 shadow-xl">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-auto rounded-2xl border border-neutral-800 bg-neutral-900 text-neutral-100 shadow-xl">
             <div className="px-5 py-3 border-b border-neutral-800 flex items-center justify-between">
               <h3 className="font-semibold">Eliminar en lote</h3>
               <button
@@ -1482,7 +1491,6 @@ export default function CuentasPantallasVencidasPage() {
                     busy: false,
                     progress: 0,
                     total: 0,
-                    invComment: "",
                   })
                 }
                 disabled={!!bulkModal.busy}
@@ -1491,7 +1499,7 @@ export default function CuentasPantallasVencidasPage() {
               </button>
             </div>
             <div className="p-5 space-y-3 text-sm">
-              <p className="text-rose-200">La eliminación definitiva no está disponible en operaciones masivas. La operación se cancela si algún registro seleccionado tiene asignaciones activas.</p>
+              <p className="text-rose-200">La eliminación será definitiva, incluidos los últimos registros. Solo se omitirán los registros con asignaciones activas o que ya no existan. No se enviarán al inventario.</p>
               <p>
                 Total a procesar: <b>{bulkModal.total}</b>
               </p>
@@ -1502,16 +1510,16 @@ export default function CuentasPantallasVencidasPage() {
                 Registros “últimos” (correo+plataforma dentro de su tipo):{" "}
                 <b>{bulkModal.lastKeys.size}</b>
               </p>
-              {/* Lista de correos que irán a Inventario */}
+              {/* Últimos registros incluidos en la selección */}
               {(() => {
-                const lastForInventory = bulkModal.rows.filter((r) =>
+                const lastSelected = bulkModal.rows.filter((r) =>
                   bulkModal.lastKeys.has(`${r.tipo}:${r.id}`)
                 );
-                if (lastForInventory.length === 0) return null;
+                if (lastSelected.length === 0) return null;
 
                 const copy = async () => {
                   try {
-                    const text = lastForInventory
+                    const text = lastSelected
                       .map((r) => r.correo || "")
                       .filter(Boolean)
                       .join(", ");
@@ -1526,7 +1534,7 @@ export default function CuentasPantallasVencidasPage() {
                   <div className="rounded-md border border-neutral-700 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <div className="font-semibold">
-                        Últimos registros detectados ({lastForInventory.length})
+                        Últimos registros detectados ({lastSelected.length})
                       </div>
                       <button
                         onClick={copy}
@@ -1537,7 +1545,7 @@ export default function CuentasPantallasVencidasPage() {
                     </div>
 
                     <ul className="mt-2 max-h-40 overflow-auto list-disc pl-5 space-y-1">
-                      {lastForInventory.map((r, i) => (
+                      {lastSelected.map((r, i) => (
                         <li key={`${r.tipo}:${r.id}-${i}`}>
                           <span className="font-medium">{r.correo || "—"}</span>
                           <span className="text-neutral-400">
@@ -1553,22 +1561,22 @@ export default function CuentasPantallasVencidasPage() {
               })()}
 
 
-              {/* Comentario común para inventario en lote */}
-              <label className="grid gap-1">
-                <span className="text-sm text-neutral-300">
-                  Comentario para Inventario (opcional, se aplica a los
-                  “últimos”)
-                </span>
-                <textarea
-                  rows={2}
-                  className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                  value={bulkModal.invComment ?? ""}
-                  onChange={(e) =>
-                    setBulkModal((m) => ({ ...m, invComment: e.target.value }))
-                  }
-                  placeholder="Ej: Se archiva por limpieza de vencidas"
-                />
-              </label>
+              {!!bulkModal.blocked?.length && !bulkModal.result && (
+                <div className="rounded-md border border-amber-700 p-3">
+                  Se omitirán por asignaciones activas ({bulkModal.blocked.length}):
+                  <ul className="max-h-32 overflow-auto list-disc pl-5">{bulkModal.blocked.map(row => <li key={row.key}>{row.correo} · {row.key}</li>)}</ul>
+                </div>
+              )}
+              {!bulkModal.result && <label className="flex items-start gap-2">
+                <input type="checkbox" className="mt-1" checked={!!bulkModal.confirmed} disabled={bulkModal.busy}
+                  onChange={e => setBulkModal(m => ({ ...m, confirmed: e.target.checked }))} />
+                <span>Entiendo que se eliminarán definitivamente los registros seleccionados, incluidos los últimos registros, y deseo continuar</span>
+              </label>}
+              {bulkModal.error && <p role="alert" className="text-rose-200">{bulkModal.error}</p>}
+              {bulkModal.result && <div role="status" className="rounded-md border border-neutral-700 p-3">
+                <p>Eliminados: <b>{bulkModal.result.eliminated}</b>. Omitidos: <b>{bulkModal.result.skipped.length}</b>.</p>
+                <ul className="max-h-40 overflow-auto list-disc pl-5">{bulkModal.result.skipped.map(row => <li key={`${row.tipo}:${row.id}`}>{row.correo || "Registro"} · {row.tipo}:{row.id}: {row.reason}</li>)}</ul>
+              </div>}
 
               {bulkModal.busy && (
                 <div className="rounded-md border border-neutral-700 p-3">
@@ -1589,17 +1597,16 @@ export default function CuentasPantallasVencidasPage() {
                     busy: false,
                     progress: 0,
                     total: 0,
-                    invComment: "",
                   })
                 }
                 disabled={!!bulkModal.busy}
               >
-                Cancelar
+                {bulkModal.result ? "Cerrar" : "Cancelar"}
               </button>
               <button
                 className="px-3 py-2 rounded-lg border border-rose-800 bg-rose-900/40 hover:bg-rose-900/60 disabled:opacity-60"
                 onClick={() => void processBulk()}
-                disabled={!!bulkModal.busy}
+                disabled={!!bulkModal.busy || !bulkModal.confirmed || !!bulkModal.result}
               >
                 {bulkModal.busy ? "Eliminando…" : "Eliminar selección"}
               </button>

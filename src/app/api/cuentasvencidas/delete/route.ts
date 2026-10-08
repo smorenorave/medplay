@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { getAuthenticatedAdminId } from "@/lib/adminSession";
 import { AccountSafetyError, ACTIVE_ACCOUNT_WARNING, hasActiveAssignment } from "@/lib/expiredAccountSafety";
 import { deleteEmails } from "@/lib/emailDeletion";
+import { deleteExpiredBulk } from "@/lib/expiredBulkDeletion";
 
 export const dynamic = "force-dynamic";
 const schema = z.object({
@@ -12,6 +13,7 @@ const schema = z.object({
   motivo: z.string().trim().max(2000).optional(),
   expected: z.object({ correo: z.string().min(1).max(191), clave: z.string().max(191), plataformaId: z.number().int().positive(), confirmado: z.literal(true) }).strict().optional(),
   destino: z.enum(["inventario", "eliminar", "registro"]).optional(),
+  bulkConfirmed: z.literal(true).optional(),
 }).strict();
 
 export async function DELETE(request: Request) {
@@ -20,6 +22,11 @@ export async function DELETE(request: Request) {
   const body = schema.safeParse(await request.json().catch(() => null));
   if (!body.success || body.data.targets.some(row => BigInt(row.id) > (row.tipo === "completa" ? 18446744073709551615n : 2147483647n))) return NextResponse.json({ error: "Selecciona entre 1 y 100 registros válidos." }, { status: 400 });
   try {
+    if (body.data.bulkConfirmed) {
+      if (body.data.destino !== "eliminar" || body.data.expected) return NextResponse.json({ error: "Confirmación de lote inválida." }, { status: 400 });
+      const result = await deleteExpiredBulk(prisma, { targets: body.data.targets, confirmed: body.data.bulkConfirmed, adminId });
+      return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
+    }
     const result = await deleteEmails(prisma, { expiredTargets: body.data.targets, motivo: body.data.motivo, destino: body.data.destino, expected: body.data.expected, scopedExpired: true, adminId });
     return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
