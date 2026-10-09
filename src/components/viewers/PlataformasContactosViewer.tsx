@@ -1,4 +1,5 @@
 "use client";
+import { useInventoryRefresh } from "@/hooks/useInventoryRefresh";
 import { deleteEmailsGlobally } from "@/lib/accountDataChanges";
 import { useAccountDataRefresh } from "@/hooks/useAccountDataRefresh";
 
@@ -1225,6 +1226,7 @@ function InventarioPane() {
     }
   }, [fPlataformaId, q]);
   useAccountDataRefresh(load);
+  useInventoryRefresh(load);
 
   useEffect(() => {
     load();

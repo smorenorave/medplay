@@ -1,3 +1,4 @@
+import { consumeInventory, InventoryUnavailableError } from "@/lib/consumeInventory";
 import { deleteEmailForRecord } from "@/lib/deleteEmailForRecord";
 // src/app/api/pantallas/[id]/route.ts
 export const runtime = "nodejs";
@@ -80,6 +81,8 @@ function toUTCDateOrNull(v: unknown): Date | null {
 
 /* ===================== Schema (PATCH) ===================== */
 const PatchSchema = z.object({
+  inventario_id: z.number().int().positive().nullable().optional(),
+  applyCorreoCuenta: z.boolean().optional(),
   contacto: z.string().min(1).optional(),
 
   // conectar/desconectar relación con cuentascompartidas
@@ -100,10 +103,7 @@ const PatchSchema = z.object({
   estado: z.string().optional(),
   comentario: z.string().nullable().optional(),
 
-  /**
-   * OJO: el endpoint **NO** modificará `correo` en `cuentascompartidas`.
-   * Puedes mandarlo, pero aquí se IGNORA. El correo solo cambia re-asignando `cuenta_id` o creando otra cuenta.
-   */
+  // Normally reassigns the screen; applyCorreoCuenta updates its shared account.
   correo: z.string().nullable().optional(),
 
   // Sí permitimos cambiar la clave de la cuenta compartida
@@ -185,276 +185,360 @@ export async function PATCH(
     }
     const c = parsed.data;
 
-    // Estado actual para cálculos de totales
-    const current = await prisma.pantallas.findUnique({
-      where: { id: pid },
-      select: {
-        cuenta_id: true,
-        total_pagado: true,
-        total_pagado_proveedor: true,
-        total_ganado: true,
-        contacto: true,
-      },
-    });
-    if (!current)
-      return NextResponse.json({ error: "not-found" }, { status: 404 });
-
-    const data: Record<string, any> = {};
-
-    // Si cambia contacto -> asegurar usuario y usar connect
-    if (c.contacto !== undefined) {
-      const exists = await prisma.usuarios.findUnique({
-        where: { contacto: c.contacto },
-        select: { contacto: true },
-      });
-      if (!exists) {
-        await prisma.usuarios.create({
-          data: { contacto: c.contacto, nombre: null },
-        });
-      }
-      data.usuarios = { connect: { contacto: c.contacto } };
-    }
-
-    // Conectar/desconectar cuenta compartida (NO tocar correo aquí)
-    // pero ignorar si estamos moviendo por correo o plataforma
-    const movingByPlatOrCorreo =
-      c.plataforma_id !== undefined || c.correo !== undefined;
-
-    if (!movingByPlatOrCorreo && c.cuenta_id !== undefined) {
-      if (c.cuenta_id === null) {
-        data.cuentascompartidas = { disconnect: true };
-      } else {
-        data.cuentascompartidas = { connect: { id: c.cuenta_id } };
-      }
-    }
-
-    // Escalares locales (fechas UTC-safe) SOLO en pantallas
-    if (c.nro_pantalla !== undefined) data.nro_pantalla = c.nro_pantalla;
-    if (c.pin !== undefined) data.pin = c.pin;
-    if (c.fecha_compra !== undefined)
-      data.fecha_compra = toUTCDateOrNull(c.fecha_compra);
-    if (c.fecha_vencimiento !== undefined)
-      data.fecha_vencimiento = toUTCDateOrNull(c.fecha_vencimiento);
-    if (c.meses_pagados !== undefined) data.meses_pagados = c.meses_pagados;
-    if (c.estado !== undefined) data.estado = c.estado;
-    if (c.comentario !== undefined) data.comentario = c.comentario;
-
-    // Totales (cálculo de total_ganado si cambian TP/TPP)
-    const hasTP = c.total_pagado !== undefined;
-    const hasTPP = c.total_pagado_proveedor !== undefined;
-    const hasTG = c.total_ganado !== undefined;
-
-    const curTP = toNumOrNull(current.total_pagado as any);
-    const curTPP = toNumOrNull(current.total_pagado_proveedor as any);
-
-    const nextTPNum = hasTP ? toNumOrNull(c.total_pagado) : curTP;
-    const nextTPPNum = hasTPP ? toNumOrNull(c.total_pagado_proveedor) : curTPP;
-
-    if (hasTP) data.total_pagado = toDecStr(c.total_pagado);
-    if (hasTPP)
-      data.total_pagado_proveedor = toDecStr(c.total_pagado_proveedor);
-
-    if (hasTG) {
-      data.total_ganado = toDecStr(c.total_ganado);
-    } else if (hasTP || hasTPP) {
-      let computed: number | null = null;
-      if (nextTPNum === null) computed = null;
-      else if (nextTPPNum === null) computed = nextTPNum;
-      else computed = nextTPNum - nextTPPNum;
-      data.total_ganado = toDecStr(computed);
-    }
-
-    // Si no vienen cambios en pantallas y TAMPOCO vienen contrasena/nombre/cuenta_id/plataforma_id/correo, no hay nada que hacer.
-    const noPantallasChanges = Object.keys(data).length === 0;
-    if (
-      noPantallasChanges &&
-      c.contrasena === undefined &&
-      c.nombre === undefined &&
-      c.cuenta_id === undefined &&
-      c.plataforma_id === undefined &&
-      c.correo === undefined
-    ) {
-      return NextResponse.json(
-        { error: "no_fields_to_update" },
-        { status: 400 },
-      );
-    }
-
-    // ====== Actualizar pantallas SOLO si hay cambios en ella ======
-    type CuentaLite = {
-      id: number | null;
-      correo: string | null;
-      contrasena: string;
-      plataforma_id: number | null;
-      cuenta_caida: boolean;
-    } | null;
-
-    type UsuarioLite = {
-      contacto: string | null;
-      nombre: string | null;
-    } | null;
-
-    let updated: {
-      cuentascompartidas: CuentaLite;
-      usuarios: UsuarioLite;
-    } | null = null;
-
-    if (!noPantallasChanges) {
-      updated = await prisma.pantallas.update({
+    return await prisma.$transaction(async (tx) => {
+      // Estado actual para cálculos de totales
+      const current = await tx.pantallas.findUnique({
         where: { id: pid },
-        data,
-        include: {
-          cuentascompartidas: {
-            select: {
-              id: true,
-              correo: true,
-              contrasena: true,
-              plataforma_id: true,
-              cuenta_caida: true,
-            },
-          },
-          usuarios: { select: { contacto: true, nombre: true } },
+        select: {
+          cuenta_id: true,
+          total_pagado: true,
+          total_pagado_proveedor: true,
+          total_ganado: true,
+          contacto: true,
+          cuentascompartidas: { select: { correo: true, plataforma_id: true } },
         },
       });
-    } else {
-      // No hay cambios en pantallas -> traemos la fila para poder tocar relaciones
-      const row = await prisma.pantallas.findUnique({
-        where: { id: pid },
-        include: {
-          cuentascompartidas: {
-            select: {
-              id: true,
-              correo: true,
-              contrasena: true,
-              plataforma_id: true,
-              cuenta_caida: true,
-            },
-          },
-          usuarios: { select: { contacto: true, nombre: true } },
-        },
-      });
-      if (!row)
-        return NextResponse.json({ error: "not-found" }, { status: 404 });
-      updated = row;
-    }
+      if (!current)
+        throw NextResponse.json({ error: "not-found" }, { status: 404 });
 
-    // ⛑️ A partir de aquí, updated NO es null
-    if (!updated) {
-      return NextResponse.json({ error: "not-found" }, { status: 404 });
-    }
+      const inventoryTarget = c.cuenta_id != null && c.correo === undefined && c.plataforma_id === undefined
+        ? await tx.cuentascompartidas.findUniqueOrThrow({ where: { id: c.cuenta_id } })
+        : current.cuentascompartidas;
+      await consumeInventory(tx, c.inventario_id,
+        c.plataforma_id ?? inventoryTarget.plataforma_id,
+        c.correo ?? inventoryTarget.correo);
 
-    // ====== ACTUALIZAR RELACIONES ======
-    const hasCuentaRelacion = !!updated.cuentascompartidas?.id;
+      const data: Record<string, any> = {};
 
-    // 1) Cuentas compartidas: actualizar contraseña SOLO si NO estás moviendo
-    if (
-      !movingByPlatOrCorreo &&
-      hasCuentaRelacion &&
-      c.contrasena !== undefined
-    ) {
-      const normalized = toEmptyOrString(c.contrasena);
-      const cuentaId = updated.cuentascompartidas?.id;
-      if (normalized !== undefined && cuentaId) {
-        await prisma.cuentascompartidas.update({
-          where: { id: cuentaId },
-          data: { contrasena: normalized }, // ¡NO correo ni plataforma aquí!
+      // Si cambia contacto -> asegurar usuario y usar connect
+      if (c.contacto !== undefined) {
+        const exists = await tx.usuarios.findUnique({
+          where: { contacto: c.contacto },
+          select: { contacto: true },
         });
-      }
-    }
-
-    // ❌ NO actualizar plataforma_id de la cuenta existente aquí.
-    // Si cambia plataforma/correo, se maneja con reasignación.
-
-    // 1.c) REASIGNACIÓN DE CUENTA: correo y plataforma DEBEN coincidir; si no, crear nueva
-    const wantsMove = c.plataforma_id !== undefined || c.correo !== undefined;
-
-    if (wantsMove) {
-      const oldCuentaId = updated.cuentascompartidas?.id ?? null;
-      // Datos actuales
-
-      const currentCorreo = updated.cuentascompartidas?.correo ?? null;
-      const currentPlatId = updated.cuentascompartidas?.plataforma_id ?? null;
-
-      // Destino: si no viene el campo, usamos el actual (pero ambos deben definirse al final)
-      const targetCorreo = (c.correo ?? currentCorreo ?? "")
-        .trim()
-        .toLowerCase();
-      const targetPlatId =
-        c.plataforma_id !== undefined ? c.plataforma_id : currentPlatId;
-
-      if (!targetCorreo) {
-        return NextResponse.json(
-          { error: "correo_required_for_move" },
-          { status: 400 },
-        );
-      }
-      if (targetPlatId == null) {
-        return NextResponse.json(
-          { error: "plataforma_required_for_move" },
-          { status: 400 },
-        );
-      }
-
-      // 1) Buscar cuenta existente por (correo + plataforma_id)
-      const existing = await prisma.cuentascompartidas.findFirst({
-        where: {
-          correo: targetCorreo,
-          plataforma_id: targetPlatId,
-        },
-        select: { id: true },
-      });
-
-      let targetCuentaId: number;
-
-      if (existing) {
-        targetCuentaId = existing.id;
-
-        // (Opcional) si vino nueva contraseña, la actualizamos en la cuenta destino
-        if (c.contrasena !== undefined) {
-          const normalized = toEmptyOrString(c.contrasena);
-          await prisma.cuentascompartidas.update({
-            where: { id: targetCuentaId },
-            data: { contrasena: normalized ?? "" },
+        if (!exists) {
+          await tx.usuarios.create({
+            data: { contacto: c.contacto, nombre: null },
           });
         }
+        data.usuarios = { connect: { contacto: c.contacto } };
+      }
+
+      // Conectar/desconectar cuenta compartida (NO tocar correo aquí)
+      // pero ignorar si estamos moviendo por correo o plataforma
+      const movingByPlatOrCorreo =
+        c.plataforma_id !== undefined || c.correo !== undefined;
+
+      if (!movingByPlatOrCorreo && c.cuenta_id !== undefined) {
+        if (c.cuenta_id === null) {
+          data.cuentascompartidas = { disconnect: true };
+        } else {
+          data.cuentascompartidas = { connect: { id: c.cuenta_id } };
+        }
+      }
+
+      // Escalares locales (fechas UTC-safe) SOLO en pantallas
+      if (c.nro_pantalla !== undefined) data.nro_pantalla = c.nro_pantalla;
+      if (c.pin !== undefined) data.pin = c.pin;
+      if (c.fecha_compra !== undefined)
+        data.fecha_compra = toUTCDateOrNull(c.fecha_compra);
+      if (c.fecha_vencimiento !== undefined)
+        data.fecha_vencimiento = toUTCDateOrNull(c.fecha_vencimiento);
+      if (c.meses_pagados !== undefined) data.meses_pagados = c.meses_pagados;
+      if (c.estado !== undefined) data.estado = c.estado;
+      if (c.comentario !== undefined) data.comentario = c.comentario;
+
+      // Totales (cálculo de total_ganado si cambian TP/TPP)
+      const hasTP = c.total_pagado !== undefined;
+      const hasTPP = c.total_pagado_proveedor !== undefined;
+      const hasTG = c.total_ganado !== undefined;
+
+      const curTP = toNumOrNull(current.total_pagado as any);
+      const curTPP = toNumOrNull(current.total_pagado_proveedor as any);
+
+      const nextTPNum = hasTP ? toNumOrNull(c.total_pagado) : curTP;
+      const nextTPPNum = hasTPP ? toNumOrNull(c.total_pagado_proveedor) : curTPP;
+
+      if (hasTP) data.total_pagado = toDecStr(c.total_pagado);
+      if (hasTPP)
+        data.total_pagado_proveedor = toDecStr(c.total_pagado_proveedor);
+
+      if (hasTG) {
+        data.total_ganado = toDecStr(c.total_ganado);
+      } else if (hasTP || hasTPP) {
+        let computed: number | null = null;
+        if (nextTPNum === null) computed = null;
+        else if (nextTPPNum === null) computed = nextTPNum;
+        else computed = nextTPNum - nextTPPNum;
+        data.total_ganado = toDecStr(computed);
+      }
+
+      // Si no vienen cambios en pantallas y TAMPOCO vienen contrasena/nombre/cuenta_id/plataforma_id/correo, no hay nada que hacer.
+      const noPantallasChanges = Object.keys(data).length === 0;
+      if (
+        noPantallasChanges &&
+        c.contrasena === undefined &&
+        c.nombre === undefined &&
+        c.cuenta_id === undefined &&
+        c.plataforma_id === undefined &&
+        c.correo === undefined
+      ) {
+        throw NextResponse.json(
+          { error: "no_fields_to_update" },
+          { status: 400 },
+        );
+      }
+
+      // ====== Actualizar pantallas SOLO si hay cambios en ella ======
+      type CuentaLite = {
+        id: number | null;
+        correo: string | null;
+        contrasena: string;
+        plataforma_id: number | null;
+        cuenta_caida: boolean;
+      } | null;
+
+      type UsuarioLite = {
+        contacto: string | null;
+        nombre: string | null;
+      } | null;
+
+      let updated: {
+        cuentascompartidas: CuentaLite;
+        usuarios: UsuarioLite;
+      } | null = null;
+
+      if (!noPantallasChanges) {
+        updated = await tx.pantallas.update({
+          where: { id: pid },
+          data,
+          include: {
+            cuentascompartidas: {
+              select: {
+                id: true,
+                correo: true,
+                contrasena: true,
+                plataforma_id: true,
+                cuenta_caida: true,
+              },
+            },
+            usuarios: { select: { contacto: true, nombre: true } },
+          },
+        });
       } else {
-        // 2) No hay cuenta con ese correo+plataforma ⇒ crear una nueva
-        const created = await prisma.cuentascompartidas.create({
+        // No hay cambios en pantallas -> traemos la fila para poder tocar relaciones
+        const row = await tx.pantallas.findUnique({
+          where: { id: pid },
+          include: {
+            cuentascompartidas: {
+              select: {
+                id: true,
+                correo: true,
+                contrasena: true,
+                plataforma_id: true,
+                cuenta_caida: true,
+              },
+            },
+            usuarios: { select: { contacto: true, nombre: true } },
+          },
+        });
+        if (!row)
+          throw NextResponse.json({ error: "not-found" }, { status: 404 });
+        updated = row;
+      }
+
+      // ⛑️ A partir de aquí, updated NO es null
+      if (!updated) {
+        throw NextResponse.json({ error: "not-found" }, { status: 404 });
+      }
+
+      // ====== ACTUALIZAR RELACIONES ======
+      const hasCuentaRelacion = !!updated.cuentascompartidas?.id;
+
+      // 1) Cuentas compartidas: actualizar contraseña SOLO si NO estás moviendo
+      if (
+        !movingByPlatOrCorreo &&
+        hasCuentaRelacion &&
+        c.contrasena !== undefined
+      ) {
+        const normalized = toEmptyOrString(c.contrasena);
+        const cuentaId = updated.cuentascompartidas?.id;
+        if (normalized !== undefined && cuentaId) {
+          await tx.cuentascompartidas.update({
+            where: { id: cuentaId },
+            data: { contrasena: normalized }, // ¡NO correo ni plataforma aquí!
+          });
+        }
+      }
+
+      // ❌ NO actualizar plataforma_id de la cuenta existente aquí.
+      // Si cambia plataforma/correo, se maneja con reasignación.
+
+      // 1.c) REASIGNACIÓN DE CUENTA: correo y plataforma DEBEN coincidir; si no, crear nueva
+      const wantsMove = c.plataforma_id !== undefined || c.correo !== undefined;
+
+      if (wantsMove && c.applyCorreoCuenta) {
+        await tx.cuentascompartidas.update({
+          where: { id: current.cuenta_id },
           data: {
+            ...(c.correo !== undefined ? { correo: (c.correo ?? "").trim().toLowerCase() } : {}),
+            ...(c.plataforma_id !== undefined ? { plataforma_id: c.plataforma_id } : {}),
+            ...(c.contrasena !== undefined ? { contrasena: toEmptyOrString(c.contrasena) ?? "" } : {}),
+          },
+        });
+      } else if (wantsMove) {
+        const oldCuentaId = updated.cuentascompartidas?.id ?? null;
+        // Datos actuales
+
+        const currentCorreo = updated.cuentascompartidas?.correo ?? null;
+        const currentPlatId = updated.cuentascompartidas?.plataforma_id ?? null;
+
+        // Destino: si no viene el campo, usamos el actual (pero ambos deben definirse al final)
+        const targetCorreo = (c.correo ?? currentCorreo ?? "")
+          .trim()
+          .toLowerCase();
+        const targetPlatId =
+          c.plataforma_id !== undefined ? c.plataforma_id : currentPlatId;
+
+        if (!targetCorreo) {
+          throw NextResponse.json(
+            { error: "correo_required_for_move" },
+            { status: 400 },
+          );
+        }
+        if (targetPlatId == null) {
+          throw NextResponse.json(
+            { error: "plataforma_required_for_move" },
+            { status: 400 },
+          );
+        }
+
+        // 1) Buscar cuenta existente por (correo + plataforma_id)
+        const existing = await tx.cuentascompartidas.findFirst({
+          where: {
             correo: targetCorreo,
             plataforma_id: targetPlatId,
-            contrasena: toEmptyOrString(c.contrasena) ?? "",
           },
           select: { id: true },
         });
-        targetCuentaId = created.id;
-      }
 
-      // 3) Conectar esta pantalla a la cuenta destino (sin tocar la cuenta original)
-      await prisma.pantallas.update({
-        where: { id: pid },
-        data: { cuentascompartidas: { connect: { id: targetCuentaId } } },
-      });
+        let targetCuentaId: number;
 
-      // Si la cuenta anterior quedó sin pantallas, eliminarla
-      if (oldCuentaId && oldCuentaId !== targetCuentaId) {
-        const restantes = await prisma.pantallas.count({
-          where: {
-            cuenta_id: oldCuentaId,
+        if (existing) {
+          targetCuentaId = existing.id;
+
+          // (Opcional) si vino nueva contraseña, la actualizamos en la cuenta destino
+          if (c.contrasena !== undefined) {
+            const normalized = toEmptyOrString(c.contrasena);
+            await tx.cuentascompartidas.update({
+              where: { id: targetCuentaId },
+              data: { contrasena: normalized ?? "" },
+            });
+          }
+        } else {
+          // 2) No hay cuenta con ese correo+plataforma ⇒ crear una nueva
+          const created = await tx.cuentascompartidas.create({
+            data: {
+              correo: targetCorreo,
+              plataforma_id: targetPlatId,
+              contrasena: toEmptyOrString(c.contrasena) ?? "",
+            },
+            select: { id: true },
+          });
+          targetCuentaId = created.id;
+        }
+
+        // 3) Conectar esta pantalla a la cuenta destino (sin tocar la cuenta original)
+        await tx.pantallas.update({
+          where: { id: pid },
+          data: { cuentascompartidas: { connect: { id: targetCuentaId } } },
+        });
+
+        // Si la cuenta anterior quedó sin pantallas, eliminarla
+        if (oldCuentaId && oldCuentaId !== targetCuentaId) {
+          const restantes = await tx.pantallas.count({
+            where: {
+              cuenta_id: oldCuentaId,
+            },
+          });
+
+          if (restantes === 0) {
+            await tx.cuentascompartidas.delete({
+              where: {
+                id: oldCuentaId,
+              },
+            });
+          }
+        }
+
+        // 4) Refrescar 'updated' tras la reconexión
+        updated = await tx.pantallas.findUnique({
+          where: { id: pid },
+          include: {
+            cuentascompartidas: {
+              select: {
+                id: true,
+                correo: true,
+                contrasena: true,
+                plataforma_id: true,
+                cuenta_caida: true,
+              },
+            },
+            usuarios: { select: { contacto: true, nombre: true } },
           },
         });
 
-        if (restantes === 0) {
-          await prisma.cuentascompartidas.delete({
-            where: {
-              id: oldCuentaId,
-            },
+        if (!updated) {
+          throw NextResponse.json({ error: "not-found" }, { status: 404 });
+        }
+      }
+
+      // 2) Usuarios: nombre
+      if (c.nombre !== undefined) {
+        const newNombre =
+          c.nombre == null
+            ? null
+            : String(c.nombre).trim() === ""
+              ? null
+              : String(c.nombre).trim();
+
+        const usuarioContacto = updated.usuarios?.contacto;
+        if (usuarioContacto) {
+          await tx.usuarios.update({
+            where: { contacto: usuarioContacto },
+            data: { nombre: newNombre },
           });
         }
       }
 
-      // 4) Refrescar 'updated' tras la reconexión
-      updated = await prisma.pantallas.findUnique({
+      // La clave pertenece al par plataforma + correo, no a una pantalla.
+      // Sincroniza todas las fuentes relacionadas en una única transacción.
+      if (c.contrasena !== undefined) {
+        const credentialTarget = await tx.pantallas.findUnique({
+          where: { id: pid },
+          select: {
+            cuentascompartidas: {
+              select: {
+                correo: true,
+                plataforma_id: true,
+              },
+            },
+          },
+        });
+
+        const account = credentialTarget?.cuentascompartidas;
+        if (account?.correo && account.plataforma_id != null) {
+          const credentialPlatformId = account.plataforma_id;
+          await syncCredentialByPlatformEmail(tx, {
+              plataformaId: credentialPlatformId,
+              correo: account.correo,
+              contrasena: toEmptyOrString(c.contrasena) ?? "",
+            });
+        }
+      }
+
+      // Traer de nuevo con los últimos datos de la relación (y normalizar fechas)
+      const finalRow = await tx.pantallas.findUnique({
         where: { id: pid },
         include: {
           cuentascompartidas: {
@@ -470,91 +554,26 @@ export async function PATCH(
         },
       });
 
-      if (!updated) {
-        return NextResponse.json({ error: "not-found" }, { status: 404 });
-      }
-    }
+      const finalOut = finalRow && {
+        ...finalRow,
+        fecha_compra: toYMDUTC(finalRow!.fecha_compra),
+        fecha_vencimiento: toYMDUTC(finalRow!.fecha_vencimiento),
+      };
 
-    // 2) Usuarios: nombre
-    if (c.nombre !== undefined) {
-      const newNombre =
-        c.nombre == null
-          ? null
-          : String(c.nombre).trim() === ""
-            ? null
-            : String(c.nombre).trim();
+      const flat = {
+        row: finalOut,
+        correo: finalOut?.cuentascompartidas?.correo ?? null,
+        contrasena: finalOut?.cuentascompartidas?.contrasena ?? "",
+        /** 👇 devolver la plataforma de la CUENTA conectada */
+        plataforma_id: finalOut?.cuentascompartidas?.plataforma_id ?? null,
+        cuenta_caida: !!finalOut?.cuentascompartidas?.cuenta_caida,
+      };
 
-      const usuarioContacto = updated.usuarios?.contacto;
-      if (usuarioContacto) {
-        await prisma.usuarios.update({
-          where: { contacto: usuarioContacto },
-          data: { nombre: newNombre },
-        });
-      }
-    }
-
-    // La clave pertenece al par plataforma + correo, no a una pantalla.
-    // Sincroniza todas las fuentes relacionadas en una única transacción.
-    if (c.contrasena !== undefined) {
-      const credentialTarget = await prisma.pantallas.findUnique({
-        where: { id: pid },
-        select: {
-          cuentascompartidas: {
-            select: {
-              correo: true,
-              plataforma_id: true,
-            },
-          },
-        },
-      });
-
-      const account = credentialTarget?.cuentascompartidas;
-      if (account?.correo && account.plataforma_id != null) {
-        const credentialPlatformId = account.plataforma_id;
-        await prisma.$transaction((tx) =>
-          syncCredentialByPlatformEmail(tx, {
-            plataformaId: credentialPlatformId,
-            correo: account.correo,
-            contrasena: toEmptyOrString(c.contrasena) ?? "",
-          }),
-        );
-      }
-    }
-
-    // Traer de nuevo con los últimos datos de la relación (y normalizar fechas)
-    const finalRow = await prisma.pantallas.findUnique({
-      where: { id: pid },
-      include: {
-        cuentascompartidas: {
-          select: {
-            id: true,
-            correo: true,
-            contrasena: true,
-            plataforma_id: true,
-            cuenta_caida: true,
-          },
-        },
-        usuarios: { select: { contacto: true, nombre: true } },
-      },
+      return NextResponse.json(flat, { status: 200 });
     });
-
-    const finalOut = finalRow && {
-      ...finalRow,
-      fecha_compra: toYMDUTC(finalRow!.fecha_compra),
-      fecha_vencimiento: toYMDUTC(finalRow!.fecha_vencimiento),
-    };
-
-    const flat = {
-      row: finalOut,
-      correo: finalOut?.cuentascompartidas?.correo ?? null,
-      contrasena: finalOut?.cuentascompartidas?.contrasena ?? "",
-      /** 👇 devolver la plataforma de la CUENTA conectada */
-      plataforma_id: finalOut?.cuentascompartidas?.plataforma_id ?? null,
-      cuenta_caida: !!finalOut?.cuentascompartidas?.cuenta_caida,
-    };
-
-    return NextResponse.json(flat, { status: 200 });
   } catch (e: any) {
+    if (e instanceof Response) return e;
+    if (e instanceof InventoryUnavailableError) return NextResponse.json({ error: "inventory_unavailable", detail: e.message }, { status: 409 });
     if (e?.code === "P2025")
       return NextResponse.json({ error: "not-found" }, { status: 404 });
     if (e?.code === "P2003")

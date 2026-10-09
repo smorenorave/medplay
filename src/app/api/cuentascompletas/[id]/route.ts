@@ -1,3 +1,4 @@
+import { consumeInventory, InventoryUnavailableError } from "@/lib/consumeInventory";
 import { deleteEmailForRecord } from "@/lib/deleteEmailForRecord";
 // app/api/cuentascompletas/[id]/route.ts
 export const runtime = 'nodejs';
@@ -259,6 +260,7 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
     // ===== Caso 1: NO cambia el contacto =====
     if (!wantsChangeContacto || !oldContacto) {
       await prisma.$transaction(async (tx) => {
+        await consumeInventory(tx, raw?.inventario_id, credentialPlatformId, credentialEmail);
         if (Object.keys(scalarData).length > 0) {
           await tx.cuentascompletas.update({ where: { id }, data: scalarData });
         }
@@ -299,6 +301,7 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
     if (refCount === 1 && !targetUser) {
       // renombrar usuario actual y actualizar cuenta
       await prisma.$transaction(async (tx) => {
+        await consumeInventory(tx, raw?.inventario_id, credentialPlatformId, credentialEmail);
         await tx.usuarios.update({
           where: { contacto: oldContacto ?? '' },
           data: {
@@ -320,6 +323,7 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
     } else {
       // conectar a usuario existente o crear uno nuevo
       await prisma.$transaction(async (tx) => {
+        await consumeInventory(tx, raw?.inventario_id, credentialPlatformId, credentialEmail);
         if (!targetUser) {
           await tx.usuarios.create({
             data: { contacto: newContacto, nombre: c.nombre ?? null },
@@ -356,6 +360,7 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
     });
     return NextResponse.json(fresh ? shapeRow(fresh) : null, { status: 200 });
   } catch (e: any) {
+    if (e instanceof InventoryUnavailableError) return NextResponse.json({ error: "inventory_unavailable", detail: e.message }, { status: 409 });
     if (e?.code === 'P2025') return NextResponse.json({ error: 'relation-or-row-not-found' }, { status: 404 });
     if (e?.code === 'P2003') return NextResponse.json({ error: 'foreign_key_violation' }, { status: 409 });
     if (e?.code === 'P2002') return NextResponse.json({ error: 'unique_violation' }, { status: 409 });

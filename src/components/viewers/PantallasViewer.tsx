@@ -1,4 +1,6 @@
 "use client";
+import { useInventoryRefresh } from "@/hooks/useInventoryRefresh";
+import { notifyInventoryConsumed } from "@/lib/inventoryChanges";
 import { deleteEmailsGlobally, readCurrentAccountData, registerAccountCache } from "@/lib/accountDataChanges";
 import { useAccountDataRefresh } from "@/hooks/useAccountDataRefresh";
 
@@ -18,9 +20,6 @@ import {
   buildPidEmailKey,
   buildNumerosPantallaDisponibles,
 } from "@/lib/cantidadPantallasDisponibles";
-import {
-  upsertCuentaCompartida,
-} from "@/lib/cuentasCompartidasUpsert";
 
 import {
   mergePantallaIntoCache,
@@ -55,10 +54,12 @@ type Pantalla = {
   cuenta_caida: boolean; // 👈 Nueva flag
 };
 type EditState = Partial<Pantalla> & {
+  inventorySelection?: { id: number | null; email: string; pid: number | null };
   id: number;
   __applyCorreoToCuenta?: boolean; // ✅ nuevo
 };
 type AvailableEmail = {
+  invId: number | null;
   email: string;
   password: string | null;
   cuentaId: number | null;
@@ -350,6 +351,7 @@ export default function PantallasViewer() {
     [rows],
   );
 
+  const inventoryRevision = useInventoryRefresh();
   // edición
   const [edit, setEdit] = useState<EditState | null>(null);
   const {
@@ -499,6 +501,7 @@ export default function PantallasViewer() {
 
         if (!cancelled) {
           setAvailableEmails(disponibilidad.options.map((option) => ({
+            invId: disponibilidad.invIdMap[option.email] ?? null,
             email: option.email,
             cuentaId: option.cuentaId,
             password: option.source === "acct"
@@ -525,7 +528,7 @@ export default function PantallasViewer() {
     return () => {
       cancelled = true;
     };
-  }, [edit?.plataforma_id, edit?.id, plataformas, rows]);
+  }, [edit?.plataforma_id, edit?.id, plataformas, rows, inventoryRevision]);
 
   const [saving, setSaving] = useState(false);
 
@@ -1041,6 +1044,10 @@ export default function PantallasViewer() {
         edit.plataforma_id == null ? oldPid : Number(edit.plataforma_id);
       const credentialScopeChanged =
         newCorreo !== oldCorreo || newPid !== oldPid;
+      const selection = edit.inventorySelection;
+      const inventoryId = selection && selection.email === newCorreo && selection.pid === newPid
+        ? selection.id
+        : credentialScopeChanged ? availableEmails.find(item => item.email === newCorreo)?.invId ?? null : null;
       const passwordChanged =
         (edit.contrasena ?? "") !== (row.contrasena ?? "");
       const shouldSubmitCredential =
@@ -1058,6 +1065,7 @@ export default function PantallasViewer() {
 
       // ===== Payload base para PANTALLAS (sin correo/plataforma si se aplica a todas) =====
       const payloadPant: Record<string, unknown> = {
+        inventario_id: inventoryId,
         contacto: edit.contacto ?? "",
         nombre: (edit.nombre ?? "") === "" ? null : (edit.nombre ?? ""),
         nro_pantalla: edit.nro_pantalla ?? "",
@@ -1082,7 +1090,7 @@ export default function PantallasViewer() {
         payloadPant.plataforma_id = newPid;
       }
 
-      let cuentaIdToUpdate: number | null = row.cuenta_id ?? null;
+      const cuentaIdToUpdate: number | null = row.cuenta_id ?? null;
 
       // ===== A) Checkbox marcado → actualiza la CUENTA (mismo id) =====
       if (applyCorreoCuenta) {
@@ -1092,25 +1100,9 @@ export default function PantallasViewer() {
           );
         }
 
-        // 1) Actualizar cuentascompartidas (correo/plataforma/clave) en el MISMO id
-        const bodyCuenta: any = {};
-        if (newCorreo && newCorreo !== oldCorreo) bodyCuenta.correo = newCorreo;
-        if (newPid !== oldPid) bodyCuenta.plataforma_id = newPid;
-
-        if (Object.keys(bodyCuenta).length > 0) {
-          const resC = await fetch(`/api/cuentascompartidas/${row.cuenta_id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(bodyCuenta),
-          });
-          if (!resC.ok) {
-            const j = await resC.json().catch(() => ({}));
-            throw new Error(
-              j?.error ??
-                "No se pudo actualizar la cuenta compartida (correo/plataforma).",
-            );
-          }
-        }
+        payloadPant.applyCorreoCuenta = true;
+        if (newCorreo && newCorreo !== oldCorreo) payloadPant.correo = newCorreo;
+        if (newPid !== oldPid) payloadPant.plataforma_id = newPid;
 
         // 2) Patch de PANTALLAS solo con campos locales (¡sin correo/plataforma!)
         const resPant = await fetch(`/api/pantallas/${edit.id}`, {
@@ -1120,9 +1112,11 @@ export default function PantallasViewer() {
         });
         if (!resPant.ok) {
           const j = await resPant.json().catch(() => ({}));
-          throw new Error(j?.error ?? "No se pudo guardar");
+          if (j?.error === "inventory_unavailable") notifyInventoryConsumed();
+        throw new Error(j?.detail ?? j?.error ?? "No se pudo guardar");
         }
         const flat = await resPant.json();
+        if (inventoryId != null) notifyInventoryConsumed();
 
         // 3) UI: reflejar el cambio en TODAS las filas con el mismo cuenta_id
         setRows((prev) => {
@@ -1149,7 +1143,7 @@ export default function PantallasViewer() {
         // 4) Mezcla la fila editada con lo devuelto por la API
         const updated = {
           id: Number(flat?.row?.id ?? edit.id),
-          cuenta_id: cuentaIdToUpdate,
+          cuenta_id: flat?.row?.cuenta_id ?? cuentaIdToUpdate,
           contacto: flat?.row?.contacto ?? edit.contacto,
           nombre: flat?.row?.usuarios?.nombre ?? edit.nombre ?? null,
           nro_pantalla: flat?.row?.nro_pantalla ?? edit.nro_pantalla ?? null,
@@ -1197,34 +1191,8 @@ export default function PantallasViewer() {
         return; // ← Detén aquí; no entres a la rama normal
       }
 
-      // ===== B) Checkbox NO marcado → flujo original (puede crear/reasignar cuentas)
-      if (newCorreo && newCorreo !== oldCorreo) {
-        // Antes esto buscaba con `findCuentaCompartidaByCorreo(null, newCorreo)`
-        // -> sin filtrar por plataforma, podía reutilizar por error el
-        // cuenta_id de OTRA plataforma que casualmente comparte el correo.
-        // Ahora usa el helper compartido, con la plataforma correcta.
-        const { id: cuentaId } = await upsertCuentaCompartida(
-          newPid ?? oldPid ?? null,
-          newCorreo,
-          {
-            contrasena:
-              shouldSubmitCredential && typeof edit.contrasena === "string"
-                ? edit.contrasena
-                : null,
-          },
-        );
-
-        (payloadPant as any).cuenta_id = cuentaId;
-        (payloadPant as any).correo = newCorreo;
-        cuentaIdToUpdate = cuentaId;
-      } else {
-        (payloadPant as any).correo = newCorreo || oldCorreo || null;
-
-        if (!newCorreo) {
-          (payloadPant as any).cuenta_id = null;
-          cuentaIdToUpdate = null;
-        }
-      }
+      // Account reassignment is part of the same server transaction.
+      payloadPant.correo = newCorreo || oldCorreo || null;
 
       const res = await fetch(`/api/pantallas/${edit.id}`, {
         method: "PATCH",
@@ -1233,13 +1201,15 @@ export default function PantallasViewer() {
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        throw new Error(j?.error ?? "No se pudo guardar");
+        if (j?.error === "inventory_unavailable") notifyInventoryConsumed();
+        throw new Error(j?.detail ?? j?.error ?? "No se pudo guardar");
       }
       const flat = await res.json();
+      if (inventoryId != null) notifyInventoryConsumed();
 
       const updated = {
         id: Number(flat?.row?.id ?? edit.id),
-        cuenta_id: cuentaIdToUpdate,
+        cuenta_id: flat?.row?.cuenta_id ?? cuentaIdToUpdate,
         contacto: flat?.row?.contacto ?? edit.contacto,
         nombre: flat?.row?.usuarios?.nombre ?? edit.nombre ?? null,
         nro_pantalla: flat?.row?.nro_pantalla ?? edit.nro_pantalla ?? null,
@@ -2153,6 +2123,7 @@ export default function PantallasViewer() {
                       onChange={(e) => {
                         setEdit((s) => ({
                           ...(s as EditState),
+                          inventorySelection: undefined,
                           correo: e.target.value,
                           contrasena: "",
                         }));
@@ -2191,6 +2162,7 @@ export default function PantallasViewer() {
                                     );
                                     setEdit((s) => ({
                                       ...(s as EditState),
+                                      inventorySelection: { id: item.invId, email: item.email, pid: edit.plataforma_id ?? null },
                                       correo: item.email,
                                       contrasena: item.password,
                                       ...(item.cuentaId ? { cuenta_id: item.cuentaId } : {}),

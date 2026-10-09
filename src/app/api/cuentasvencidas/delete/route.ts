@@ -6,6 +6,8 @@ import { getAuthenticatedAdminId } from "@/lib/adminSession";
 import { AccountSafetyError, ACTIVE_ACCOUNT_WARNING, hasActiveAssignment } from "@/lib/expiredAccountSafety";
 import { deleteEmails } from "@/lib/emailDeletion";
 import { deleteExpiredBulk } from "@/lib/expiredBulkDeletion";
+import { expiredDeletionFailure } from "@/lib/expiredDeletionFailure";
+import { randomUUID } from "node:crypto";
 
 export const dynamic = "force-dynamic";
 const schema = z.object({
@@ -31,8 +33,14 @@ export async function DELETE(request: Request) {
     return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof AccountSafetyError) return NextResponse.json({ error: error.message }, { status: 409 });
-    console.error("Expired account deletion failed", error);
-    return NextResponse.json({ error: "No se pudo completar la operación. No se guardó ningún cambio." }, { status: (error as Error).message === "unauthorized" ? 401 : 500 });
+    const failure = expiredDeletionFailure(error);
+    const reference = randomUUID();
+    console.error("Expired account deletion failed", { reference, code: failure.code }, error);
+    return NextResponse.json({
+      error: `${failure.error} Referencia: ${reference}.`,
+      code: failure.code,
+      reference,
+    }, { status: failure.status, headers: { "Cache-Control": "no-store" } });
   }
 }
 

@@ -1,4 +1,7 @@
 "use client";
+import { useInventoryRefresh } from "@/hooks/useInventoryRefresh";
+import { upsertCuentaCompartida } from "@/lib/cuentasCompartidasUpsert";
+import { inventoryEpoch, notifyInventoryConsumed } from "@/lib/inventoryChanges";
 import { deleteEmailsGlobally, readCurrentAccountData, accountDataEpoch } from "@/lib/accountDataChanges";
 import { useAccountDataRefresh } from "@/hooks/useAccountDataRefresh";
 
@@ -11,7 +14,6 @@ import TextArea from "@/components/ui/TextArea";
 import type { Usuario, Cuenta, FormState } from "@/types/pantallas";
 import { buildDisponibilidadCorreos } from "@/lib/cuentasDisponibles";
 import { buildNumerosPantallaDisponibles } from "@/lib/cantidadPantallasDisponibles";
-import { upsertCuentaCompartida } from "@/lib/cuentasCompartidasUpsert";
 
 // Reutiliza tu bus de mutaciones / cache
 import {
@@ -853,7 +855,9 @@ export default function FormPantallas() {
     if (!force && pantallasPidCacheRef.current[pid]) {
       return pantallasPidCacheRef.current[pid];
     }
+    const invEpoch = inventoryEpoch();
     const rows = await readCurrentAccountData(() => fetchPantallasPorPlataforma(pid));
+    if (invEpoch !== inventoryEpoch()) return getPantallasPorPlataformaCached(pid, true);
     pantallasPidCacheRef.current[pid] = rows;
     return rows;
   }
@@ -1092,6 +1096,7 @@ export default function FormPantallas() {
   }
   async function loadEmailsForPidFromServer(pid: number, force = false): Promise<void> {
     const epoch = accountDataEpoch();
+    const invEpoch = inventoryEpoch();
     if (!pid) return;
     ensurePerPidInit(pid);
 
@@ -1119,7 +1124,7 @@ export default function FormPantallas() {
       const acctRows: Cuenta[] = await acctRes.json();
       const invRows: InventarioItem[] = await invRes.json();
 
-      if (epoch !== accountDataEpoch()) return loadEmailsForPidFromServer(pid, true);
+      if (epoch !== accountDataEpoch() || invEpoch !== inventoryEpoch()) return loadEmailsForPidFromServer(pid, true);
 
       // Seguimos escribiendo el cache LS de cuentas/inventario porque otras
       // partes del componente lo siguen leyendo (líneas ~739, 758, 1239:
@@ -1150,7 +1155,7 @@ export default function FormPantallas() {
       // ✅ Pantallas usadas: dataset fresco de la plataforma.
       const pantallasRows = await getPantallasPorPlataformaCached(pid, force);
 
-      if (epoch !== accountDataEpoch()) return loadEmailsForPidFromServer(pid, true);
+      if (epoch !== accountDataEpoch() || invEpoch !== inventoryEpoch()) return loadEmailsForPidFromServer(pid, true);
 
       // ✅ Única fuente de verdad para disponibilidad de correos.
       const disponibilidad = buildDisponibilidadCorreos({
@@ -1203,6 +1208,12 @@ export default function FormPantallas() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshTick]);
+
+  useInventoryRefresh(() => {
+    invalidatePantallasPidCache();
+    setPerPid({});
+    setRefreshTick(value => value + 1);
+  });
 
   useAccountDataRefresh(change => {
     const emails = new Set(change.correos.map(normalizeEmail));
@@ -1333,6 +1344,7 @@ export default function FormPantallas() {
           : totalPag - totalProv;
 
     return {
+      inventario_id: o.selectedInvId ?? perPid[o.plataforma_id]?.invIdMap[normalizeEmail(o.correo)] ?? null,
       cuenta_id: cuentaIdFinal ?? null,
       contacto: normalizeContacto(user.contacto.trim()),
       nombre: (user.nombre ?? "").trim() || null,
@@ -1428,18 +1440,14 @@ export default function FormPantallas() {
         keyset.add(k);
       }
 
-      // asegurar cuenta compartida por bloque y construir payload
-      const payloads: any[] = [];
+      const payloads = [];
       for (const o of orders) {
-        let cuentaId: number | null = o.cuenta_id ?? null;
-        if (o.correo && o.plataforma_id > 0) {
-          const { id } = await ensureCuentaCompartida(
-            o.correo,
-            o.plataforma_id,
-            o.contrasena || null,
-            (o.proveedor ?? "") || null,
-          );
-          cuentaId = id;
+        const inventoryId = o.selectedInvId ?? perPid[o.plataforma_id]?.invIdMap[normalizeEmail(o.correo)] ?? null;
+        let cuentaId = o.cuenta_id ?? null;
+        // Inventory accounts are created only when the sale is confirmed,
+        // inside its transaction. Preserve the existing flow for manual sales.
+        if (inventoryId == null && o.correo && o.plataforma_id > 0) {
+          cuentaId = (await ensureCuentaCompartida(o.correo, o.plataforma_id, o.contrasena || null, o.proveedor || null)).id;
         }
         payloads.push(buildPayloadFor(o, cuentaId));
       }
@@ -1477,7 +1485,11 @@ export default function FormPantallas() {
             body: JSON.stringify(p),
           }).then(async (res) => {
             const j = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(j?.error ?? "No se pudo guardar");
+            if (!res.ok) {
+              if (j?.error === "inventory_unavailable") notifyInventoryConsumed();
+              throw new Error(j?.detail ?? j?.error ?? "No se pudo guardar");
+            }
+            if (p.inventario_id != null) notifyInventoryConsumed();
             return { saved: j, sent: p };
           }),
         ),
@@ -1489,29 +1501,6 @@ export default function FormPantallas() {
       const bad = results.filter(
         (r) => r.status === "rejected",
       ) as PromiseRejectedResult[];
-
-      // si venían de inventario: borrar por bloque usando selectedInvId
-      for (let i = 0; i < ok.length; i++) {
-        const sent = ok[i].value.sent;
-        // buscamos el índice por match plataforma+correo+nro_pantalla (mejor esfuerzo)
-        const idx = confirmOrders.findIndex(
-          (o) =>
-            Number(o.plataforma_id) === Number(sent?.plataforma_id) &&
-            normalizeEmail(o.correo) === normalizeEmail(sent?.correo ?? "") &&
-            String(o.nro_pantalla) === String(sent?.nro_pantalla ?? ""),
-        );
-        if (idx >= 0) {
-          const o = confirmOrders[idx];
-          if (o.selectedEmailSource === "inv" && o.selectedInvId != null) {
-            try {
-              await fetch(`/api/inventario/${o.selectedInvId}?scope=record`, {
-                method: "DELETE",
-                cache: "no-store",
-              });
-            } catch {}
-          }
-        }
-      }
 
       for (const f of ok) {
         try {
@@ -1941,7 +1930,7 @@ export default function FormPantallas() {
                                               contrasena:
                                                 o.contrasena || pass || "",
                                               selectedEmailSource: "acct",
-                                              selectedInvId: null,
+                                              selectedInvId: pidCache.invIdMap[email] ?? null,
                                               nro_pantalla: "",
                                             });
                                           }

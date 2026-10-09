@@ -1,5 +1,7 @@
 // src/components/forms/FormCuentaCompletas.tsx
 "use client";
+import { useInventoryRefresh } from "@/hooks/useInventoryRefresh";
+import { inventoryEpoch, notifyInventoryConsumed } from "@/lib/inventoryChanges";
 import { readCurrentAccountData, accountDataEpoch } from "@/lib/accountDataChanges";
 import { useAccountDataRefresh } from "@/hooks/useAccountDataRefresh";
 
@@ -716,6 +718,7 @@ export default function FormCuentaCompletas() {
   }
   async function fetchEmailsByPlatformFromServer(plataformaId: number): Promise<Record<string, InvEntry>> {
     const epoch = accountDataEpoch();
+    const invEpoch = inventoryEpoch();
     if (!plataformaId) return {};
 
     // 1) LS cache
@@ -739,11 +742,18 @@ export default function FormCuentaCompletas() {
       if (!c) continue;
       m[c] = { pass: (it as any)?.clave ?? null, id: Number(it?.id) };
     }
-    if (epoch !== accountDataEpoch()) return fetchEmailsByPlatformFromServer(plataformaId);
+    if (epoch !== accountDataEpoch() || invEpoch !== inventoryEpoch()) return fetchEmailsByPlatformFromServer(plataformaId);
     writeInvCache(plataformaId, m);
     setInvIndexByPid((s) => ({ ...s, [plataformaId]: m }));
     return m;
   }
+
+  useInventoryRefresh(() => {
+    setInvIndexByPid({});
+    setEmailOptsByIdx([]);
+    orders.forEach(order => { if (order.plataforma_id) void fetchEmailsByPlatform(order.plataforma_id).catch(() => {}); });
+  });
+  const inventorySelectionScopes = useRef<Record<number, string>>({});
 
   useAccountDataRefresh(change => {
     const emails = new Set(change.correos.map(normalizeEmail));
@@ -841,6 +851,7 @@ export default function FormCuentaCompletas() {
       const correo = normalizeEmail(o.correo.trim());
       const invIndex = invIndexByPid[pid] ?? {};
 
+      const scope = `${pid}:${correo}`;
       // autocompletar desde inventario
       if (correo && invIndex[correo]) {
         const hit = invIndex[correo];
@@ -853,13 +864,15 @@ export default function FormCuentaCompletas() {
         if (hit.pass && !o.contrasena) {
           setOrder(idx, { contrasena: hit.pass || o.contrasena });
         }
-      } else {
+      } else if (inventorySelectionScopes.current[idx] !== scope) {
         setSelectedInvIdByIdx((p) => {
           const a = [...p];
           a[idx] = null;
           return a;
         });
       }
+
+      inventorySelectionScopes.current[idx] = scope;
 
       // filtrar dropdown local
       const nextOpts: EmailSuggestion[] = [];
@@ -963,7 +976,7 @@ export default function FormCuentaCompletas() {
   }, [user, orders]);
 
   /* ===================== Payload por bloque ===================== */
-  const buildPayloadFor = (o: OrderState) => {
+  const buildPayloadFor = (o: OrderState, idx: number) => {
     const totalPagadoNum =
       o.total_pagado_completa !== "" ? Number(o.total_pagado_completa) : null;
     const totalProvNum =
@@ -976,6 +989,7 @@ export default function FormCuentaCompletas() {
         : null;
 
     return {
+      inventario_id: selectedInvIdByIdx[idx] ?? null,
       contacto: normalizeContacto(user.contacto.trim()),
       nombre: user.nombre.trim() || null,
       plataforma_id: o.plataforma_id,
@@ -1048,7 +1062,11 @@ export default function FormCuentaCompletas() {
             body: JSON.stringify(p),
           }).then(async (res) => {
             const j = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(j?.error ?? "No se pudo guardar");
+            if (!res.ok) {
+              if (j?.error === "inventory_unavailable") notifyInventoryConsumed();
+              throw new Error(j?.detail ?? j?.error ?? "No se pudo guardar");
+            }
+            if (p.inventario_id != null) notifyInventoryConsumed();
             return { saved: j?.cuenta ?? j, idx, sent: p };
           }),
         ),
@@ -1076,17 +1094,6 @@ export default function FormCuentaCompletas() {
           );
         }
       } catch {}
-
-      // si venían de inventario, intenta eliminar (por bloque)
-      for (const f of ok) {
-        const idx = f.value.idx;
-        const invId = selectedInvIdByIdx[idx];
-        if (invId != null) {
-          try {
-            await fetch(`/api/inventario/${invId}?scope=record`, { method: "DELETE" });
-          } catch {}
-        }
-      }
 
       // cache local + notify por cada insert ok
       for (const f of ok) {

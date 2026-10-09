@@ -1,4 +1,6 @@
 "use client";
+import { useInventoryRefresh } from "@/hooks/useInventoryRefresh";
+import { notifyInventoryConsumed } from "@/lib/inventoryChanges";
 import { deleteEmailsGlobally, readCurrentAccountData, registerAccountCache } from "@/lib/accountDataChanges";
 import { useAccountDataRefresh } from "@/hooks/useAccountDataRefresh";
 
@@ -30,7 +32,7 @@ type Cuenta = {
   estado: string | null;
   comentario: string | null;
 };
-type EditState = Partial<Cuenta> & { id: number };
+type EditState = Partial<Cuenta> & { id: number; inventorySelection?: { id: number | null; email: string; pid: number | null } };
 
 /* =========================================================
  * Config
@@ -304,6 +306,7 @@ export default function CuentasCompletasViewer() {
     "all" | "active" | "expiring" | "expired" | "notes"
   >("all");
 
+  const inventoryRevision = useInventoryRefresh();
   // edición
   const [edit, setEdit] = useState<EditState | null>(null);
   const {
@@ -395,7 +398,7 @@ export default function CuentasCompletasViewer() {
     return () => {
       cancelled = true;
     };
-  }, [edit?.plataforma_id]);
+  }, [edit?.plataforma_id, edit?.id, inventoryRevision]);
   const [saving, setSaving] = useState(false);
 
   // selección múltiple
@@ -722,10 +725,15 @@ export default function CuentasCompletasViewer() {
       const newPid = edit.plataforma_id == null ? oldPid : Number(edit.plataforma_id);
       const credentialScopeChanged =
         oldCorreo !== newCorreo || oldPid !== newPid;
+      const selection = edit.inventorySelection;
+      const inventoryId = selection && selection.email === newCorreo && selection.pid === newPid
+        ? selection.id
+        : credentialScopeChanged ? availableEmails.find(item => item.email === newCorreo)?.invId ?? null : null;
       const passwordChanged =
         (edit.contrasena ?? "") !== (row.contrasena ?? "");
 
       const payload: Record<string, unknown> = {
+        inventario_id: inventoryId,
         contacto: edit.contacto ?? "",
         nombre: (edit.nombre ?? "") === "" ? null : edit.nombre ?? "",
         proveedor: (edit.proveedor ?? "") === "" ? null : edit.proveedor ?? "",
@@ -760,11 +768,13 @@ export default function CuentasCompletasViewer() {
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        throw new Error(j?.error ?? "No se pudo guardar");
+        if (j?.error === "inventory_unavailable") notifyInventoryConsumed();
+        throw new Error(j?.detail ?? j?.error ?? "No se pudo guardar");
       }
 
       // ⬇️ El endpoint devuelve la FILA PLANA, no {row: ...}
       const saved = await res.json();
+      if (inventoryId != null) notifyInventoryConsumed();
       const updated = normalizeRow(saved); // reutiliza tu helper
 
       const nextCache = mergeIntoCache(updated);
@@ -1570,6 +1580,7 @@ export default function CuentasCompletasViewer() {
                       onChange={(e) => {
                         setEdit((s) => ({
                           ...(s as EditState),
+                          inventorySelection: undefined,
                           correo: e.target.value,
                           contrasena: "",
                         }));
@@ -1608,6 +1619,7 @@ export default function CuentasCompletasViewer() {
                                     );
                                     setEdit((s) => ({
                                       ...(s as EditState),
+                                      inventorySelection: { id: opt.invId, email: opt.email, pid: edit.plataforma_id ?? null },
                                       correo: opt.email,
                                       contrasena: opt.invClave ?? "",
                                     }));

@@ -1,6 +1,8 @@
 {
   "scripts": {
-    "test:email-deletion": "node --test tests/emailDeletion.test.cjs tests/accountDataChanges.test.cjs tests/expiredDeletion.regression.test.cjs",
+    "test:inventory": "node --test tests/inventoryConsumption.test.cjs tests/inventoryChanges.test.cjs",
+    "test:inventory:ui": "node tests/inventoryConsumption.ui.cjs",
+    "test:email-deletion": "node --test tests/emailDeletion.test.cjs tests/accountDataChanges.test.cjs tests/expiredDeletion.regression.test.cjs tests/expiredDeletionFailure.test.cjs",
     "test:email-deletion:ui": "node tests/emailDeletion.ui.cjs",
     "test:account-restoration": "node --test tests/restoreDeletedRecord.test.cjs",
     "dev": "next dev -p 3000",

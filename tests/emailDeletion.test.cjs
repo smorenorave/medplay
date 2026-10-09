@@ -281,6 +281,30 @@ test('expired endpoint authenticates, validates targets and preserves the last c
   assert.equal(routeFixture.state.emailDeletionAudit.some(row => row.clave === 'full-key'), false);
 });
 
+test('expired bulk endpoint reports database failure codes on screen and retains all records', async () => {
+  for (const code of ['P2021', 'P2022', 'P2002', 'P2028']) {
+    routeFixture = fixture(); sessionId = 1;
+    const before = structuredClone(routeFixture.state);
+    routeFixture.db.$transaction = async () => { throw Object.assign(new Error('private database details'), { code }); };
+    const originalLog = console.error;
+    const logs = [];
+    console.error = (...args) => logs.push(args);
+    let response;
+    try {
+      response = await expiredRoute.DELETE(new Request('http://localhost/api/cuentasvencidas/delete', {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targets: [{ tipo: 'completa', id: '10' }], destino: 'eliminar', bulkConfirmed: true }),
+      }));
+    } finally { console.error = originalLog; }
+    assert.equal(response.status, code === 'P2002' ? 409 : 503);
+    const result = await response.json();
+    assert.equal(result.code, code); assert.match(result.error, new RegExp(code));
+    assert.equal(logs[0][1].reference, result.reference);
+    assert.ok(!result.error.includes('private database details'));
+    assert.deepEqual(routeFixture.state, before);
+  }
+});
+
 test('legacy audit is claimed without duplicating the same pair or losing its original snapshots', async () => {
   const f = fixture(); await remove(f);
   const existing = f.state.emailDeletionAudit.find(row => row.clave === 'full-key');

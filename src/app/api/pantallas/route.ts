@@ -1,3 +1,4 @@
+import { consumeInventory, InventoryUnavailableError } from "@/lib/consumeInventory";
 // src/app/api/pantallas/route.ts
 export const runtime = 'nodejs';
 
@@ -408,6 +409,11 @@ const created = await withTxRetry(() =>
         throw new Error('missing_cuenta_resuelta');
       }
 
+      if (body?.inventario_id != null) {
+        const target = await tx.cuentascompartidas.findUniqueOrThrow({ where: { id: cuentaIdFinal } });
+        await consumeInventory(tx, body.inventario_id, target.plataforma_id, target.correo);
+      }
+
       /* -------------------- 3) Crear pantalla -------------------- */
       const base = await tx.pantallas.create({
         data: {
@@ -476,6 +482,7 @@ const created = await withTxRetry(() =>
 
     return NextResponse.json(out, { status: 201 });
   } catch (e: any) {
+    if (e instanceof InventoryUnavailableError) return NextResponse.json({ error: "inventory_unavailable", detail: e.message }, { status: 409 });
     if (e?.message === 'missing_cuenta_resuelta') {
       return NextResponse.json(
         { error: 'missing_cuenta', detail: 'No se pudo resolver cuenta_id para la pantalla.' },

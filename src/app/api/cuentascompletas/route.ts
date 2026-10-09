@@ -1,3 +1,4 @@
+import { consumeInventory, InventoryUnavailableError } from "@/lib/consumeInventory";
 // src/app/api/cuentascompletas/route.ts
 export const runtime = "nodejs";
 
@@ -268,6 +269,7 @@ export async function POST(req: Request) {
     // Transacción: asegurar usuario + crear cuenta + limpiar inventario
     const created = await withTxRetry(() =>
     prisma.$transaction(async (tx) => {
+      await consumeInventory(tx, flat?.inventario_id, plataforma_id, correo);
       // 1) asegurar usuario (concurrencia segura)
       await tx.usuarios.upsert({
       where: { contacto },
@@ -311,28 +313,6 @@ export async function POST(req: Request) {
         },
       });
 
-      // 3) eliminar del inventario (si existe) por plataforma y correo
-      let removedViaModel = false;
-
-      if ((tx as any).inventario?.deleteMany) {
-        try {
-          await (tx as any).inventario.deleteMany({
-            where: { plataforma_id, correo },
-          });
-          removedViaModel = true;
-        } catch {
-          // fallback abajo
-        }
-      }
-
-      if (!removedViaModel) {
-        await tx.$executeRaw`
-          DELETE FROM inventario
-          WHERE plataforma_id = ${plataforma_id}
-            AND LOWER(correo) = ${correo}
-        `;
-      }
-
       return saved;
     }));
 
@@ -352,6 +332,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json(out, { status: 201 });
   } catch (e: any) {
+    if (e instanceof InventoryUnavailableError) return NextResponse.json({ error: "inventory_unavailable", detail: e.message }, { status: 409 });
     console.error("POST /api/cuentascompletas error:", e);
     return NextResponse.json(
       { error: "server_error", detail: e?.message ?? "Error" },
