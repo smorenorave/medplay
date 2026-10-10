@@ -34,3 +34,18 @@ test('unknown exceptions stay generic and never become successful responses', ()
     assert.ok(!JSON.stringify(result).includes('secret')); assert.ok(!JSON.stringify(result).includes('sensitive-data'));
   }
 });
+
+test('identifies a missing declared column without exposing the database name', () => {
+  for (const column of ['dedupeKey', 'emailDeletionAudit.dedupeKey', '`private_database`.`emailDeletionAudit`.`dedupeKey`']) {
+    const result = expiredDeletionFailure({ code: 'P2022', meta: { modelName: 'emailDeletionAudit', column } });
+    assert.match(result.error, /falta la columna emailDeletionAudit.dedupeKey/);
+    assert.ok(!result.error.includes('private_database'));
+  }
+});
+
+test('unknown schema metadata is never echoed to the browser', () => {
+  for (const meta of [null, { modelName: 'secret', column: 'password=secret' }, { modelName: 'plataformas', column: 'secret' }]) {
+    const result = expiredDeletionFailure({ code: 'P2022', meta });
+    assert.ok(!result.error.includes('secret'));
+  }
+});

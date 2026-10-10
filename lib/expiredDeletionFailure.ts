@@ -1,15 +1,32 @@
+import { Prisma } from "../src/generated/prisma";
+
+// Only return canonical names already declared in our schema, never arbitrary
+// metadata strings (which can contain database names or submitted values).
+function missingSchemaField(meta: unknown): string | undefined {
+  if (!meta || typeof meta !== "object") return;
+  const data = meta as { modelName?: unknown; column?: unknown };
+  if (typeof data.column !== "string") return;
+  const parts = data.column.replace(/[`"']/g, "").split(".");
+  const column = parts.at(-1);
+  const modelName = parts.length > 1 ? parts.at(-2) : data.modelName;
+  const model = Prisma.dmmf.datamodel.models.find(item => item.name === modelName || item.dbName === modelName);
+  const field = model?.fields.find(item => item.kind !== "object" && (item.name === column || item.dbName === column));
+  return model && field ? `${model.name}.${field.name}` : undefined;
+}
+
 /** Public diagnostics only: never return Prisma messages, SQL or submitted data. */
 export function expiredDeletionFailure(error: unknown) {
-  const reason = error as { code?: unknown; name?: unknown; message?: unknown } | null;
+  const reason = error as { code?: unknown; name?: unknown; message?: unknown; meta?: unknown } | null;
   const code = typeof reason?.code === "string" ? reason.code : "";
   const rollback = "No se guardó ningún cambio.";
   if (reason?.message === "unauthorized") return {
     status: 401, code: "ADMIN_NOT_FOUND",
     error: `No se pudo validar el administrador de la sesión. Vuelve a iniciar sesión. ${rollback}`,
   };
+  const missingField = code === "P2022" ? missingSchemaField(reason?.meta) : undefined;
   if (code === "P2021" || code === "P2022") return {
     status: 503, code,
-    error: `La base de datos no coincide con la versión instalada: falta una tabla o columna necesaria. Deben aplicarse las migraciones pendientes en el servidor. ${rollback} Código: ${code}.`,
+    error: `La base de datos no coincide con la versión instalada: ${missingField ? `falta la columna ${missingField}` : "falta una tabla o columna necesaria"}. Deben aplicarse las migraciones pendientes en el servidor. ${rollback} Código: ${code}.`,
   };
   if (code === "P2002") return {
     status: 409, code,

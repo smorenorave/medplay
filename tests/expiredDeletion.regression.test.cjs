@@ -4,6 +4,16 @@ const assert = require('node:assert/strict');
 require('ts-node').register({ transpileOnly: true, compilerOptions: { module: 'CommonJS', moduleResolution: 'node' } });
 const { deleteEmails } = require('../lib/emailDeletion.ts');
 const { deleteExpiredBulk } = require('../lib/expiredBulkDeletion.ts');
+
+function selectLegacyRow(row, select, allowed) {
+  if (!select) throw Object.assign(new Error('Full model read requires missing column'), { code: 'P2022' });
+  const result = {};
+  for (const [key, value] of Object.entries(select)) {
+    if (!(key in allowed)) throw Object.assign(new Error(`Missing column ${key}`), { code: 'P2022' });
+    if (row) result[key] = value === true ? row[key] : selectLegacyRow(row[key], value.select, allowed[key]);
+  }
+  return row ? result : null;
+}
 function fixture(kind, count = 1) {
   const platform = { id: 1, nombre: 'MAX' };
   let state = { admin: [{ id: 1, usuario: 'Admin' }], cuentascompletas: [], cuentascompartidas: [], pantallas: [], inventario: [], usuarios: [{ contacto: 'cliente' }], emailDeletionAudit: [], accountDataRevision: [], metricasmensuales: [] };
@@ -28,6 +38,25 @@ function fixture(kind, count = 1) {
   const db = { $transaction: async work=> { const before=structuredClone(state);try{return await work(tx);}catch(error){state=before;throw error;} } };
   return {db,get state(){return state;},fail:()=>{failInventory=true;}};
 }
+
+for (const kind of ['completa', 'pantalla']) test(`bulk ${kind} works without unrelated account or platform columns`, async () => {
+  const f = fixture(kind);
+  const platform = { id: true, nombre: true };
+  const allowed = kind === 'completa'
+    ? { id: true, estado: true, fecha_vencimiento: true, correo: true, plataforma_id: true, plataformas: platform }
+    : { id: true, estado: true, fecha_vencimiento: true, cuenta_id: true, cuentascompartidas: { correo: true, plataforma_id: true, plataformas: platform } };
+  const table = kind === 'completa' ? 'cuentascompletas' : 'pantallas';
+  const db = { $transaction: work => f.db.$transaction(tx => {
+    const original = tx[table].findUnique;
+    const wrapped = { ...tx, [table]: { ...tx[table], findUnique: async query => selectLegacyRow(await original(query), query.select, allowed) } };
+    return work(wrapped);
+  }) };
+  const result = await deleteExpiredBulk(db, { adminId: 1, targets: [{ tipo: kind, id: '1' }], confirmed: true });
+  assert.equal(result.eliminated, 1);
+  assert.equal(f.state[table].length, 0);
+  assert.equal(f.state.emailDeletionAudit.length, 1);
+  assert.deepEqual(f.state.emailDeletionAudit[0].plataformas, [{ id: 1, nombre: 'MAX' }]);
+});
 for(const kind of ['completa','pantalla']) test('last '+kind+' moves to inventory atomically without either audit',async()=>{
   const f=fixture(kind); const result=await deleteEmails(f.db,{expiredTargets:[{tipo:kind,id:'1'}],adminId:1});
   assert.equal(f.state.inventario.length,1);assert.equal(f.state.inventario[0].correo,'example@test.com');assert.equal(f.state.inventario[0].clave,'Exact KEY ');

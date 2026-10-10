@@ -27,8 +27,25 @@ export async function deleteExpiredBulk(db: PrismaClient, input: {
     let eliminated = 0;
     for (const target of targets) {
       // Serializable reads protect the assignment checks from concurrent edits.
-      const screen = target.tipo === "pantalla" ? await tx.pantallas.findUnique({ where: { id: Number(target.id) }, include: { cuentascompartidas: { include: { plataformas: true } } } }) : null;
-      const complete = target.tipo === "completa" ? await tx.cuentascompletas.findUnique({ where: { id: BigInt(target.id) }, include: { plataformas: true } }) : null;
+      // This operation needs identity, expiry and platform name only. Reading
+      // entire models also requires unrelated newer columns (PIN, settings, etc.).
+      const screen = target.tipo === "pantalla" ? await tx.pantallas.findUnique({
+        where: { id: Number(target.id) },
+        select: {
+          id: true, cuenta_id: true, estado: true, fecha_vencimiento: true,
+          cuentascompartidas: { select: {
+            correo: true, plataforma_id: true,
+            plataformas: { select: { id: true, nombre: true } },
+          } },
+        },
+      }) : null;
+      const complete = target.tipo === "completa" ? await tx.cuentascompletas.findUnique({
+        where: { id: BigInt(target.id) },
+        select: {
+          id: true, estado: true, fecha_vencimiento: true, correo: true, plataforma_id: true,
+          plataformas: { select: { id: true, nombre: true } },
+        },
+      }) : null;
       const account = screen?.cuentascompartidas ?? complete;
       const assignment = screen ?? complete;
       if (!account || !assignment) {
@@ -47,12 +64,12 @@ export async function deleteExpiredBulk(db: PrismaClient, input: {
         continue;
       }
       if (screen) parents.add(screen.cuenta_id);
-      if (revision === undefined) revision = (await tx.accountDataRevision.upsert({ where: { id: 1 }, create: { id: 1, revision: 1n }, update: { revision: { increment: 1n } } })).revision;
+      if (revision === undefined) revision = (await tx.accountDataRevision.upsert({ where: { id: 1 }, create: { id: 1, revision: 1n }, update: { revision: { increment: 1n } }, select: { revision: true } })).revision;
       const correo = normalizeEmail(account.correo);
       const fechaEliminacion = new Date();
       // Allowlisted metadata only: no account snapshots, passwords or password hashes.
       const dedupeKey = createHash("sha256").update(randomUUID()).digest("hex");
-      await tx.emailDeletionAudit.upsert({ where: { dedupeKey }, update: {}, create: {
+      await tx.emailDeletionAudit.upsert({ where: { dedupeKey }, update: {}, select: { id: true }, create: {
         dedupeKey, correo, clave: null, claves: "",
         plataformas: account.plataformas ? [{ id: account.plataformas.id, nombre: account.plataformas.nombre }] : [],
         contactos: [], identificadorOriginal: `${target.tipo}:${target.id}`,
@@ -68,7 +85,7 @@ export async function deleteExpiredBulk(db: PrismaClient, input: {
       if (!remaining.length) await tx.cuentascompartidas.deleteMany({ where: { id } });
     }
     if (revision !== undefined) await tx.metricasmensuales.deleteMany({});
-    else revision = (await tx.accountDataRevision.findUnique({ where: { id: 1 } }))?.revision ?? 0n;
+    else revision = (await tx.accountDataRevision.findUnique({ where: { id: 1 }, select: { revision: true } }))?.revision ?? 0n;
     return { correos: [...correos], revision: String(revision), eliminated, skipped };
   });
 }
