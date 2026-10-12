@@ -1,3 +1,4 @@
+import { withRouteTiming } from "@/lib/routeTiming";
 import { consumeInventory, InventoryUnavailableError } from "@/lib/consumeInventory";
 import { deleteEmailForRecord } from "@/lib/deleteEmailForRecord";
 // src/app/api/pantallas/[id]/route.ts
@@ -117,7 +118,7 @@ const PatchSchema = z.object({
 });
 
 /* ===================== GET ===================== */
-export async function GET(
+async function handleGET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -167,7 +168,7 @@ export async function GET(
 }
 
 /* ===================== PATCH ===================== */
-export async function PATCH(
+async function handlePATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -378,7 +379,7 @@ export async function PATCH(
       const wantsMove = c.plataforma_id !== undefined || c.correo !== undefined;
 
       if (wantsMove && c.applyCorreoCuenta) {
-        await tx.cuentascompartidas.update({
+        updated.cuentascompartidas = await tx.cuentascompartidas.update({
           where: { id: current.cuenta_id },
           data: {
             ...(c.correo !== undefined ? { correo: (c.correo ?? "").trim().toLowerCase() } : {}),
@@ -514,19 +515,9 @@ export async function PATCH(
       // La clave pertenece al par plataforma + correo, no a una pantalla.
       // Sincroniza todas las fuentes relacionadas en una única transacción.
       if (c.contrasena !== undefined) {
-        const credentialTarget = await tx.pantallas.findUnique({
-          where: { id: pid },
-          select: {
-            cuentascompartidas: {
-              select: {
-                correo: true,
-                plataforma_id: true,
-              },
-            },
-          },
-        });
-
-        const account = credentialTarget?.cuentascompartidas;
+        // updated already contains the connected account, including moves and
+        // applyCorreoCuenta. Re-reading the same relation adds a round trip.
+        const account = updated.cuentascompartidas;
         if (account?.correo && account.plataforma_id != null) {
           const credentialPlatformId = account.plataforma_id;
           await syncCredentialByPlatformEmail(tx, {
@@ -598,7 +589,7 @@ export async function PUT(
 }
 
 /* ===================== DELETE ===================== */
-export async function DELETE(
+async function handleDELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -706,3 +697,9 @@ export async function DELETE(
     );
   }
 }
+
+export const GET = withRouteTiming(handleGET);
+
+export const PATCH = withRouteTiming(handlePATCH);
+
+export const DELETE = withRouteTiming(handleDELETE);

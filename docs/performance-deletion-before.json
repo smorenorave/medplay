@@ -1,0 +1,57 @@
+{
+  "environment": "In-memory transactional adapters; real deletion functions; no MySQL, no artificial latency. ORM calls can expand to multiple SQL statements.",
+  "scenarios": [
+    {
+      "kind": "global-one-email",
+      "medianMs": 0.556,
+      "ormAndRawCalls": 34,
+      "callsByMethod": {
+        "admin.findUnique": 1,
+        "$queryRaw": 3,
+        "cuentascompartidas.findMany": 1,
+        "cuentascompletas.findMany": 1,
+        "inventario.findMany": 1,
+        "pantallas.findMany": 1,
+        "usuarios.findMany": 1,
+        "accountDataRevision.upsert": 1,
+        "emailDeletionAudit.findUnique": 6,
+        "emailDeletionAudit.findMany": 6,
+        "emailDeletionAudit.upsert": 6,
+        "pantallas.deleteMany": 1,
+        "cuentascompartidas.deleteMany": 1,
+        "cuentascompletas.deleteMany": 1,
+        "inventario.deleteMany": 1,
+        "usuarios.deleteMany": 1,
+        "metricasmensuales.deleteMany": 1
+      }
+    },
+    {
+      "kind": "expired-complete-100",
+      "medianMs": 5.559,
+      "ormAndRawCalls": 303,
+      "callsByMethod": {
+        "admin.findUnique": 1,
+        "cuentascompletas.findUnique": 100,
+        "cuentascompletas.deleteMany": 100,
+        "accountDataRevision.upsert": 1,
+        "emailDeletionAudit.upsert": 100,
+        "metricasmensuales.deleteMany": 1
+      }
+    },
+    {
+      "kind": "expired-screen-100",
+      "medianMs": 5.146,
+      "ormAndRawCalls": 305,
+      "callsByMethod": {
+        "admin.findUnique": 1,
+        "pantallas.findUnique": 100,
+        "pantallas.deleteMany": 100,
+        "accountDataRevision.upsert": 1,
+        "emailDeletionAudit.upsert": 100,
+        "pantallas.findMany": 1,
+        "cuentascompartidas.deleteMany": 1,
+        "metricasmensuales.deleteMany": 1
+      }
+    }
+  ]
+}

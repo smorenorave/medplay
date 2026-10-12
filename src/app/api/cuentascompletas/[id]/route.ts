@@ -1,3 +1,4 @@
+import { withRouteTiming } from "@/lib/routeTiming";
 import { consumeInventory, InventoryUnavailableError } from "@/lib/consumeInventory";
 import { deleteEmailForRecord } from "@/lib/deleteEmailForRecord";
 // app/api/cuentascompletas/[id]/route.ts
@@ -149,7 +150,7 @@ function shapeRow(r: any) {
 }
 
 /* ============ GET /[id] ============ */
-export async function GET(_req: Request, ctx: RouteCtx) {
+async function handleGET(_req: Request, ctx: RouteCtx) {
   try {
     const { id: idStr } = await ctx.params;
     const id = parseId(idStr);
@@ -170,7 +171,7 @@ export async function GET(_req: Request, ctx: RouteCtx) {
 }
 
 /* ============ PATCH /[id] ============ */
-export async function PATCH(req: Request, ctx: RouteCtx) {
+async function handlePATCH(req: Request, ctx: RouteCtx) {
   try {
     const { id: idStr } = await ctx.params;
     const id = parseId(idStr);
@@ -375,7 +376,7 @@ export async function PUT(req: Request, ctx: RouteCtx) {
 }
 
 /* ============ DELETE /[id] ============ */
-export async function DELETE(req: Request, ctx: RouteCtx) {
+async function handleDELETE(req: Request, ctx: RouteCtx) {
   try {
     const { id: idStr } = await ctx.params;
     const globalDeletion = await deleteEmailForRecord(req, { tipo: "completa", id: idStr });
@@ -454,3 +455,9 @@ export async function DELETE(req: Request, ctx: RouteCtx) {
     return NextResponse.json({ error: 'No se pudo eliminar' }, { status: 500 });
   }
 }
+
+export const GET = withRouteTiming(handleGET);
+
+export const PATCH = withRouteTiming(handlePATCH);
+
+export const DELETE = withRouteTiming(handleDELETE);

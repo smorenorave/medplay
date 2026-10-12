@@ -1,8 +1,9 @@
 const { spawn } = require("child_process");
 
-const next = spawn("npm.cmd", ["run", "dev"], {
+const next = spawn("npm.cmd", ["run", "start"], {
   windowsHide: true,
-  cwd: "C:/Medplay/medplay",
+  cwd: require("node:path").resolve(__dirname, ".."),
+  env: { ...process.env, NODE_ENV: "production" },
   shell: true,
   stdio: "inherit"
 });

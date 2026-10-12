@@ -1,0 +1,20 @@
+{
+  "measuredAt": "2026-10-10T18:43:32.081Z",
+  "scope": "This machine and diagnostic process only; not evidence of production saturation",
+  "host": {
+    "cpu": "12th Gen Intel(R) Core(TM) i7-12800H",
+    "logicalCpus": 20,
+    "cpuBusyPercent": 46.9,
+    "totalMemoryBytes": 16847822848,
+    "freeMemoryBytes": 4744921088,
+    "diskFreeBytes": 909678989312
+  },
+  "diagnosticProcess": {
+    "rssBytes": 48787456,
+    "eventLoopP95Ms": 16.171
+  },
+  "database": {
+    "configured": false,
+    "status": "not verified"
+  }
+}

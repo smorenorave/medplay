@@ -1,4 +1,6 @@
 "use client";
+import { usePageWindow } from "@/hooks/usePageWindow";
+import ResultsPagination from "@/components/ui/ResultsPagination";
 import { useInventoryRefresh } from "@/hooks/useInventoryRefresh";
 import { notifyInventoryConsumed } from "@/lib/inventoryChanges";
 import { deleteEmailsGlobally, readCurrentAccountData, registerAccountCache } from "@/lib/accountDataChanges";
@@ -573,25 +575,6 @@ export default function PantallasViewer() {
 
   const mounted = useRef(false);
 
-  useEffect(() => {
-    let bc: BroadcastChannel | null = null;
-    try {
-      bc = new BroadcastChannel("pantallas_mutations_bc");
-      bc.onmessage = (ev) => {
-        if (ev?.data?.type === "invalidate-pantallas") {
-          console.log("🔄 Refrescando pantallas por broadcast...");
-          forceRefresh(); // 👈 ya tienes esta función para recargar desde el servidor
-        }
-      };
-    } catch {}
-
-    return () => {
-      try {
-        bc?.close();
-      } catch {}
-    };
-  }, []);
-
   //recalcular modal
   useEffect(() => {
     if (!edit) return;
@@ -655,24 +638,11 @@ export default function PantallasViewer() {
     let bc: BroadcastChannel | null = null;
     try {
       bc = new BroadcastChannel(BC_NAME);
-      bc.onmessage = async (ev) => {
+      bc.onmessage = (ev) => {
         if (ev?.data?.type === "invalidate-pantallas") {
-          try {
-            setLoading(true);
-            const stamp = await fetchStamp();
-            const local = Number(localStorage.getItem(LS_REMOTE_STAMP) || 0);
-            if (stamp !== local) {
-              const all = await fetchAllPantallas();
-              if (!mounted.current) return;
-              setRows(all);
-              writeCache(all, stamp);
-            }
-          } catch (e: any) {
-            if (mounted.current)
-              setErr(e?.message ?? "Error actualizando datos");
-          } finally {
-            if (mounted.current) setLoading(false);
-          }
+          // Explicit mutations must refresh even when the stamp is unchanged:
+          // shared-account password/flag changes are not represented in it.
+          void forceRefresh();
         }
       };
     } catch {}
@@ -788,11 +758,11 @@ export default function PantallasViewer() {
   const filtered = useMemo(() => {
     const term = normSearch(q);
     const pid: number | null = platFilter === "all" ? null : Number(platFilter);
+    const today = todayYMDBogota();
+    const soonYmd = addDaysYMD(today, 7);
 
     return rows.filter((r) => {
       if (pid !== null && r.plataforma_id !== pid) return false;
-      const today = todayYMDBogota();
-      const soonYmd = addDaysYMD(today, 7);
       const due = r.fecha_vencimiento ?? "";
       if (quickFilter === "active" && !(due > today)) return false;
       if (quickFilter === "soon" && !(due > today && due <= soonYmd)) return false;
@@ -844,17 +814,25 @@ export default function PantallasViewer() {
 
   // Helper que arma los items para los badges de un email dado
   // REEMPLAZA tu función actual por esta
+  const platformsByEmail = useMemo(() => {
+    const index = new Map<string, Set<number>>();
+    for (const row of rows) {
+      const email = (row.correo ?? "").trim().toLowerCase();
+      const pid = Number(row.plataforma_id);
+      if (!Number.isFinite(pid)) continue;
+      let ids = index.get(email);
+      if (!ids) { ids = new Set<number>(); index.set(email, ids); }
+      ids.add(pid);
+    }
+    return index;
+  }, [rows]);
+
   function getPerPlatformForEmail(email: string) {
     const norm = (s?: string | null) => (s ?? "").trim().toLowerCase();
     const em = norm(email);
 
     // plataformas donde este email tiene algo
-    const seen = new Set<number>();
-    for (const r of rows) {
-      if (norm(r.correo) !== em) continue;
-      const pid = Number(r.plataforma_id);
-      if (Number.isFinite(pid)) seen.add(pid);
-    }
+    const seen = platformsByEmail.get(em) ?? new Set<number>();
 
     type Item = {
       pid: number;
@@ -879,7 +857,7 @@ export default function PantallasViewer() {
             : null;
 
       const name =
-        plataformas.find((p) => Number(p.id) === pid)?.nombre ??
+        nameByPlatform.get(pid) ??
         fetched?.nombre ??
         `#${pid}`;
 
@@ -917,6 +895,15 @@ export default function PantallasViewer() {
     groups.sort((a, b) => a.email.localeCompare(b.email));
     return groups;
   }, [filtered]);
+
+  const orderedRows = useMemo(() => groupedByEmail.flatMap(group => group.rows), [groupedByEmail]);
+  const resultPage = usePageWindow(orderedRows, JSON.stringify([q, platFilter, quickFilter]));
+  const groupsOnPage = new Map<string, Pantalla[]>();
+  for (const row of resultPage.items) {
+    const email = (row.correo ?? "(sin correo)").trim().toLowerCase();
+    const group = groupsOnPage.get(email);
+    if (group) group.push(row); else groupsOnPage.set(email, [row]);
+  }
 
   /* =========================================================
    * Editar / Guardar
@@ -1673,8 +1660,9 @@ export default function PantallasViewer() {
       </div>
 
       {/* Vista móvil: la información crítica se presenta como tarjetas táctiles. */}
+      <ResultsPagination {...resultPage} />
       <div className="grid gap-3 md:hidden">
-        {filtered.map((r) => {
+        {resultPage.items.map((r) => {
           const isExpired = Boolean(r.fecha_vencimiento && r.fecha_vencimiento <= todayYMDBogota());
           const platform = plataformas.find((p) => Number(p.id) === Number(r.plataforma_id))?.nombre ?? "Sin plataforma";
           return <article key={`mobile-${r.id}`} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 shadow-sm">
@@ -1728,7 +1716,7 @@ export default function PantallasViewer() {
           </thead>
           <tbody>
             {groupedByEmail.length > 0 ? (
-              groupedByEmail.map((g, gi) => (
+              Array.from(groupsOnPage, ([email, rows]) => ({ email, rows })).map((g, gi) => (
                 <React.Fragment key={`grp-${gi}-${g.email}`}>
                   {/* Encabezado del grupo (correo) + badges de disponibilidad */}
                   <tr className="bg-neutral-950/60 border-b border-neutral-800">

@@ -90,6 +90,16 @@ function fixture() {
 }
 const remove = f => deleteEmails(f.db, { correos: [' TEST@example.com ', 'test@example.com'], adminId: 1, motivo: 'Cuenta retirada' });
 
+test('multiple credentials reuse one legacy audit lookup while preserving six distinct audits', async () => {
+  const f = fixture(); let reads = 0;
+  const original = f.db.emailDeletionAudit.findMany;
+  f.db.emailDeletionAudit.findMany = async args => { if (args.where?.dedupeKey === null) reads++; return original(args); };
+  await remove(f);
+  assert.equal(reads, 1);
+  assert.equal(f.state.emailDeletionAudit.length, 6);
+  assert.equal(new Set(f.state.emailDeletionAudit.map(row => row.dedupeKey)).size, 6);
+});
+
 test('deletes duplicate email accounts across every live table/platform and retains unrelated clients', async () => {
   const f = fixture(); const result = await remove(f);
   assert.deepEqual(result.deleted, { pantallas: 2, compartidas: 2, completas: 2, inventario: 2, clientes: 2 });

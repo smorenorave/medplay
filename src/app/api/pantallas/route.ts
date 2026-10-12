@@ -1,3 +1,4 @@
+import { withRouteTiming } from "@/lib/routeTiming";
 import { consumeInventory, InventoryUnavailableError } from "@/lib/consumeInventory";
 // src/app/api/pantallas/route.ts
 export const runtime = 'nodejs';
@@ -5,6 +6,7 @@ export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { pantallaPinSchema } from '@/lib/pantallaPin';
+import { pageLimit } from '@/lib/pagination';
 
 /* ===================== Utils de fechas (sin desfases) ===================== */
 function sleep(ms: number) {
@@ -99,19 +101,15 @@ const toDecStr = (v: unknown): string | null => {
   const n = Number(v as any);
   return Number.isNaN(n) ? null : n.toFixed(2);
 };
-const clamp = (n: number | null | undefined, min: number, max: number, fallback: number) => {
-  const v = Number(n);
-  return Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;
-};
 
 /* ========================================================================
  * GET /api/pantallas
  * ======================================================================== */
-export async function GET(req: Request) {
+async function handleGET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
 
-    const limit = clamp(Number(searchParams.get('limit')), 1, 5000, 300);
+    const limit = pageLimit(searchParams.get('limit'), 300);
     const cursorRaw = searchParams.get('cursor');
 
     const plataformaRaw =
@@ -179,7 +177,7 @@ export async function GET(req: Request) {
     const args: Parameters<typeof prisma.pantallas.findMany>[0] = {
       where,
       orderBy,
-      take: limit,
+      take: limit + 1,
       include: {
         cuentascompartidas: {
           select: {
@@ -202,7 +200,7 @@ export async function GET(req: Request) {
 
     const rows = await prisma.pantallas.findMany(args);
 
-    const items = rows.map((r: any) => ({
+    const items = rows.slice(0, limit).map((r: any) => ({
       id: Number(r.id),
       cuenta_id: r.cuenta_id == null ? null : Number(r.cuenta_id),
       contacto: r.contacto,
@@ -226,7 +224,7 @@ export async function GET(req: Request) {
       cuenta_caida: !!r.cuentascompartidas?.cuenta_caida,
     }));
 
-    const nextCursor = items.length === limit ? Number(items[items.length - 1]?.id ?? null) : null;
+    const nextCursor = rows.length > limit ? Number(items[items.length - 1]?.id ?? null) : null;
 
     return NextResponse.json({ items, nextCursor }, { status: 200 });
   } catch (e: any) {
@@ -240,7 +238,7 @@ export async function GET(req: Request) {
  *  - `cuenta_id` es OBLIGATORIO (tu schema lo exige). Si no se puede resolver, 400.
  *  - Usuario: create + P2002 + updateMany (concurrencia segura)
  * ======================================================================== */
-export async function POST(req: Request) {
+async function handlePOST(req: Request) {
   try {
     const body = await req.json();
     const parsedPin = pantallaPinSchema.safeParse(body?.pin);
@@ -415,7 +413,7 @@ const created = await withTxRetry(() =>
       }
 
       /* -------------------- 3) Crear pantalla -------------------- */
-      const base = await tx.pantallas.create({
+      const full = await tx.pantallas.create({
         data: {
           cuenta_id: cuentaIdFinal,
           contacto: contactoNorm,
@@ -430,12 +428,6 @@ const created = await withTxRetry(() =>
           estado: String(estado).trim(),
           comentario: (comentario ?? null) == null ? null : String(comentario),
         },
-        select: { id: true },
-      });
-
-      /* -------------------- 4) Leer con include para devolver aplanado -------------------- */
-      const full = await tx.pantallas.findUniqueOrThrow({
-        where: { id: base.id },
         include: {
           cuentascompartidas: {
             select: {
@@ -493,3 +485,7 @@ const created = await withTxRetry(() =>
     return NextResponse.json({ error: 'server_error', detail: e?.message ?? 'Error interno' }, { status: 500 });
   }
 }
+
+export const GET = withRouteTiming(handleGET);
+
+export const POST = withRouteTiming(handlePOST);

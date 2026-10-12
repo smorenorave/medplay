@@ -7,6 +7,23 @@ Después de descargar los cambios de GitHub, el reinicio habitual de PM2 aplica
 las migraciones pendientes con `prisma migrate deploy` usando el CLI instalado.
 Un `git pull` sin reiniciar el proceso no ejecuta este paso.
 
+## Compilación antes del reinicio
+
+Los lanzadores del servicio usan ahora `npm start` en modo producción. El
+actualizador del computador que descarga Git debe completar `npm ci` (incluidas
+las dependencias de desarrollo) y `npm run build` antes de reiniciar el servicio.
+Sólo debe reiniciarlo si ambos comandos terminan correctamente. Descargar cambios
+cada uno o cinco minutos, por sí solo, no publica una nueva compilación.
+
+Si se administra mediante el archivo de PM2 de este repositorio, después del build
+se puede aplicar `pm2 startOrRestart ecosystem.config.js --update-env`. Conservar
+la configuración de entorno del servidor y verificar sus registros y acceso HTTPS.
+No ejecutar dos actualizaciones simultáneas: el actualizador debe impedir que una
+nueva ejecución se solape con una compilación todavía en curso.
+
+El actualizador remoto no está incluido en este repositorio y su secuencia no se
+ha verificado desde el entorno de auditoría.
+
 El script carga los mismos archivos de entorno que Next para el modo de inicio,
 incluido `.env.local`, y respeta las variables ya configuradas por PM2.
 La cuenta de `DATABASE_URL` debe tener permisos para aplicar las migraciones.

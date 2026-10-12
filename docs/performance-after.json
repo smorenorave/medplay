@@ -1,0 +1,24 @@
+{
+  "environment": "synthetic; no MySQL, HTTP transport or browser rendering",
+  "node": "v24.21.0",
+  "rows": 10000,
+  "groups": 2000,
+  "filter": {
+    "medianMs": 0.127,
+    "maxMs": 0.289
+  },
+  "badges": {
+    "medianMs": 4.651,
+    "maxMs": 6.888
+  },
+  "paging": {
+    "pantallas": {
+      "status": 200,
+      "defaultPageRows": 300
+    },
+    "cuentascompletas": {
+      "status": 200,
+      "defaultPageRows": 200
+    }
+  }
+}

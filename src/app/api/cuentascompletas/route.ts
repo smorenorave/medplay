@@ -1,9 +1,11 @@
+import { withRouteTiming } from "@/lib/routeTiming";
 import { consumeInventory, InventoryUnavailableError } from "@/lib/consumeInventory";
 // src/app/api/cuentascompletas/route.ts
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { pageLimit } from "@/lib/pagination";
 
 /* ===================== Utils de fechas (sin desfases por huso) ===================== */
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -32,13 +34,6 @@ function normalizeContactoServer(raw?: string | null) {
   return (raw ?? "").trim().replace(/\s+/g, "");
 }
 
-// clamp seguro
-const clamp = (n: number | null | undefined, min: number, max: number, fallback: number) => {
-  const v = Number(n);
-  return Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : fallback;
-};
-
-
 async function withTxRetry<T>(fn: () => Promise<T>, retries = 6) {
   let attempt = 0;
   while (true) {
@@ -62,11 +57,11 @@ async function withTxRetry<T>(fn: () => Promise<T>, retries = 6) {
 
 
 /* ===================== GET: lista con filtros + cursor ===================== */
-export async function GET(req: Request) {
+async function handleGET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
 
-    const limit = clamp(Number(searchParams.get("limit")), 1, 5000, 200);
+    const limit = pageLimit(searchParams.get("limit"), 200);
     const cursor = searchParams.get("cursor"); // id numérico
 
     const plataformaRaw =
@@ -119,7 +114,7 @@ export async function GET(req: Request) {
     const args: any = {
       where,
       orderBy,
-      take: limit,
+      take: limit + 1,
       select: {
         id: true,
         contacto: true,
@@ -150,7 +145,7 @@ export async function GET(req: Request) {
 
     const rows = await prisma.cuentascompletas.findMany(args);
 
-    const items = rows.map((r: any) => ({
+    const items = rows.slice(0, limit).map((r: any) => ({
       id: Number(r.id),
       contacto: r.contacto,
       nombre: r.usuarios?.nombre ?? null,
@@ -171,7 +166,7 @@ export async function GET(req: Request) {
     }));
 
     // siguiente cursor: último id de esta página (orden desc => el menor id de la página)
-    const nextCursor = items.length === limit ? items[items.length - 1]?.id ?? null : null;
+    const nextCursor = rows.length > limit ? items[items.length - 1]?.id ?? null : null;
 
     return NextResponse.json({ items, nextCursor }, { status: 200 });
   } catch (e: any) {
@@ -184,7 +179,7 @@ export async function GET(req: Request) {
 }
 
 /* ===================== POST: crear + asegurar usuario + limpiar inventario ===================== */
-export async function POST(req: Request) {
+async function handlePOST(req: Request) {
   try {
     const json = await req.json();
 
@@ -340,3 +335,7 @@ export async function POST(req: Request) {
     );
   }
 }
+
+export const GET = withRouteTiming(handleGET);
+
+export const POST = withRouteTiming(handlePOST);

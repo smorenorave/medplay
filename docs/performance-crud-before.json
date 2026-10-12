@@ -1,0 +1,66 @@
+{
+  "environment": "Actual CRUD handlers; in-memory transactional adapter; simulated 2 ms per model call. Counts are ORM calls, not SQL statements.",
+  "flows": [
+    {
+      "name": "crear completa",
+      "medianMs": 46.659,
+      "ormCalls": 3,
+      "operations": [
+        "inventario.deleteMany",
+        "usuarios.upsert",
+        "cuentascompletas.create"
+      ]
+    },
+    {
+      "name": "editar completa",
+      "medianMs": 93.598,
+      "ormCalls": 8,
+      "operations": [
+        "cuentascompletas.findUnique",
+        "plataformas.findUnique",
+        "inventario.deleteMany",
+        "cuentascompletas.update",
+        "cuentascompartidas.updateMany",
+        "cuentascompletas.updateMany",
+        "inventario.updateMany",
+        "cuentascompletas.findUnique"
+      ]
+    },
+    {
+      "name": "crear pantalla",
+      "medianMs": 109.316,
+      "ormCalls": 7,
+      "operations": [
+        "usuarios.create",
+        "cuentascompartidas.findFirst",
+        "cuentascompartidas.create",
+        "cuentascompartidas.findUniqueOrThrow",
+        "inventario.deleteMany",
+        "pantallas.create",
+        "pantallas.findUniqueOrThrow"
+      ]
+    },
+    {
+      "name": "editar pantalla",
+      "medianMs": 203.344,
+      "ormCalls": 15,
+      "operations": [
+        "pantallas.findUnique",
+        "inventario.deleteMany",
+        "usuarios.findUnique",
+        "pantallas.update",
+        "cuentascompartidas.findFirst",
+        "cuentascompartidas.create",
+        "pantallas.update",
+        "pantallas.count",
+        "cuentascompartidas.delete",
+        "pantallas.findUnique",
+        "pantallas.findUnique",
+        "cuentascompartidas.updateMany",
+        "cuentascompletas.updateMany",
+        "inventario.updateMany",
+        "pantallas.findUnique"
+      ]
+    }
+  ]
+}

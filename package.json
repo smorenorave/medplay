@@ -1,5 +1,8 @@
 {
   "scripts": {
+    "test:performance": "node --test tests/performance.test.cjs",
+    "benchmark:performance": "node scripts/benchmark-performance.cjs",
+    "diagnose:performance": "node scripts/diagnose-performance.cjs",
     "test:inventory": "node --test tests/inventoryConsumption.test.cjs tests/inventoryChanges.test.cjs",
     "test:inventory:ui": "node tests/inventoryConsumption.ui.cjs",
     "test:email-deletion": "node --test tests/emailDeletion.test.cjs tests/accountDataChanges.test.cjs tests/expiredDeletion.regression.test.cjs tests/expiredDeletionFailure.test.cjs",

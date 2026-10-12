@@ -129,10 +129,13 @@ export async function deleteEmails(db: PrismaClient, input: { adminId: number; m
       const auditEligible = <T extends { plataformas: { auditarEliminaciones?: boolean } | null }>(rows: T[]) => rows.filter(row => row.plataformas && row.plataformas.auditarEliminaciones !== false);
       const eligibleComplete = auditEligible(complete), eligibleShared = auditEligible(shared), eligibleInventory = auditEligible(inventory);
       const keys = [...new Set([...eligibleComplete.map(row => row.contrasena), ...eligibleShared.map(row => row.contrasena), ...eligibleInventory.map(row => row.clave ?? "")])].filter(key => !retainedKeys.has(key));
+      // Legacy audits are immutable within this loop: new upserts have a
+      // dedupeKey. Load this fallback at most once per email/transaction.
+      let legacyAudits: Awaited<ReturnType<typeof tx.emailDeletionAudit.findMany>> | undefined;
       for (const clave of keys) {
       const dedupeKey = auditIdentity(correo, clave);
       const previous = await tx.emailDeletionAudit.findUnique({ where: { dedupeKey } })
-        ?? (await tx.emailDeletionAudit.findMany({ where: { correo, dedupeKey: null } })).find(row => (row.clave ?? "") === clave);
+        ?? (legacyAudits ??= await tx.emailDeletionAudit.findMany({ where: { correo, dedupeKey: null } })).find(row => (row.clave ?? "") === clave);
       const auditShared = eligibleShared.filter(row => row.contrasena === clave);
       const auditComplete = eligibleComplete.filter(row => row.contrasena === clave);
       const auditInventory = eligibleInventory.filter(row => (row.clave ?? "") === clave);

@@ -1,4 +1,6 @@
 "use client";
+import { usePageWindow } from "@/hooks/usePageWindow";
+import ResultsPagination from "@/components/ui/ResultsPagination";
 import { useInventoryRefresh } from "@/hooks/useInventoryRefresh";
 import { notifyInventoryConsumed } from "@/lib/inventoryChanges";
 import { deleteEmailsGlobally, readCurrentAccountData, registerAccountCache } from "@/lib/accountDataChanges";
@@ -586,6 +588,8 @@ export default function CuentasCompletasViewer() {
       return hay;
     });
   }, [rows, q, platFilter, quickFilter]);
+
+  const resultPage = usePageWindow(filtered, JSON.stringify([q, platFilter, quickFilter]));
 
   const overview = useMemo(() => {
     const today = new Date();
@@ -1219,8 +1223,9 @@ export default function CuentasCompletasViewer() {
       </div>
 
       {/* Vista móvil optimizada: reemplaza la tabla ancha por tarjetas. */}
+      <ResultsPagination {...resultPage} />
       <div className="grid gap-3 md:hidden">
-        {filtered.map((r) => {
+        {resultPage.items.map((r) => {
           const isExpired = Boolean(r.fecha_vencimiento && r.fecha_vencimiento <= todayYMDLocal());
           const platform = plataformas.find((p) => Number(p.id) === Number(r.plataforma_id))?.nombre ?? "Sin plataforma";
           return <article key={`mobile-${r.id}`} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 shadow-sm">
@@ -1269,7 +1274,7 @@ export default function CuentasCompletasViewer() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((r, idx) => (
+            {resultPage.items.map((r, idx) => (
               <tr
                 key={r.id ?? `row-${idx}`}
                 className="border-b border-neutral-800 hover:bg-neutral-900/30"

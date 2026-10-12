@@ -1,4 +1,5 @@
 "use client";
+import { settleWithConcurrency } from "@/lib/settleWithConcurrency";
 import { useInventoryRefresh } from "@/hooks/useInventoryRefresh";
 import { upsertCuentaCompartida } from "@/lib/cuentasCompartidasUpsert";
 import { inventoryEpoch, notifyInventoryConsumed } from "@/lib/inventoryChanges";
@@ -1477,8 +1478,7 @@ export default function FormPantallas() {
         if (Array.isArray(maybe)) toSend = maybe;
       } catch {}
 
-      const results = await Promise.allSettled(
-        toSend.map((p) =>
+      const results = await settleWithConcurrency(toSend, (p) =>
           fetch("/api/pantallas", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1492,7 +1492,6 @@ export default function FormPantallas() {
             if (p.inventario_id != null) notifyInventoryConsumed();
             return { saved: j, sent: p };
           }),
-        ),
       );
 
       const ok = results.filter(
@@ -1505,9 +1504,9 @@ export default function FormPantallas() {
       for (const f of ok) {
         try {
           mergePantallaIntoCache(f.value.saved);
-          notifyPantallasChanged();
         } catch {}
       }
+      if (ok.length) notifyPantallasChanged();
 
       // ✅ Invalida el cache en memoria de pantallas/cupos de las plataformas
       // afectadas, así el próximo cálculo de cupos y correos disponibles

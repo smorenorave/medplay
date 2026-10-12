@@ -1,0 +1,27 @@
+{
+  "environment": "Production Next + Edge headless; API mocked in browser, 2000 synthetic records; no MySQL or real network",
+  "modules": [
+    {
+      "name": "Cuentas completas",
+      "initialMs": 177.1,
+      "openMs": 593.2,
+      "searchMs": 36.1,
+      "elements": 6317,
+      "tableRows": 100,
+      "mobileCards": 100,
+      "apiRequests": 11,
+      "listRequests": 4
+    },
+    {
+      "name": "Pantallas",
+      "initialMs": 122.1,
+      "openMs": 447.2,
+      "searchMs": 33.1,
+      "elements": 7018,
+      "tableRows": 200,
+      "mobileCards": 100,
+      "apiRequests": 11,
+      "listRequests": 4
+    }
+  ]
+}

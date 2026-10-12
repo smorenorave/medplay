@@ -2,9 +2,10 @@ module.exports = {
   apps: [
     {
       name: "medplay-web",
-      cwd: "C:/Medplay/medplay",
+      cwd: __dirname,
       script: "C:/Program Files/nodejs/npm.cmd",
-      args: "run dev",
+      args: "run start",
+      env: { NODE_ENV: "production" },
       interpreter: "none"
     }
   ]

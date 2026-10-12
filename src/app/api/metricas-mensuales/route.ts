@@ -1,7 +1,6 @@
 export const runtime = "nodejs";
 
 import { NextResponse, type NextRequest } from "next/server";
-import ExcelJS from "exceljs";
 import { z } from "zod";
 import {
   ensureMonthlySnapshot,
@@ -49,6 +48,7 @@ async function exportSnapshot(
     });
   }
 
+  const { default: ExcelJS } = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
   const kpiSheet = workbook.addWorksheet("KPIs");
   kpiSheet.addRows([["KPI", "Valor"], ...kpis]);

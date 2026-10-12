@@ -1,3 +1,3 @@
 @echo off
-cd /d C:\Medplay\medplay
-npm run dev
+cd /d "%~dp0.."
+npm run start

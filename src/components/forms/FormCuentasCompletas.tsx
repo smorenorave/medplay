@@ -1,5 +1,6 @@
 // src/components/forms/FormCuentaCompletas.tsx
 "use client";
+import { settleWithConcurrency } from "@/lib/settleWithConcurrency";
 import { useInventoryRefresh } from "@/hooks/useInventoryRefresh";
 import { inventoryEpoch, notifyInventoryConsumed } from "@/lib/inventoryChanges";
 import { readCurrentAccountData, accountDataEpoch } from "@/lib/accountDataChanges";
@@ -1054,8 +1055,7 @@ export default function FormCuentaCompletas() {
         if (Array.isArray(maybe)) toSend = maybe;
       } catch {}
 
-      const results = await Promise.allSettled(
-        toSend.map((p, idx) =>
+      const results = await settleWithConcurrency(toSend, (p, idx) =>
           fetch("/api/cuentascompletas", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1069,7 +1069,6 @@ export default function FormCuentaCompletas() {
             if (p.inventario_id != null) notifyInventoryConsumed();
             return { saved: j?.cuenta ?? j, idx, sent: p };
           }),
-        ),
       );
 
       const ok = results.filter(
