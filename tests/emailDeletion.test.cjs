@@ -311,7 +311,7 @@ for (const { name, route } of routes) {
     const request = () => new Request(`http://localhost/api/${name}/${id}`, { method: 'DELETE' });
     const context = () => ({ params: Promise.resolve({ id }) });
     const response = await route.DELETE(request(), context());
-    assert.equal(response.status, 409);
+    assert.equal(response.status, name === 'pantallas' ? 400 : 409);
     assert.deepEqual(routeFixture.state, before);
   });
 }

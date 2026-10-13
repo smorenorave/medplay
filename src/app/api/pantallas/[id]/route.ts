@@ -1,6 +1,6 @@
 import { withRouteTiming } from "@/lib/routeTiming";
 import { consumeInventory, InventoryUnavailableError } from "@/lib/consumeInventory";
-import { deleteEmailForRecord } from "@/lib/deleteEmailForRecord";
+import { pantallaDeletion, PantallaDeletionError } from "@/lib/pantallaDeletion";
 // src/app/api/pantallas/[id]/route.ts
 export const runtime = "nodejs";
 
@@ -10,7 +10,6 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { pantallaPinSchema } from "@/lib/pantallaPin";
 import { getAuthenticatedAdminId } from "@/lib/adminSession";
-import { archiveDeletedAccount } from "@/lib/deletionHistory";
 import { syncCredentialByPlatformEmail } from "@/lib/accountCredentials";
 
 /* ===================== Utils generales ===================== */
@@ -32,10 +31,6 @@ const toNumOrNull = (v: unknown): number | null => {
   const n = Number(v as any);
   return Number.isNaN(n) ? null : n;
 };
-
-function normalizeContactoServer(raw?: string | null) {
-  return (raw ?? "").trim().replace(/\s+/g, "");
-}
 
 /**
  * Importante para evitar el error de TS/Prisma cuando `contrasena` NO es nullable:
@@ -126,6 +121,12 @@ async function handleGET(
     const { id } = await params;
     const pid = parseId(id);
 
+    if (new URL(_req.url).searchParams.get("deletion") === "preview") {
+      const adminId = await getAuthenticatedAdminId(_req);
+      if (!adminId) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+      const result = await pantallaDeletion(prisma, pid, adminId);
+      return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
+    }
     const row = await prisma.pantallas.findUnique({
       where: { id: pid },
       include: {
@@ -162,7 +163,8 @@ async function handleGET(
     };
 
     return NextResponse.json(flat, { status: 200 });
-  } catch {
+  } catch (error) {
+    if (error instanceof PantallaDeletionError) return NextResponse.json({ error: error.message }, { status: error.status });
     return NextResponse.json({ error: "invalid-id" }, { status: 400 });
   }
 }
@@ -589,112 +591,20 @@ export async function PUT(
 }
 
 /* ===================== DELETE ===================== */
-async function handleDELETE(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+async function handleDELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = await params;
-    const globalDeletion = await deleteEmailForRecord(req, { tipo: "pantalla", id });
-    if (globalDeletion) return globalDeletion;
-    const pid = parseId(id);
     const adminId = await getAuthenticatedAdminId(req);
-
-    const result = await prisma.$transaction(async (tx) => {
-      const before = await tx.pantallas.findUnique({
-        where: { id: pid },
-        select: {
-          id: true,
-          cuenta_id: true,
-          contacto: true,
-          nro_pantalla: true,
-          cuentascompartidas: {
-            select: {
-              id: true,
-              correo: true,
-              contrasena: true,
-              proveedor: true,
-              plataforma_id: true,
-              plataformas: { select: { nombre: true } },
-            },
-          },
-        },
-      });
-      if (!before) {
-        return {
-          deleted: false,
-          cuenta_deleted: false,
-          usuario_deleted: false,
-        };
-      }
-
-      const cuentaId = before.cuenta_id ?? null;
-      const contactoRaw = before.contacto ?? "";
-      const contactoNorm = normalizeContactoServer(contactoRaw);
-
-      await archiveDeletedAccount(tx, {
-        plataformaId: before.cuentascompartidas.plataforma_id,
-        plataforma: before.cuentascompartidas.plataformas?.nombre,
-        correo: before.cuentascompartidas.correo,
-        clave: before.cuentascompartidas.contrasena,
-        proveedor: before.cuentascompartidas.proveedor,
-        tipoRegistro: 'PANTALLA',
-        tipoEliminacion: 'PANTALLA',
-        identificadorOriginal: before.id,
-        eliminadoPorAdminId: adminId,
-        datosRecuperacion: {
-          cuentaId: before.cuentascompartidas.id,
-          numeroPantalla: before.nro_pantalla,
-          contacto: before.contacto,
-        },
-      });
-
-      await tx.pantallas.delete({ where: { id: pid } });
-
-      let cuentaDeleted = false;
-      if (cuentaId != null) {
-        const restantes = await tx.pantallas.count({
-          where: { cuenta_id: cuentaId },
-        });
-        if (restantes === 0) {
-          await tx.cuentascompartidas.delete({ where: { id: cuentaId } });
-          cuentaDeleted = true;
-        }
-      }
-
-      const refsPantallas = await tx.pantallas.count({
-        where: { OR: [{ contacto: contactoRaw }, { contacto: contactoNorm }] },
-      });
-      const refsCuentasCompletas = await tx.cuentascompletas.count({
-        where: { OR: [{ contacto: contactoRaw }, { contacto: contactoNorm }] },
-      });
-
-      let usuarioDeleted = false;
-      if (refsPantallas + refsCuentasCompletas === 0) {
-        const delRes = await tx.usuarios.deleteMany({
-          where: {
-            OR: [{ contacto: contactoRaw }, { contacto: contactoNorm }],
-          },
-        });
-        usuarioDeleted = delRes.count > 0;
-      }
-
-      return {
-        deleted: true,
-        cuenta_deleted: cuentaDeleted,
-        usuario_deleted: usuarioDeleted,
-      };
-    });
-
-    return NextResponse.json(result, { status: 200 });
-  } catch (e: any) {
-    if (e?.message === "invalid-id") {
-      return NextResponse.json({ error: "invalid-id" }, { status: 400 });
-    }
-    return NextResponse.json(
-      { error: e?.message ?? "Error eliminando pantalla" },
-      { status: 500 },
-    );
+    if (!adminId) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    const pid = parseId((await params).id);
+    const body = await req.json().catch(() => null);
+    const parsed = z.object({ cuentaId: z.number().int().positive(), action: z.enum(["record", "inventory", "purge"]) }).strict().safeParse(body);
+    if (!parsed.success) return NextResponse.json({ error: "Revisa la pantalla y elige una acción individual válida." }, { status: 400 });
+    const result = await pantallaDeletion(prisma, pid, adminId, parsed.data);
+    return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    if (error instanceof PantallaDeletionError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if ((error as Error)?.message === "invalid-id") return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+    return NextResponse.json({ error: "No se pudo eliminar la pantalla. No se guardó ningún cambio; vuelve a intentarlo." }, { status: 503 });
   }
 }
 

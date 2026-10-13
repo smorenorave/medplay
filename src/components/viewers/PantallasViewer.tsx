@@ -3,7 +3,7 @@ import { usePageWindow } from "@/hooks/usePageWindow";
 import ResultsPagination from "@/components/ui/ResultsPagination";
 import { useInventoryRefresh } from "@/hooks/useInventoryRefresh";
 import { notifyInventoryConsumed } from "@/lib/inventoryChanges";
-import { deleteEmailsGlobally, readCurrentAccountData, registerAccountCache } from "@/lib/accountDataChanges";
+import { applyAccountDeletion, readCurrentAccountData, registerAccountCache } from "@/lib/accountDataChanges";
 import { useAccountDataRefresh } from "@/hooks/useAccountDataRefresh";
 
 import { recordPasswordChange } from "@/lib/passwordChanges";
@@ -18,7 +18,6 @@ import { addDaysYMD, todayYMDBogota } from "@/lib/bogotaDate";
 import {
   resolveCapacidadPantallas,
   computeUsedByEmailPlatform,
-  computeUsedCounts,
   buildPidEmailKey,
   buildNumerosPantallaDisponibles,
 } from "@/lib/cantidadPantallasDisponibles";
@@ -228,54 +227,6 @@ function ModalPortal({ children }: { children: React.ReactNode }) {
  * ======================================================= */
 const normEmail = (s?: string | null) => (s ?? "").trim().toLowerCase();
 
-async function existsInInventario(
-  plataforma_id: number | null | undefined,
-  correo: string,
-): Promise<boolean> {
-  const email = normEmail(correo);
-  try {
-    const base = `/api/inventario`;
-    const url =
-      plataforma_id != null
-        ? `${base}?q=${encodeURIComponent(
-            email,
-          )}&plataforma_id=${plataforma_id}`
-        : `${base}?q=${encodeURIComponent(email)}`;
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) return false;
-    const data = await res.json();
-    const arr: any[] = Array.isArray(data)
-      ? data
-      : Array.isArray(data?.items)
-        ? data.items
-        : [];
-    return arr.some((r) => String(r?.correo ?? "").toLowerCase() === email);
-  } catch {
-    return false;
-  }
-}
-async function ensureInInventario(
-  plataforma_id?: number | null,
-  correo?: string | null,
-  clave?: string | null,
-) {
-  if (!correo) return;
-  const email = normEmail(correo);
-  try {
-    if (await existsInInventario(plataforma_id, email)) return;
-    const body: any = { correo: email };
-    if (plataforma_id != null) body.plataforma_id = plataforma_id;
-    if (clave && clave.trim().length > 0) body.clave = clave;
-    await fetch("/api/inventario", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-  } catch {
-    /* best-effort */
-  }
-}
-
 /** fetch util */
 async function fetchListSafe(urls: string[]): Promise<any[]> {
   for (const url of urls) {
@@ -291,22 +242,6 @@ async function fetchListSafe(urls: string[]): Promise<any[]> {
     } catch {}
   }
   return [];
-}
-
-/** ================= NUEVO: Conteo LOCAL por (correo + plataforma) ================= */
-function countLocalByEmailAndPlatform(
-  all: Pantalla[],
-  correo: string | null | undefined,
-  plataforma_id: number | null | undefined,
-): number {
-  if (!correo || plataforma_id == null) return 0;
-  const email = (correo ?? "").trim().toLowerCase();
-  const pid = Number(plataforma_id);
-  return all.reduce((acc, r) => {
-    const sameEmail = (r.correo ?? "").trim().toLowerCase() === email;
-    const samePlat = Number(r.plataforma_id) === pid;
-    return acc + (sameEmail && samePlat ? 1 : 0);
-  }, 0);
 }
 
 /** === cuentascompartidas helpers (para editar correo) ===
@@ -541,6 +476,7 @@ export default function PantallasViewer() {
   const [deleteTarget, setDeleteTarget] = useState<{
     id: number;
     label?: string;
+    cuentaId?: number;
   } | null>(null);
   const [checkingArchive, setCheckingArchive] = useState(false);
   const [canArchive, setCanArchive] = useState(false);
@@ -552,14 +488,7 @@ export default function PantallasViewer() {
   const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
 
   // eliminación masiva
-  type BulkItem = {
-    id: number;
-    label?: string;
-    canArchive: boolean;
-    plataforma_id: number | null;
-    correo: string | null;
-    contrasena: string | null;
-  };
+  type BulkItem = { id: number; label?: string; cuentaId: number };
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkItems, setBulkItems] = useState<BulkItem[]>([]);
   const [bulkAssessing, setBulkAssessing] = useState(false);
@@ -1274,208 +1203,57 @@ export default function PantallasViewer() {
   /* =========================================================
    * Eliminación (individual y masiva) con inventario opcional
    * ======================================================= */
-  const openDelete = async (id: number, label?: string) => {
-    setDeleteTarget({ id, label });
-    setDeleteErr(null);
-    setDeleteAction(null);
-    setCanArchive(false);
-    setCheckingArchive(true);
-
-    try {
-      const victimLocal = rows.find((r) => r.id === id) || null;
-      let correo = victimLocal?.correo ?? null;
-      let plataforma_id = victimLocal?.plataforma_id ?? null;
-
-      if (!correo || plataforma_id == null) {
-        const resolved = await (async () => {
-          try {
-            const res = await fetch(`/api/pantallas/${id}`, {
-              cache: "no-store",
-            });
-            if (!res.ok) return null;
-            const j = await res.json();
-            return {
-              correo: j?.item?.correo ?? j?.correo ?? null,
-              plataforma_id: j?.item?.plataforma_id ?? j?.plataforma_id ?? null,
-            };
-          } catch {
-            return null;
-          }
-        })();
-        if (resolved) {
-          if (!correo) correo = resolved.correo;
-          if (plataforma_id == null) plataforma_id = resolved.plataforma_id;
-        }
-      }
-
-      setDeleteTarget({
-        id,
-        label:
-          label ??
-          (correo
-            ? `${correo} / ${victimLocal?.nro_pantalla ?? ""}`
-            : (victimLocal?.nro_pantalla ?? `#${id}`)),
-      });
-
-      if (!correo || plataforma_id == null) {
-        setCanArchive(false);
-        return;
-      }
-
-      // ======== usar SOLO las filas cargadas (lo que "miras") ========
-      const usesLocal =
-        plataforma_id == null
-          ? 0
-          : (computeUsedCounts(rows, plataforma_id).usedByEmail[
-              correo.trim().toLowerCase()
-            ] ?? 0);
-      setCanArchive(usesLocal <= 1);
-    } catch (e: any) {
-      setDeleteErr(e?.message ?? "Error al verificar el estado del correo.");
-    } finally {
-      setCheckingArchive(false);
-    }
+  const previewDeletion = async (id: number) => {
+    const res = await fetch(`/api/pantallas/${id}?deletion=preview`, { cache: "no-store" });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error ?? "No se pudo verificar la cuenta.");
+    return result as { cuentaId: number; last: boolean };
   };
-
-  useAccountDataRefresh(forceRefresh);
-
-  const doDelete = async (archive: boolean) => {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    setDeleteErr(null);
-    setDeleteAction(archive ? "archive" : "purge");
+  const deleteRequest = async (id: number, cuentaId: number, action: "record" | "inventory" | "purge") => {
+    const res = await fetch(`/api/pantallas/${id}`, {
+      method: "DELETE", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cuentaId, action }),
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error ?? "No se pudo eliminar.");
+    removePantallaFromCache(id);
+    setRows(current => current.filter(row => row.id !== id));
+    applyAccountDeletion(result);
+    notifyPantallasChanged();
+    notifyInventoryConsumed();
+    setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+    return result;
+  };
+  const deletionRequest = useRef(0);
+  const openDelete = async (id: number, label?: string) => {
+    const request = ++deletionRequest.current;
+    setDeleteTarget({ id, label }); setDeleteErr(null); setDeleteAction(null);
+    setCanArchive(false); setCheckingArchive(true);
     try {
-      const victim = rows.find((r) => r.id === deleteTarget.id) || null;
-      let victimPlataforma = victim?.plataforma_id ?? null;
-      let victimCorreo = victim?.correo ?? null;
-      let victimClave = victim?.contrasena ?? null;
-
-      if ((!victimCorreo || victimPlataforma == null) && archive) {
-        try {
-          const resolved = await fetch(`/api/pantallas/${deleteTarget.id}?scope=record`, {
-            cache: "no-store",
-          }).then((r) => (r.ok ? r.json() : null));
-          if (resolved) {
-            if (!victimCorreo)
-              victimCorreo = resolved?.item?.correo ?? resolved?.correo ?? null;
-            if (victimPlataforma == null)
-              victimPlataforma =
-                resolved?.item?.plataforma_id ??
-                resolved?.plataforma_id ??
-                null;
-            if (!victimClave)
-              victimClave =
-                resolved?.item?.contrasena ?? resolved?.contrasena ?? null;
-          }
-        } catch {}
-      }
-
-      if (!archive) {
-        await deleteEmailsGlobally([victimCorreo], "Eliminación definitiva desde Pantallas");
-        await forceRefresh();
-        setSelectedIds(new Set());
-        setDeleteTarget(null);
-        setDeleteMsg("Correo eliminado de todas las cuentas, pantallas e inventario.");
-        return;
-      }
-
-      if (archive && victimCorreo && victimPlataforma != null) {
-        await ensureInInventario(
-          victimPlataforma as number | null,
-          victimCorreo,
-          victimClave,
-        );
-      }
-
-      const res = await fetch(`/api/pantallas/${deleteTarget.id}?scope=record`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j?.error ?? "No se pudo eliminar");
-      }
-      await res.json().catch(() => ({}));
-
-      const next = removePantallaFromCache(deleteTarget.id);
-      setRows(next.map(normalizeRow));
-      notifyPantallasChanged();
-
-      setDeleteMsg("Pantalla eliminada correctamente.");
-      setSelectedIds((prev) => {
-        const s = new Set(prev);
-        s.delete(deleteTarget.id);
-        return s;
-      });
-      setDeleteTarget(null);
-    } catch (e: any) {
-      setDeleteErr(e?.message ?? "Error al eliminar");
-    } finally {
-      setDeleting(false);
-      setDeleteAction(null);
-    }
+      const result = await previewDeletion(id);
+      if (request !== deletionRequest.current) return;
+      setDeleteTarget(current => current?.id === id ? { ...current, cuentaId: result.cuentaId } : current);
+      setCanArchive(result.last);
+    } catch (e: any) { if (request === deletionRequest.current) setDeleteErr(e.message); }
+    finally { if (request === deletionRequest.current) setCheckingArchive(false); }
+  };
+  useAccountDataRefresh(forceRefresh);
+  const doDelete = async (archive: boolean) => {
+    if (!deleteTarget?.cuentaId || checkingArchive || deleting) return;
+    if (canArchive && !archive && !window.confirm("¿Eliminar definitivamente esta última pantalla y su cuenta? Las otras cuentas y clientes permanecerán intactos.")) return;
+    setDeleting(true); setDeleteErr(null); setDeleteAction(archive ? "archive" : "purge");
+    try {
+      await deleteRequest(deleteTarget.id, deleteTarget.cuentaId, canArchive ? (archive ? "inventory" : "purge") : "record");
+      setDeleteTarget(null); setDeleteMsg(archive ? "Cuenta enviada a inventario." : "Pantalla eliminada correctamente.");
+    } catch (e: any) { setDeleteErr(e.message); }
+    finally { setDeleting(false); setDeleteAction(null); }
   };
 
   // ==== BULK ====
-  type Built = {
-    id: number;
-    label?: string;
-    canArchive: boolean;
-    plataforma_id: number | null;
-    correo: string | null;
-    contrasena: string | null;
-  };
-
-  const buildBulkItem = async (id: number): Promise<Built> => {
-    const local = rows.find((r) => r.id === id) || null;
-    let correo = local?.correo ?? null;
-    let plataforma_id = local?.plataforma_id ?? null;
-    let contrasena = local?.contrasena ?? null;
-
-    if (!correo || plataforma_id == null) {
-      const resolved = await (async () => {
-        try {
-          const res = await fetch(`/api/pantallas/${id}`, {
-            cache: "no-store",
-          });
-          if (!res.ok) return null;
-          const j = await res.json();
-          return {
-            correo: j?.item?.correo ?? j?.correo ?? null,
-            plataforma_id: j?.item?.plataforma_id ?? j?.plataforma_id ?? null,
-            contrasena: j?.item?.contrasena ?? j?.contrasena ?? null,
-          };
-        } catch {
-          return null;
-        }
-      })();
-      if (resolved) {
-        if (!correo) correo = resolved.correo;
-        if (plataforma_id == null) plataforma_id = resolved.plataforma_id;
-        if (!contrasena) contrasena = resolved.contrasena;
-      }
-    }
-
-    // ======== usar SOLO las filas cargadas (lo que "miras") ========
-    let can = false;
-    if (correo && plataforma_id != null) {
-      const usesLocal = countLocalByEmailAndPlatform(
-        rows,
-        correo,
-        plataforma_id,
-      );
-      can = usesLocal <= 1;
-    }
-    const label = correo
-      ? `${correo} / ${local?.nro_pantalla ?? ""}`
-      : (local?.nro_pantalla ?? `#${id}`);
-    return {
-      id,
-      label,
-      canArchive: can,
-      plataforma_id: plataforma_id ?? null,
-      correo: correo ?? null,
-      contrasena: contrasena ?? null,
-    };
+  const buildBulkItem = async (id: number): Promise<BulkItem> => {
+    const local = rows.find(row => row.id === id);
+    const preview = await previewDeletion(id);
+    return { id, cuentaId: preview.cuentaId, label: local ? `${local.correo} / ${local.nro_pantalla}` : `#${id}` };
   };
 
   const openBulk = async (ids: number[]) => {
@@ -1487,9 +1265,8 @@ export default function PantallasViewer() {
     setBulkItems([]);
     setBulkAssessing(true);
     try {
-      const items: Built[] = [];
+      const items: BulkItem[] = [];
       for (const id of unique) {
-        // eslint-disable-next-line no-await-in-loop
         const it = await buildBulkItem(id);
         items.push(it);
       }
@@ -1503,81 +1280,24 @@ export default function PantallasViewer() {
   const openBulkSelected = () => openBulk(Array.from(selectedIds));
 
   const runBulk = async (preferArchive: boolean) => {
-    if (!bulkOpen || bulkItems.length === 0) return;
-    setBulkProcessing(true);
-    setBulkErr(null);
-    setBulkProgress(0);
-    const total = bulkItems.length;
-    if (!preferArchive) {
-      try {
-        await deleteEmailsGlobally(bulkItems.map(item => item.correo), "Eliminación masiva desde Pantallas");
-        await forceRefresh();
-        setSelectedIds(new Set());
-        setBulkProgress(100);
-        setBulkSummary({ total, archived: 0, purged: total, failed: 0 });
-      } catch (error) {
-        setBulkErr((error as Error).message);
-      } finally { setBulkProcessing(false); }
-      return;
-    }
-    let archived = 0,
-      purged = 0,
-      failed = 0;
-
+    if (!bulkOpen || !bulkItems.length || bulkProcessing) return;
+    if (!preferArchive && !window.confirm("¿Eliminar las pantallas seleccionadas y únicamente sus cuentas cuando queden vacías?")) return;
+    setBulkProcessing(true); setBulkErr(null); setBulkProgress(0);
+    let archived = 0, purged = 0, failed = 0;
     for (let i = 0; i < bulkItems.length; i++) {
       const it = bulkItems[i];
       try {
-        if (
-          preferArchive &&
-          it.canArchive &&
-          it.correo &&
-          it.plataforma_id != null
-        ) {
-          // eslint-disable-next-line no-await-in-loop
-          await ensureInInventario(
-            it.plataforma_id,
-            it.correo,
-            it.contrasena ?? null,
-          );
-        }
-        // eslint-disable-next-line no-await-in-loop
-        const res = await fetch(`/api/pantallas/${it.id}?scope=record`, {
-          method: "DELETE",
-        });
-        if (!res.ok) {
-          failed++;
-        } else {
-          if (
-            preferArchive &&
-            it.canArchive &&
-            it.correo &&
-            it.plataforma_id != null
-          )
-            archived++;
-          else purged++;
-          setRows((rs) => rs.filter((r) => r.id !== it.id));
-          setSelectedIds((prev) => {
-            const next = new Set(prev);
-            next.delete(it.id);
-            return next;
-          });
-          removePantallaFromCache(it.id);
-        }
-      } catch {
-        failed++;
-      } finally {
-        setBulkProgress(Math.round(((i + 1) / total) * 100));
-      }
+        const current = await previewDeletion(it.id);
+        if (current.cuentaId !== it.cuentaId) throw new Error("La asignación cambió de cuenta. Vuelve a revisar la selección.");
+        const result = await deleteRequest(it.id, current.cuentaId, current.last ? (preferArchive ? "inventory" : "purge") : "record");
+        if (result.archived) archived++; else purged++;
+      } catch (error) { failed++; setBulkErr((error as Error).message); }
+      finally { setBulkProgress(Math.round(((i + 1) / bulkItems.length) * 100)); }
     }
-
-    notifyPantallasChanged();
-    setBulkSummary({ total, archived, purged, failed });
+    setBulkSummary({ total: bulkItems.length, archived, purged, failed });
     setBulkProcessing(false);
   };
 
-  /* =========================================================
-   * Render
-   * ======================================================= */
   const selectedCount = selectedIds.size;
 
   return (
@@ -1644,7 +1364,7 @@ export default function PantallasViewer() {
             onClick={openBulkSelected}
             disabled={selectedCount === 0 || loading}
             className="rounded-lg border border-red-700 bg-red-800/40 px-3 py-1.5 text-red-100 hover:bg-red-800/60 disabled:opacity-50"
-            title="Si es última relación por correo+plataforma → inventario; si no → eliminar"
+            title="Si es la última asignación de su cuenta → inventario; si no → eliminar"
           >
             Eliminar seleccionados
           </button>
@@ -2532,13 +2252,11 @@ export default function PantallasViewer() {
                     </>
                   ) : null}
                   {checkingArchive
-                    ? "Verificando si es la última relación por correo y plataforma…"
+                    ? "Verificando las asignaciones de esta cuenta…"
                     : canArchive
-                      ? "Es la última pantalla con este correo en esta plataforma. Puedes enviarla al inventario antes de eliminar."
-                      : "Existen más pantallas con este correo. La eliminación definitiva también las eliminará."}
+                      ? "Esta es la última pantalla asignada de la cuenta. ¿Qué deseas hacer con la cuenta?"
+                      : "¿Deseas eliminar esta pantalla asignada al cliente seleccionado? Solo se eliminará este registro. Las demás pantallas y la cuenta permanecerán intactas."}
                 </p>
-
-                <p className="mt-3 text-sm text-rose-200">Eliminar definitivamente borra todos los registros del correo en todas las plataformas, incluidas cuentas, pantallas e inventario. La operación queda auditada.</p>
                 {deleteErr && (
                   <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">
                     {deleteErr}
@@ -2562,20 +2280,20 @@ export default function PantallasViewer() {
                     >
                       {deleting && deleteAction === "archive"
                         ? "Enviando…"
-                        : "Enviar al inventario"}
+                        : "Enviar cuenta a inventario"}
                     </button>
                   )}
 
                   <button
                     type="button"
                     onClick={() => doDelete(false)}
-                    disabled={deleting}
+                    disabled={deleting || checkingArchive || !deleteTarget.cuentaId}
                     className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-700 bg-red-800/40 px-3 py-2 hover:bg-red-800/60 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-60"
-                    title="Verificar asociaciones antes de confirmar la eliminación global"
+                    title="Eliminar únicamente la asignación seleccionada"
                   >
                     {deleting && deleteAction === "purge"
                       ? "Eliminando…"
-                      : "Revisar eliminación global"}
+                      : canArchive ? "Eliminar definitivamente" : "Eliminar pantalla"}
                   </button>
                 </div>
 
@@ -2621,13 +2339,8 @@ export default function PantallasViewer() {
                 ) : (
                   <>
                     <p id="bulk-desc" className="text-sm text-neutral-300">
-                      Se verificará cada registro: si es la última relación por{" "}
-                      <strong>correo + plataforma</strong>, se enviará al
-                      inventario y luego se eliminará; en caso contrario, se
-                      retirará solo el registro seleccionado.
+                      Solo se eliminarán las filas seleccionadas. Para la última asignación de cada cuenta, elige enviar la cuenta a inventario o eliminarla definitivamente.
                     </p>
-
-                    <p className="mt-3 text-sm text-rose-200">Eliminar definitivamente borra todos los registros de los correos seleccionados, en todas las plataformas, incluidas otras cuentas, pantallas e inventario. Es una sola transacción.</p>
                     {bulkErr && (
                       <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">
                         {bulkErr}
@@ -2675,7 +2388,7 @@ export default function PantallasViewer() {
 
                       <button
                         type="button"
-                        title="Elimina globalmente todos los registros de los correos seleccionados, incluidas otras plataformas e inventario"
+                        title="Eliminar solo las filas seleccionadas y sus cuentas si quedan vacías"
                         onClick={() => runBulk(false)}
                         disabled={
                           bulkAssessing ||
@@ -2684,7 +2397,7 @@ export default function PantallasViewer() {
                         }
                         className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-700 bg-red-800/40 px-3 py-2 hover:bg-red-800/60 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-60"
                       >
-                        Revisar eliminación global
+                        Eliminar seleccionadas
                       </button>
                     </div>
 
