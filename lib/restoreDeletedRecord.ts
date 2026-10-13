@@ -55,7 +55,7 @@ export async function restoreDeletedRecord(db: PrismaClient, target: Restoration
       ? snapshot(sharedSchema, rows(event.cuentascompartidas).find(row => row.id === original.cuenta_id))
       : snapshot(completeSchema, original);
     if (normalizeEmail(account.correo) !== normalizeEmail(audit.correo)) throw new RestorationError("El respaldo no corresponde al correo de esta auditoría.");
-    if (account.plataforma_id !== null && !await tx.plataformas.findUnique({ where: { id: account.plataforma_id } })) throw new RestorationError("La plataforma original ya no existe. Debes recuperarla antes de restaurar.");
+    if (account.plataforma_id !== null && !await tx.plataformas.findUnique({ where: { id: account.plataforma_id }, select: { id: true } })) throw new RestorationError("La plataforma original ya no existe. Debes recuperarla antes de restaurar.");
 
     if (target.tipo === "pantalla") {
       const screen = snapshot(screenSchema, original);

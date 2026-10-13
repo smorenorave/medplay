@@ -2571,11 +2571,11 @@ export default function PantallasViewer() {
                     onClick={() => doDelete(false)}
                     disabled={deleting}
                     className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-700 bg-red-800/40 px-3 py-2 hover:bg-red-800/60 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-60"
-                    title="Eliminar sin archivar"
+                    title="Verificar asociaciones antes de confirmar la eliminación global"
                   >
                     {deleting && deleteAction === "purge"
                       ? "Eliminando…"
-                      : "Eliminar definitivamente"}
+                      : "Revisar eliminación global"}
                   </button>
                 </div>
 
@@ -2684,7 +2684,7 @@ export default function PantallasViewer() {
                         }
                         className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-700 bg-red-800/40 px-3 py-2 hover:bg-red-800/60 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-60"
                       >
-                        Eliminar definitivamente
+                        Revisar eliminación global
                       </button>
                     </div>
 

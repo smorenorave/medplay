@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from "../src/generated/prisma";
 import { AccountSafetyError, ACTIVE_ACCOUNT_WARNING, hasActiveAssignment, type ConfirmedAccount } from "./expiredAccountSafety";
 import { createHash } from "node:crypto";
+import { deletionImpact, DeletionConfirmationError } from "./deletionImpact";
 
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 export const auditIdentity = (correo: string, clave: string | null) => createHash("sha256").update(`${Buffer.byteLength(normalizeEmail(correo))}:${normalizeEmail(correo)}${clave ?? ""}`).digest("hex");
@@ -27,7 +28,7 @@ export async function serializable<T>(db: PrismaClient, work: (tx: Prisma.Transa
 
 /** Global removal; expired selections retain the last platform/type relation in inventory. */
 export type DeletionTarget = { tipo: "pantalla" | "completa" | "compartida" | "inventario"; id: string };
-export async function deleteEmails(db: PrismaClient, input: { adminId: number; motivo?: string; destino?: "inventario" | "eliminar" | "registro"; scopedExpired?: boolean; expected?: ConfirmedAccount } & ({ correos: string[]; target?: never; expiredTargets?: never } | { target: DeletionTarget; correos?: never; expiredTargets?: never } | { expiredTargets: DeletionTarget[]; correos?: never; target?: never })) {
+export async function deleteEmails(db: PrismaClient, input: { adminId: number; motivo?: string; confirmation?: string; destino?: "inventario" | "eliminar" | "registro"; scopedExpired?: boolean; expected?: ConfirmedAccount } & ({ correos: string[]; target?: never; expiredTargets?: never } | { target: DeletionTarget; correos?: never; expiredTargets?: never } | { expiredTargets: DeletionTarget[]; correos?: never; target?: never })) {
   if (input.correos && (!input.correos.length || input.correos.length > 100 || input.correos.some(email => !email.trim() || email.trim().length > 191))) throw new Error("invalid-emails");
   if (input.destino === "eliminar" && (!input.scopedExpired || input.expiredTargets?.length !== 1 || !input.expected?.confirmado)) throw new AccountSafetyError("La eliminación definitiva requiere un único registro y la confirmación de su correo y clave.");
   const execute = (legacyPlatformAudit: boolean) => serializable(db, async tx => {
@@ -48,6 +49,10 @@ export async function deleteEmails(db: PrismaClient, input: { adminId: number; m
       else if (input.scopedExpired) throw new AccountSafetyError("El registro seleccionado ya no existe. Actualiza la lista.");
     }
     correos = [...new Set(correos.map(normalizeEmail))].sort();
+    if (input.confirmation !== undefined) {
+      const impact = await deletionImpact(tx, correos);
+      if (impact.fingerprint !== input.confirmation) throw new DeletionConfirmationError("Las asociaciones cambiaron. No se eliminó nada. Revisa y confirma de nuevo el alcance.");
+    }
     const deleted = { pantallas: 0, compartidas: 0, completas: 0, inventario: 0, clientes: 0 };
     const audits: { id: string; correo: string }[] = [];
     let revision: bigint | undefined;

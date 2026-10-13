@@ -52,6 +52,17 @@ function fixture() {
 }
 const target = { auditId: '1', evento: 0, tipo: 'pantalla', id: '9' };
 
+test('restoration only needs platform identity on a schema without audit settings', async () => {
+  const f = fixture(); const original = f.db.plataformas.findUnique;
+  f.db.plataformas.findUnique = args => {
+    if (!args.select?.id || args.select.auditarEliminaciones) throw Object.assign(new Error('Missing audit column'), { code: 'P2022' });
+    return original(args);
+  };
+  await restoreDeletedRecord(f.db, target, 1);
+  assert.equal(f.state.pantallas.length, 1);
+  assert.equal(f.state.usuarios.length, 1);
+});
+
 test('restores the selected screen, parent and client with original dates, prices, PIN and IDs', async () => {
   const f = fixture(); const result = await restoreDeletedRecord(f.db, target, 1);
   assert.equal(result.revision, '2'); assert.equal(result.alreadyRestored, false);

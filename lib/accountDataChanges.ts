@@ -61,7 +61,14 @@ export function listenAccountDeletionStorage() {
 export async function deleteEmailsGlobally(correos: (string | null | undefined)[], motivo: string) {
   if (correos.some(email => !email?.trim())) throw new Error("No se pudo identificar el correo de todos los registros.");
   const emails = [...new Set(correos.map(email => email!.trim().toLowerCase()))];
-  const response = await fetch("/api/account-deletions", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ correos: emails, motivo }) });
+  const preview = await fetch("/api/account-deletions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ correos: emails, motivo }) });
+  const impact = await preview.json();
+  if (!preview.ok) throw new Error(impact.error ?? "No se pudieron verificar las asociaciones. No se eliminó nada.");
+  if (typeof impact.fingerprint !== "string" || !/^[a-f0-9]{64}$/.test(impact.fingerprint)
+    || ![impact.completas, impact.compartidas, impact.pantallas, impact.inventario, impact.clientesAsociados].every(value => Number.isSafeInteger(value) && value >= 0)) throw new Error("No se pudo verificar el alcance. No se eliminó nada.");
+  const confirmation = window.prompt(`ATENCIÓN: eliminación GLOBAL en todas las plataformas.\nCorreos: ${emails.join(", ")}\n\nSe eliminarán:\n${impact.completas} cuentas completas\n${impact.compartidas} cuentas compartidas\n${impact.pantallas} pantallas\n${impact.inventario} registros de inventario\n\nHay ${impact.clientesAsociados} clientes asociados. Sus registros se eliminarán sólo si no conservan otras cuentas o pantallas.\n\nPara confirmar TODO este alcance escribe ELIMINAR TODO. Para conservarlo, cancela.`, "");
+  if (confirmation !== "ELIMINAR TODO") throw new Error("Eliminación cancelada. No se guardó ningún cambio.");
+  const response = await fetch("/api/account-deletions", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ correos: emails, motivo, confirmado: true, confirmation: impact.fingerprint }) });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error ?? "No se pudo eliminar. No se guardó ningún cambio.");
   applyAccountDeletion(result);

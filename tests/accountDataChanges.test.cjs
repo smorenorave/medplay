@@ -67,16 +67,26 @@ test('failed deletion leaves cached state and refresh subscribers unchanged', as
 
 test('successful batch normalizes and deduplicates emails and propagates the committed revision', async () => {
   browser(); const oldFetch = global.fetch; let request;
+  window.prompt = message => { assert.match(message, /clientes asociados/); return 'ELIMINAR TODO'; };
   global.fetch = async (url, options) => {
+    if (options.method === 'POST') return new Response(JSON.stringify({ fingerprint: 'a'.repeat(64), completas: 1, compartidas: 1, pantallas: 2, inventario: 1, clientesAsociados: 2 }));
     request = { url, ...JSON.parse(options.body) };
     return new Response(JSON.stringify({ revision: '4', correos: ['test@example.com'] }));
   };
   try {
     await bus.deleteEmailsGlobally(['TEST@example.com', ' test@example.com '], 'Cuenta retirada');
-    assert.deepEqual(request, { url: '/api/account-deletions', correos: ['test@example.com'], motivo: 'Cuenta retirada' });
+    assert.deepEqual(request, { url: '/api/account-deletions', correos: ['test@example.com'], motivo: 'Cuenta retirada', confirmado: true, confirmation: 'a'.repeat(64) });
     assert.equal(bus.accountRevision(), '4');
     await assert.rejects(bus.deleteEmailsGlobally([null], 'test'), /identificar/);
   } finally { global.fetch = oldFetch; }
+});
+
+test('cancelling the association confirmation never sends DELETE', async () => {
+  browser(); const oldFetch = global.fetch; const methods = [];
+  window.prompt = () => null;
+  global.fetch = async (_url, options) => { methods.push(options.method); return new Response(JSON.stringify({ fingerprint: 'a'.repeat(64), completas: 1, compartidas: 1, pantallas: 2, inventario: 1, clientesAsociados: 2 })); };
+  try { await assert.rejects(bus.deleteEmailsGlobally(['test@example.com'], 'test'), /cancelada/); assert.deepEqual(methods, ['POST']); }
+  finally { global.fetch = oldFetch; }
 });
 
 function syncComponent() {

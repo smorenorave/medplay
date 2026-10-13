@@ -304,17 +304,15 @@ const expiredRoute = require('../src/app/api/cuentasvencidas/delete/route.ts');
 const routes = ['pantallas', 'cuentascompletas', 'cuentascompartidas', 'inventario'].map(name => ({ name, route: require(`../src/app/api/${name}/[id]/route.ts`) }));
 
 for (const { name, route } of routes) {
-  test(`DELETE /api/${name}/[id] runs global deletion and does not duplicate its audit on retry`, async () => {
+  test(`DELETE /api/${name}/[id] refuses unconfirmed global deletion`, async () => {
     routeFixture = fixture(); sessionId = 1;
+    const before = structuredClone(routeFixture.state);
     const id = name === 'cuentascompletas' ? '10' : '1';
     const request = () => new Request(`http://localhost/api/${name}/${id}`, { method: 'DELETE' });
     const context = () => ({ params: Promise.resolve({ id }) });
     const response = await route.DELETE(request(), context());
-    assert.equal(response.status, 200);
-    const json = await response.json(); assert.equal(json.deleted.pantallas, 2); assert.equal(json.deleted.completas, 2);
-    assert.equal(routeFixture.state.emailDeletionAudit.length, 6);
-    assert.equal((await route.DELETE(request(), context())).status, 200);
-    assert.equal(routeFixture.state.emailDeletionAudit.length, 6); assert.equal(routeFixture.state.emailDeletionAudit[0].registros.eventos.length, 1);
+    assert.equal(response.status, 409);
+    assert.deepEqual(routeFixture.state, before);
   });
 }
 
@@ -323,14 +321,30 @@ test('batch endpoint rejects unauthenticated requests, invalid emails and oversi
   const request = data => new Request('http://localhost/api/account-deletions', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
   sessionId = null; assert.equal((await batchRoute.DELETE(request({ correos: ['test@example.com'] }))).status, 401);
   sessionId = 1;
-  for (const data of [{ correos: [] }, { correos: ['invalid'] }, { correos: Array(101).fill('test@example.com') }, { correos: ['test@example.com'], motivo: 'a'.repeat(2001) }]) assert.equal((await batchRoute.DELETE(request(data))).status, 400);
+  for (const data of [{ correos: [] }, { correos: ['invalid'] }, { correos: Array(101).fill('test@example.com') }, { correos: ['test@example.com'], motivo: 'a'.repeat(2001) }, { correos: ['test@example.com'] }]) assert.equal((await batchRoute.DELETE(request(data))).status, 409);
   assert.deepEqual(routeFixture.state, before);
 });
 
 test('batch endpoint performs deletion and records its reason through the actual handler', async () => {
   routeFixture = fixture(); sessionId = 1;
-  const response = await batchRoute.DELETE(new Request('http://localhost/api/account-deletions', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ correos: ['test@example.com'], motivo: 'Retirada manual' }) }));
+  const before = structuredClone(routeFixture.state);
+  const preview = await batchRoute.POST(new Request('http://localhost/api/account-deletions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ correos: ['test@example.com'] }) }));
+  const impact = await preview.json();
+  assert.equal(impact.pantallas, 2); assert.equal(impact.clientesAsociados, 3);
+  assert.deepEqual(routeFixture.state, before);
+  const response = await batchRoute.DELETE(new Request('http://localhost/api/account-deletions', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ correos: ['test@example.com'], motivo: 'Retirada manual', confirmado: true, confirmation: impact.fingerprint }) }));
   assert.equal(response.status, 200); assert.equal(routeFixture.state.emailDeletionAudit[0].motivo, 'Retirada manual');
+});
+
+test('a screen associated after preview invalidates confirmation and rolls back without deletion', async () => {
+  routeFixture = fixture(); sessionId = 1;
+  const request = (method, data) => new Request('http://localhost/api/account-deletions', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  const impact = await (await batchRoute.POST(request('POST', { correos: ['test@example.com'] }))).json();
+  routeFixture.state.pantallas.push({ id: 99, cuenta_id: 1, contacto: 'new-client' });
+  const before = structuredClone(routeFixture.state);
+  const response = await batchRoute.DELETE(request('DELETE', { correos: ['test@example.com'], confirmado: true, confirmation: impact.fingerprint }));
+  assert.equal(response.status, 409);
+  assert.deepEqual(routeFixture.state, before);
 });
 
 test('expired endpoint authenticates, validates targets and preserves the last complete account', async () => {
