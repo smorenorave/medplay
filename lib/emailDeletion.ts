@@ -6,6 +6,14 @@ export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 export const auditIdentity = (correo: string, clave: string | null) => createHash("sha256").update(`${Buffer.byteLength(normalizeEmail(correo))}:${normalizeEmail(correo)}${clave ?? ""}`).digest("hex");
 const json = (value: unknown): Prisma.InputJsonValue => JSON.parse(JSON.stringify(value, (_key, item) => typeof item === "bigint" ? String(item) : item));
 
+function missingPlatformAuditColumn(error: unknown): boolean {
+  const reason = error as { code?: unknown; meta?: { column?: unknown; modelName?: unknown } } | null;
+  if (reason?.code !== "P2022" || typeof reason.meta?.column !== "string") return false;
+  const parts = reason.meta.column.replace(/[`"']/g, "").split(".");
+  return parts.at(-1) === "auditarEliminaciones"
+    && (parts.length > 1 ? parts.at(-2) === "plataformas" : reason.meta.modelName === "plataformas");
+}
+
 export async function serializable<T>(db: PrismaClient, work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
@@ -22,7 +30,7 @@ export type DeletionTarget = { tipo: "pantalla" | "completa" | "compartida" | "i
 export async function deleteEmails(db: PrismaClient, input: { adminId: number; motivo?: string; destino?: "inventario" | "eliminar" | "registro"; scopedExpired?: boolean; expected?: ConfirmedAccount } & ({ correos: string[]; target?: never; expiredTargets?: never } | { target: DeletionTarget; correos?: never; expiredTargets?: never } | { expiredTargets: DeletionTarget[]; correos?: never; target?: never })) {
   if (input.correos && (!input.correos.length || input.correos.length > 100 || input.correos.some(email => !email.trim() || email.trim().length > 191))) throw new Error("invalid-emails");
   if (input.destino === "eliminar" && (!input.scopedExpired || input.expiredTargets?.length !== 1 || !input.expected?.confirmado)) throw new AccountSafetyError("La eliminación definitiva requiere un único registro y la confirmación de su correo y clave.");
-  return serializable(db, async tx => {
+  const execute = (legacyPlatformAudit: boolean) => serializable(db, async tx => {
     const actor = await tx.admin.findUnique({ where: { id: input.adminId }, select: { usuario: true } });
     if (!actor) throw new Error("unauthorized");
     let correos = input.correos ?? [];
@@ -48,9 +56,13 @@ export async function deleteEmails(db: PrismaClient, input: { adminId: number; m
       const sharedIds = await tx.$queryRaw<{ id: number }[]>(Prisma.sql`SELECT id FROM cuentascompartidas WHERE LOWER(TRIM(correo)) = ${correo} FOR UPDATE`);
       const completeIds = await tx.$queryRaw<{ id: bigint }[]>(Prisma.sql`SELECT id FROM cuentascompletas WHERE LOWER(TRIM(correo)) = ${correo} FOR UPDATE`);
       const inventoryIds = await tx.$queryRaw<{ id: number }[]>(Prisma.sql`SELECT id FROM inventario WHERE LOWER(TRIM(correo)) = ${correo} FOR UPDATE`);
-      let shared = await tx.cuentascompartidas.findMany({ where: { id: { in: sharedIds.map(row => row.id) } }, include: { plataformas: true } });
-      let complete = await tx.cuentascompletas.findMany({ where: { id: { in: completeIds.map(row => row.id) } }, include: { plataformas: true } });
-      let inventory = await tx.inventario.findMany({ where: { id: { in: inventoryIds.map(row => row.id) } }, include: { plataformas: true } });
+      // Old schemas predate this optional setting: the migration's default is
+      // true. Omit only that column after its exact P2022, retaining all audit
+      // writes and other platform fields. Modern schemas retain their settings.
+      const platformRelation = { omit: { auditarEliminaciones: legacyPlatformAudit } };
+      let shared = await tx.cuentascompartidas.findMany({ where: { id: { in: sharedIds.map(row => row.id) } }, include: { plataformas: platformRelation } });
+      let complete = await tx.cuentascompletas.findMany({ where: { id: { in: completeIds.map(row => row.id) } }, include: { plataformas: platformRelation } });
+      let inventory = await tx.inventario.findMany({ where: { id: { in: inventoryIds.map(row => row.id) } }, include: { plataformas: platformRelation } });
       if (!shared.length && !complete.length && !inventory.length) {
         const previous = await tx.emailDeletionAudit.findMany({ where: { correo } });
         audits.push(...previous.map(row => ({ id: String(row.id), correo })));
@@ -175,4 +187,11 @@ export async function deleteEmails(db: PrismaClient, input: { adminId: number; m
     else revision = (await tx.accountDataRevision.findUnique({ where: { id: 1 } }))?.revision ?? 0n;
     return { correos, revision: String(revision), deleted, audits };
   });
+  try {
+    return await execute(false);
+  } catch (error) {
+    if (!missingPlatformAuditColumn(error)) throw error;
+    // The failed transaction has rolled back before retrying in a fresh one.
+    return execute(true);
+  }
 }

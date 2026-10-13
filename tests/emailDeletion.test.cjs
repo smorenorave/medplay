@@ -90,6 +90,62 @@ function fixture() {
 }
 const remove = f => deleteEmails(f.db, { correos: [' TEST@example.com ', 'test@example.com'], adminId: 1, motivo: 'Cuenta retirada' });
 
+function legacyPlatformSchema(f) {
+  const reads = [];
+  for (const table of ['cuentascompartidas', 'cuentascompletas', 'inventario']) {
+    const original = f.db[table].findMany;
+    f.db[table].findMany = async args => {
+      if (args.include?.plataformas) {
+        const omitted = args.include.plataformas.omit?.auditarEliminaciones === true;
+        reads.push({ table, omitted });
+        if (!omitted) throw Object.assign(new Error('Missing column'), { code: 'P2022', meta: { modelName: 'plataformas', column: 'plataformas.auditarEliminaciones' } });
+        return (await original(args)).map(row => {
+          const copy = structuredClone(row);
+          delete copy.plataformas.auditarEliminaciones;
+          return copy;
+        });
+      }
+      return original(args);
+    };
+  }
+  return reads;
+}
+
+test('legacy platform schema retries a fresh transaction and preserves every credential audit', async () => {
+  const f = fixture();
+  const reads = legacyPlatformSchema(f);
+  const result = await remove(f);
+  assert.equal(f.options.length, 2);
+  assert.deepEqual(reads.map(read => read.omitted), [false, true, true, true]);
+  assert.equal(result.deleted.pantallas, 2);
+  assert.equal(f.state.emailDeletionAudit.length, 6);
+  assert.equal(result.revision, '1');
+  assert.equal(f.state.cuentascompartidas[0].correo, 'other@example.com');
+});
+
+test('legacy compatibility still rolls back all changes if audit persistence fails', async () => {
+  const f = fixture(); const before = structuredClone(f.state);
+  legacyPlatformSchema(f);
+  f.fail('emailDeletionAudit.upsert');
+  await assert.rejects(remove(f), /Injected failure/);
+  assert.deepEqual(f.state, before);
+});
+
+test('unrelated schema errors never enable legacy compatibility or delete data', async () => {
+  for (const meta of [
+    { modelName: 'plataformas', column: 'nombre' },
+    { modelName: 'inventario', column: 'auditarEliminaciones' },
+    { column: 'auditarEliminaciones' },
+  ]) {
+    const f = fixture(); const before = structuredClone(f.state);
+    const error = Object.assign(new Error('Missing unrelated column'), { code: 'P2022', meta });
+    f.db.cuentascompartidas.findMany = async () => { throw error; };
+    await assert.rejects(remove(f), failure => failure === error);
+    assert.equal(f.options.length, 1);
+    assert.deepEqual(f.state, before);
+  }
+});
+
 test('multiple credentials reuse one legacy audit lookup while preserving six distinct audits', async () => {
   const f = fixture(); let reads = 0;
   const original = f.db.emailDeletionAudit.findMany;
