@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "./db";
 import { getAuthenticatedAdminId } from "./adminSession";
 import { deleteEmails, type DeletionTarget } from "./emailDeletion";
+import { globalDeletionFailure } from "./globalDeletionFailure";
 
 /** Returns null only for an explicit record transfer; all ordinary DELETEs are global. */
 export async function deleteEmailForRecord(request: Request, target: DeletionTarget) {
@@ -13,7 +14,6 @@ export async function deleteEmailForRecord(request: Request, target: DeletionTar
     const result = await deleteEmails(prisma, { target, adminId, motivo: `Eliminación definitiva desde ${target.tipo}` });
     return NextResponse.json({ ok: true, ...result }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    console.error("Global record deletion failed", error);
-    return NextResponse.json({ error: "No se pudo completar la eliminación. No se guardó ningún cambio." }, { status: (error as Error).message === "unauthorized" ? 401 : 500 });
+    return globalDeletionFailure(error);
   }
 }
