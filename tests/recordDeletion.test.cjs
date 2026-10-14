@@ -87,3 +87,32 @@ test('shared endpoint preview followed by one explicit click action, no typed co
   assert.equal((await request('DELETE', { target, decision: { cuentaId: p.cuentaId, action: 'purge' } })).status, 200);
   assert.equal(routeFixture.state.accounts.length, 0);
 });
+
+test('preview and deletion failures expose safe diagnostics and a server reference', async () => {
+  const originalLog = console.error;
+  const logged = [];
+  console.error = (...args) => logged.push(args);
+  try {
+    for (const method of ['POST', 'DELETE']) {
+      routeFixture = { db: { $transaction: async () => { throw { code: 'P2022', meta: { modelName: 'cuentascompletas', column: 'updatedAt' }, message: 'password=private' }; } } };
+      const response = await request(method, { target: { tipo: 'completa', id: '1' }, ...(method === 'DELETE' ? { decision: { cuentaId: '1', action: 'purge' } } : {}) });
+      const result = await response.json();
+      assert.equal(response.status, 503); assert.equal(result.code, 'P2022');
+      assert.equal(result.phase, method === 'POST' ? 'preview' : 'delete');
+      assert.match(result.error, /cuentascompletas.updatedAt/); assert.ok(result.reference);
+      assert.doesNotMatch(result.error, /password|private/);
+      assert.equal(logged.at(-1)[1].reference, result.reference);
+    }
+  } finally { console.error = originalLog; }
+});
+
+test('client distinguishes expired session, permission, malformed response and server diagnostic', async () => {
+  const { previewRecordDeletion } = require('../lib/recordDeletionClient.ts');
+  const originalFetch = global.fetch;
+  try {
+    for (const [status, body, expected] of [[401, '', /sesión venció/], [403, '', /administrador/], [502, '<html>error</html>', /HTTP 502/], [503, JSON.stringify({ error: 'Falta columna. Referencia: test-ref.' }), /test-ref/]]) {
+      global.fetch = async () => new Response(body, { status });
+      await assert.rejects(previewRecordDeletion({ tipo: 'completa', id: '1' }), expected);
+    }
+  } finally { global.fetch = originalFetch; }
+});
