@@ -8,12 +8,24 @@ const http = require('http');
 const { chromium } = require('playwright');
 const mysql = require('mysql2/promise');
 const { parseWhatsAppContact, buildWhatsAppChatUrls } = require('./whatsapp-contact');
+const { deliverUsername, exclusionReason } = require('./whatsapp-delivery.cjs');
+const { sendUsernameMessage } = require('./whatsapp-username.cjs');
 
 /* =========================
  * CONFIG GENERAL
  * ========================= */
 const IS_WIN = process.platform === 'win32';
 const ROOT_DIR = path.resolve(__dirname, '..');
+const localFileIndex = process.argv.indexOf('--archivo');
+const LOCAL_FILE = localFileIndex < 0 ? null : process.argv[localFileIndex + 1];
+if (localFileIndex >= 0 && (!LOCAL_FILE || LOCAL_FILE.startsWith('--'))) {
+  throw new Error('Falta la ruta después de --archivo.');
+}
+const LOCAL_MODE = Boolean(LOCAL_FILE);
+const USERNAME_MODE = LOCAL_MODE && process.argv.includes('--usuarios');
+const PREVIEW = LOCAL_MODE && !process.argv.includes('--enviar');
+const LOCAL_DIR = path.join(ROOT_DIR, '.local-vencidos');
+if (LOCAL_MODE) fs.mkdirSync(LOCAL_DIR, { recursive: true });
 const LOG_DIR = path.join(ROOT_DIR, '.logs');
 
 try { fs.mkdirSync(LOG_DIR, { recursive: true }); } catch { }
@@ -107,7 +119,8 @@ const NOTE_NEQUI = 'PARA PAGOS POR NEQUI SOLICITAR EL QR POR FAVOR';
  * día (p. ej. un día antes de vencer y el día que vence, o el mes
  * siguiente) sin quedar bloqueado para siempre.
  */
-const SEND_LOG_FILE = path.join(LOG_DIR, 'envios_log.jsonl');
+const SEND_LOG_FILE = LOCAL_MODE
+  ? path.join(LOCAL_DIR, 'envios.jsonl') : path.join(LOG_DIR, 'envios_log.jsonl');
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -118,6 +131,7 @@ function appendSendLog(entry) {
   try {
     fs.appendFileSync(SEND_LOG_FILE, line);
   } catch (e) {
+    if (LOCAL_MODE) throw e;
     console.error('❌ No se pudo escribir en el log de envíos (esto es grave, revisar permisos):', e?.message || e);
   }
 }
@@ -131,18 +145,30 @@ function appendSendLog(entry) {
 function loadSentPhones() {
   const sent = new Set();
   const hoy = todayStr();
-  try {
-    const raw = fs.readFileSync(SEND_LOG_FILE, 'utf8');
+  // El archivo activo puede faltar o quedar vacío después de archivar un lote.
+  // Ambos historiales forman el control diario; el modo local no cambia.
+  const files = LOCAL_MODE ? [SEND_LOG_FILE] : [
+    SEND_LOG_FILE,
+    path.join(LOG_DIR, `envios_log_${hoy}.jsonl`),
+  ];
+  for (const file of files) {
+    let raw;
+    try { raw = fs.readFileSync(file, 'utf8'); }
+    catch (error) {
+      if (error.code === 'ENOENT') continue;
+      throw error; // Sin historial legible no es seguro enviar.
+    }
     for (const line of raw.split('\n')) {
       if (!line.trim()) continue;
-      try {
-        const entry = JSON.parse(line);
-        if (entry && entry.status === 'ENVIADO' && entry.phone && entry.date === hoy) {
-          sent.add(entry.phone);
-        }
-      } catch { /* línea corrupta: se ignora, no se aborta el proceso por esto */ }
+      const entry = JSON.parse(line); // Historial corrupto: detener, no arriesgar duplicados.
+      if (entry && entry.phone && (LOCAL_MODE
+        ? (USERNAME_MODE ? ['ENVIADO', 'EN_PROCESO', 'ERROR'] : ['ENVIADO', 'EN_PROCESO', 'ERROR', 'OMITIDO']).includes(entry.status)
+        : entry.status === 'ENVIADO' && entry.date === hoy)) {
+        const parsed = parseWhatsAppContact(entry.phone);
+        sent.add(parsed?.type === 'username' ? parsed.value.toLowerCase() : (parsed?.value || entry.phone));
+      }
     }
-  } catch { /* el archivo todavía no existe: no hay nada enviado aún hoy */ }
+  }
   return sent;
 }
 
@@ -164,7 +190,7 @@ function archivarYReiniciarLogDelDia() {
     } else {
       fs.renameSync(SEND_LOG_FILE, destino);
     }
-    console.log(`🗄️ Log de envíos de hoy archivado en ${destino}; el control de duplicados queda listo para mañana.`);
+    console.log(`🗄️ Log de envíos de hoy archivado en ${destino}; se conserva el control de duplicados de hoy.`);
   } catch (e) {
     console.warn('⚠️ No se pudo archivar/reiniciar el log de envíos:', e?.message || e);
   }
@@ -413,6 +439,23 @@ async function prepareWhatsApp(page) {
 
   await resolveUseHereModal(page).catch(() => { });
 
+  if (LOCAL_MODE) {
+    console.log('Escanea el QR de WhatsApp. Esperaré hasta 10 minutos a que aparezca la lista de chats.');
+    const deadline = Date.now() + 10 * 60_000;
+    let authenticated = false;
+    while (Date.now() < deadline) {
+      if (page.isClosed()) throw new Error('Se cerró WhatsApp antes de iniciar sesión.');
+      await resolveUseHereModal(page).catch(() => { });
+      authenticated = await page.locator('#pane-side').isVisible().catch(() => false);
+      if (authenticated) break;
+      await sleep(1000);
+    }
+    if (!authenticated) throw new Error('No se detectó la lista de chats en 10 minutos. Ejecuta nuevamente para escanear el QR.');
+    console.log('Sesión de WhatsApp iniciada. Preparando el envío del listado local.');
+    await sleep(3000);
+    return;
+  }
+
   let ready = await waitForWhatsAppReady(page, {
     timeout: 60_000,
     quietMs: 1500,
@@ -495,6 +538,9 @@ async function focusEditorAtEnd(page, editor) {
  * CHAT READINESS
  * ========================= */
 async function ensureChatReady(page, phone, textEncoded) {
+  if (parseWhatsAppContact(phone)?.type === 'username') {
+    return require('./whatsapp-username.cjs').openUsernameChat(page, phone, decodeURIComponent(textEncoded));
+  }
   const variants = buildWhatsAppChatUrls(phone, textEncoded);
   if (!variants.length) return false;
 
@@ -570,7 +616,23 @@ async function confirmMessageSent(page, timeoutMs = 5000) {
 //  - sent=false      -> ni siquiera se pudo pulsar Enter (compositor no encontrado, etc.)
 //  - sent=true, confirmed=false -> se pulsó Enter pero no hay evidencia de que se haya aceptado
 //  - sent=true, confirmed=true  -> hay evidencia razonable de que el mensaje se envió
-async function sendMessage(page) {
+async function sendMessage(page, expectedText) {
+  if (LOCAL_MODE) {
+    const editor = page.locator('#main footer [contenteditable="true"][role="textbox"]').last();
+    await editor.waitFor({ state: 'visible', timeout: 20_000 });
+    const normalize = value => value.replace(/\s+/g, ' ').trim();
+    if (normalize(await editor.innerText()) !== normalize(expectedText)) {
+      throw new Error('El editor no contiene el mensaje esperado; se omite el contacto.');
+    }
+    await editor.press('Enter');
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      const remaining = await editor.innerText().catch(() => null);
+      if (remaining !== null && !remaining.trim()) return { sent: true, confirmed: true };
+      await sleep(250);
+    }
+    return { sent: true, confirmed: false };
+  }
   const editor = await findEditorWithRetry(page);
 
   if (editor) {
@@ -738,7 +800,7 @@ function groupByPhone(rows) {
   for (const r of rows) {
     const parsed = parseWhatsAppContact(r.contacto);
     if (!parsed) continue;
-    const phone = parsed.value;
+    const phone = parsed.type === 'username' ? parsed.value.toLowerCase() : parsed.value;
 
     const cur = map.get(phone) || { phone, items: [], nombre: r.nombre || null };
     cur.items.push(r);
@@ -916,6 +978,7 @@ async function sendAll(recipients, sentPhones) {
 
   let enviados = 0;
   let errores = 0;
+  let omitidos = 0;
   let sinceRestart = 0;
   let consecutiveBrokenSessions = 0;
   let detenidoEnIndex = -1; // -1 = se procesó todo el lote
@@ -930,16 +993,39 @@ async function sendAll(recipients, sentPhones) {
 
     console.log(`\n[${i + 1}/${recipients.length}] → ${r.phone}`);
 
-    // Reinicio preventivo periódico.
-    if (sinceRestart > 0 && sinceRestart % RESTART_EVERY === 0) {
+    // Reinicio preventivo periódico, también antes de procesar usuarios.
+    if (session.page.isClosed() || (sinceRestart > 0 && sinceRestart % RESTART_EVERY === 0)) {
       await closeSessionQuiet(session.browser);
       session = await recoverSession('reinicio preventivo');
       if (!session) { detenidoEnIndex = i; break; }
       sinceRestart = 0;
     }
 
+    // Username support is isolated from the established telephone send/retry flow.
+    if (parseWhatsAppContact(r.phone)?.type === 'username') {
+      const result = await deliverUsername({
+        page: session.page, recipient: r,
+        scope: LOCAL_MODE ? 'local' : todayStr(),
+        directory: path.join(LOG_DIR, 'usuarios-envios'),
+        send: sendUsernameMessage, log: appendSendLog,
+      });
+      if (result.status === 'ENVIADO') { enviados++; sentPhones.add(r.phone); }
+      else if (result.status === 'OMITIDO') omitidos++;
+      else errores++;
+      console.log(`Usuario: ${result.status}${result.motivo ? ` (${result.motivo})` : ''}`);
+      if (result.motivo === 'limite_plataforma') {
+        detenidoEnIndex = i + 1;
+        console.warn('WhatsApp indicó un límite temporal. Se detiene el lote sin intentar eludirlo.');
+        break;
+      }
+      sinceRestart++;
+      await sleep(GAP_BETWEEN_CONTACTS);
+      continue;
+    }
+
     let resultado = null;
     let motivo = null;
+    let localSendStarted = false;
 
     try {
       const textEncoded = encodeURIComponent(r.text);
@@ -957,7 +1043,12 @@ async function sendAll(recipients, sentPhones) {
           }
 
           console.log('✉️ Enviando…');
-          const sendResult = await sendMessage(session.page);
+          // Se registra antes de pulsar Enter: una interrupción requiere revisión manual.
+          if (LOCAL_MODE) {
+            appendSendLog({ phone: r.phone, status: 'EN_PROCESO' });
+            localSendStarted = true;
+          }
+          const sendResult = await sendMessage(session.page, r.text);
 
           if (sendResult.confirmed) {
             resultado = 'ENVIADO';
@@ -976,8 +1067,22 @@ async function sendAll(recipients, sentPhones) {
 
         } catch (e) {
           const msg = e?.message || String(e);
+          if (LOCAL_MODE && localSendStarted) {
+            resultado = 'ERROR';
+            motivo = 'envio_incierto_revisar_manualmente';
+            errores++;
+            done = true;
+            break;
+          }
 
           if (msg === 'CHAT_NOT_READY') {
+            if (USERNAME_MODE) {
+              resultado = 'ERROR';
+              motivo = 'usuario_no_resuelto_o_identidad_no_verificada';
+              errores++;
+              done = true;
+              break;
+            }
             console.warn('♻️ Reiniciando Edge porque WhatsApp dejó de responder...');
             await closeSessionQuiet(session.browser);
             session = await recoverSession('chat no listo');
@@ -1049,18 +1154,44 @@ async function sendAll(recipients, sentPhones) {
 
   const pendientes = detenidoEnIndex >= 0 ? (recipients.length - detenidoEnIndex) : 0;
 
-  return { enviados, errores, pendientes };
+  return { enviados, errores, pendientes, omitidos };
 }
 
 /* =========================
  * MAIN
  * ========================= */
 (async () => {
+  let localLock;
   try {
-    const conn = await getConnection();
+    let localRows = LOCAL_MODE ? require('./datos-vencidos-local.cjs').readLocalRows(path.resolve(LOCAL_FILE)) : null;
+    if (USERNAME_MODE) {
+      localRows = localRows.filter(row => {
+        const contact = parseWhatsAppContact(row.contacto);
+        // Las bajas y duplicados se registran en el filtro común de destinatarios.
+        return contact?.type === 'username';
+      });
+      console.log(`Usuarios seleccionados; las exclusiones y duplicados se comprobarán antes del envío: ${localRows.map(row => row.contacto).join(', ')}`);
+    }
+    if (PREVIEW) {
+      const recipients = groupByPhone(localRows);
+      const previewFile = path.join(LOCAL_DIR, 'vista-previa.txt');
+      fs.writeFileSync(previewFile, recipients.map(r => `Para: ${r.phone}\n${r.text}`).join('\n\n--------------------\n\n'), 'utf8');
+      console.log(`Vista previa: ${localRows.length} servicios, ${recipients.length} contactos. Archivo: ${previewFile}`);
+      console.log('No se ha abierto WhatsApp ni enviado mensajes. Usa --enviar para realizar el envío.');
+      appOut.end(); appErr.end();
+      return;
+    }
+    if (LOCAL_MODE) {
+      localLock = fs.openSync(path.join(LOCAL_DIR, 'envio.lock'), 'wx');
+      process.on('exit', () => {
+        fs.closeSync(localLock);
+        fs.unlinkSync(path.join(LOCAL_DIR, 'envio.lock'));
+      });
+    }
+    const conn = LOCAL_MODE ? null : await getConnection();
 
     try {
-      const rows = await fetchExpiringRows(conn);
+      const rows = localRows || await fetchExpiringRows(conn);
       const allRecipients = groupByPhone(rows);
 
       if (!allRecipients.length) {
@@ -1068,16 +1199,21 @@ async function sendAll(recipients, sentPhones) {
         return;
       }
 
-      // Fuente de verdad: el log persistente de envíos, sin importar
-      // la fecha. Nunca se le vuelve a escribir a quien ya conste ahí
-      // como ENVIADO.
+      // Base de datos: historial activo y archivado del día.
+      // Modo local: historial persistente, sin límite de fecha.
       const sentPhones = loadSentPhones();
-      importSeedFile(sentPhones);
+      if (!LOCAL_MODE) importSeedFile(sentPhones);
 
       const recipients = [];
       let omitidosPrevios = 0;
 
       for (const r of allRecipients) {
+        const excluded = exclusionReason(r.phone, LOCAL_DIR);
+        if (excluded) {
+          omitidosPrevios++;
+          appendSendLog({ phone: r.phone, status: 'OMITIDO', motivo: excluded });
+          continue;
+        }
         if (sentPhones.has(r.phone)) {
           omitidosPrevios++;
           appendSendLog({ phone: r.phone, status: 'OMITIDO', motivo: 'ya_enviado_previamente' });
@@ -1087,35 +1223,37 @@ async function sendAll(recipients, sentPhones) {
       }
 
       if (omitidosPrevios > 0) {
-        console.log(`⏩ ${omitidosPrevios} contacto(s) ya habían sido enviados anteriormente; se omiten.`);
+        console.log(`⏩ ${omitidosPrevios} contacto(s) omitidos por exclusiones o historial previo.`);
       }
 
       if (!recipients.length) {
-        console.log('✅ Todos los contactos vigentes ya fueron notificados anteriormente.');
-        console.log(`\n===== RESUMEN =====\n✅ Enviados: 0\n⏩ Omitidos (ya en el log): ${omitidosPrevios}\n❌ Errores: 0\n⏳ Pendientes: 0\n====================`);
+        console.log('✅ No hay destinatarios pendientes después de aplicar exclusiones e historial.');
+        console.log(`\n===== RESUMEN =====\n✅ Enviados: 0\n⏩ Omitidos: ${omitidosPrevios}\n❌ Errores: 0\n⏳ Pendientes: 0\n====================`);
         return;
       }
 
       console.log(`📨 Enviaré ${recipients.length} mensaje(s).`);
-      const { enviados, errores, pendientes } = await sendAll(recipients, sentPhones);
+      const { enviados, errores, pendientes, omitidos } = await sendAll(recipients, sentPhones);
 
       console.log('\n===== RESUMEN =====');
       console.log(`✅ Enviados: ${enviados}`);
-      console.log(`⏩ Omitidos (ya en el log): ${omitidosPrevios}`);
+      console.log(`⏩ Omitidos: ${omitidosPrevios + omitidos}`);
       console.log(`❌ Errores: ${errores}`);
       console.log(`⏳ Pendientes: ${pendientes}`);
       console.log('====================');
 
       if (pendientes > 0) {
-        console.log('ℹ️ Vuelve a ejecutar el script para continuar con los pendientes; no se reenviará a quien ya conste como ENVIADO hoy en el log.');
+        console.log(LOCAL_MODE
+          ? 'Vuelve a ejecutar para continuar. Los contactos con intentos de envío se omiten; revisa manualmente los no confirmados en .local-vencidos/envios.jsonl.'
+          : 'ℹ️ Vuelve a ejecutar el script para continuar con los pendientes; no se reenviará a quien ya conste como ENVIADO hoy en el log.');
       } else {
         // Lote del día completado sin pendientes: se archiva y se
         // reinicia el control de duplicados para mañana.
-        archivarYReiniciarLogDelDia();
+        if (!LOCAL_MODE) archivarYReiniciarLogDelDia();
       }
 
     } finally {
-      try { await conn.end(); } catch { }
+      try { await conn?.end(); } catch { }
       try { appOut.end(); } catch { }
       try { appErr.end(); } catch { }
     }

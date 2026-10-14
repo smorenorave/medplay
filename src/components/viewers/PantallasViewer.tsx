@@ -1,4 +1,5 @@
 "use client";
+import { applyPasswordExpiryDeletion } from "@/lib/passwordExpiryClient";
 import RecordDeletionDialog from "@/components/RecordDeletionDialog";
 import type { DeletionSelection } from "@/lib/recordDeletionClient";
 import { assignmentStatusLabel } from "@/lib/expiredAccountSafety";
@@ -1000,6 +1001,11 @@ const mounted = useRef(false);
           if (j?.error === "inventory_unavailable") notifyInventoryConsumed();
         throw new Error(j?.detail ?? j?.error ?? "No se pudo guardar");
         }
+        if (applyPasswordExpiryDeletion(resPant, newCorreo || oldCorreo || "", edit.contrasena ?? "", newPid ?? row.plataforma_id ?? undefined)) {
+          setEdit(null);
+          await forceRefresh();
+          return;
+        }
         const flat = await resPant.json();
         if (inventoryId != null) notifyInventoryConsumed();
 
@@ -1088,6 +1094,11 @@ const mounted = useRef(false);
         const j = await res.json().catch(() => ({}));
         if (j?.error === "inventory_unavailable") notifyInventoryConsumed();
         throw new Error(j?.detail ?? j?.error ?? "No se pudo guardar");
+      }
+      if (applyPasswordExpiryDeletion(res, newCorreo || oldCorreo || "", edit.contrasena ?? "", newPid ?? row.plataforma_id ?? undefined)) {
+        setEdit(null);
+        await forceRefresh();
+        return;
       }
       const flat = await res.json();
       if (inventoryId != null) notifyInventoryConsumed();

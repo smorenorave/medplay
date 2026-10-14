@@ -1,4 +1,5 @@
 "use client";
+import { applyPasswordExpiryDeletion } from "@/lib/passwordExpiryClient";
 import RecordDeletionDialog from "@/components/RecordDeletionDialog";
 import type { DeletionSelection } from "@/lib/recordDeletionClient";
 import { assignmentStatusLabel } from "@/lib/expiredAccountSafety";
@@ -670,6 +671,11 @@ const mounted = useRef(false);
       }
 
       // ⬇️ El endpoint devuelve la FILA PLANA, no {row: ...}
+      if (applyPasswordExpiryDeletion(res, edit.correo ?? row.correo ?? "", edit.contrasena ?? "", edit.plataforma_id ?? row.plataforma_id ?? undefined)) {
+        setEdit(null);
+        await forceRefresh();
+        return;
+      }
       const saved = await res.json();
       if (inventoryId != null) notifyInventoryConsumed();
       const updated = normalizeRow(saved); // reutiliza tu helper

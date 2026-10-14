@@ -1,4 +1,5 @@
 "use client";
+import { applyPasswordExpiryDeletion } from "@/lib/passwordExpiryClient";
 import RecordDeletionDialog from "@/components/RecordDeletionDialog";
 import type { DeletionSelection } from "@/lib/recordDeletionClient";
 import ColombiaDateInput from "@/components/ui/ColombiaDateInput";
@@ -628,6 +629,11 @@ export default function CuentasPantallasVencidasPage() {
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j?.error ?? "No se pudo guardar");
+      }
+      if (applyPasswordExpiryDeletion(res, edit.correo ?? "", edit.contrasena ?? "", edit.plataforma_id ?? undefined)) {
+        closeEdit();
+        await forceRefresh();
+        return;
       }
       const flat = await res.json().catch(() => ({}));
 

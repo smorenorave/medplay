@@ -12,7 +12,7 @@ test("inactividad: rechaza fechas inválidas, futuras y exactamente una hora; ac
   assert.equal(isSessionInactive(String(now - INACTIVITY_MS + 1), now), false);
 });
 
-test("cambio de clave, sincronización, borrado aislado y persistencia de vencimientos resueltos", () => {
+test("cambio de clave, sincronización, borrado aislado y sin ocultar vencimientos", () => {
   const storage = new Map<string, string>();
   const events: Event[] = [];
   Object.defineProperty(globalThis, "window", { configurable: true, value: { dispatchEvent: (event: Event) => events.push(event) } });
@@ -24,12 +24,12 @@ test("cambio de clave, sincronización, borrado aislado y persistencia de vencim
     recordPasswordChange(" Cuenta@Example.com ", "nueva", 2);
     recordPasswordChange("otra@example.com", "otra", 3);
     assert.equal(readPasswordChanges()["cuenta@example.com"].pw, "nueva");
-    assert.equal(isResolvedExpiration("CUENTA@example.com", todayYMDLocal()), true);
+    assert.equal(isResolvedExpiration("CUENTA@example.com", todayYMDLocal()), false);
     assert.equal(isResolvedExpiration("sin-cambio@example.com", todayYMDLocal()), false);
     assert.equal(isResolvedExpiration("cuenta@example.com", "2099-01-01"), false);
     deletePasswordChange("cuenta@example.com");
     assert.deepEqual(Object.keys(readPasswordChanges()), ["otra@example.com"]);
-    assert.equal(isResolvedExpiration("cuenta@example.com", todayYMDLocal()), true);
+    assert.equal(isResolvedExpiration("cuenta@example.com", todayYMDLocal()), false);
     assert.equal(events.length, 3);
   } finally {
     Reflect.deleteProperty(globalThis, "window");

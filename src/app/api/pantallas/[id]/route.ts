@@ -1,3 +1,4 @@
+import { passwordExpiryTransaction, expiryHeaders } from "@/lib/passwordExpiryCleanup";
 import { withRouteTiming } from "@/lib/routeTiming";
 import { consumeInventory, InventoryUnavailableError } from "@/lib/consumeInventory";
 import { pantallaDeletion, PantallaDeletionError } from "@/lib/pantallaDeletion";
@@ -188,7 +189,8 @@ async function handlePATCH(
     }
     const c = parsed.data;
 
-    return await prisma.$transaction(async (tx) => {
+    const adminId = await getAuthenticatedAdminId(req);
+    const result = await passwordExpiryTransaction(prisma, { tipo: "pantalla", id: String(pid) }, c.contrasena, adminId, async (tx) => {
       // Estado actual para cálculos de totales
       const current = await tx.pantallas.findUnique({
         where: { id: pid },
@@ -564,7 +566,10 @@ async function handlePATCH(
 
       return NextResponse.json(flat, { status: 200 });
     });
+    for (const [key, value] of Object.entries(expiryHeaders(result.deletion))) result.value.headers.set(key, value);
+    return result.value;
   } catch (e: any) {
+    if (e?.message === "unauthorized-expiry-cleanup") return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     if (e instanceof Response) return e;
     if (e instanceof InventoryUnavailableError) return NextResponse.json({ error: "inventory_unavailable", detail: e.message }, { status: 409 });
     if (e?.code === "P2025")

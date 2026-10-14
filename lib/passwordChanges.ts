@@ -1,4 +1,4 @@
-import { getDaily, todayYMDLocal } from "./dailyCache";
+import { getDaily } from "./dailyCache";
 
 export type PasswordChange = { pw: string; plataforma_id?: number };
 export type PasswordChanges = Record<string, PasswordChange>;
@@ -30,12 +30,6 @@ export function writePasswordChanges(changes: PasswordChanges) {
 export function recordPasswordChange(email: string, pw: string, plataforma_id?: number) {
   const correo = normalize(email);
   if (!correo) return;
-  // Independent from history: deleting its entry must not reopen expired rows.
-  const resolved = read<Record<string, string>>(RESOLVED_KEY, {});
-  const tomorrow = new Date(`${todayYMDLocal()}T12:00:00`);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const through = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
-  localStorage.setItem(RESOLVED_KEY, JSON.stringify({ ...resolved, [correo]: through }));
   writePasswordChanges({ ...readPasswordChanges(), [correo]: { pw, plataforma_id } });
 }
 
@@ -44,8 +38,9 @@ export function readResolvedExpirations() {
 }
 
 export function isResolvedExpiration(email: string | null, expiration: string, resolved = readResolvedExpirations()) {
-  const through = resolved[normalize(email ?? "")];
-  return !!through && expiration <= through;
+  // Legacy flags must never hide persisted assignments.
+  void email; void expiration; void resolved;
+  return false;
 }
 
 export function deletePasswordChange(email: string) {

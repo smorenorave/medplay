@@ -1,0 +1,14 @@
+{
+  "prepareWhatsApp": "38c067ae65b380e61813a372b929867ee6a56a59d373933258d7fe3063acdf63",
+  "findEditorWithRetry": "90e55475779a2e7e703c210a1d9a5e41f1247c35940e7ca34d09c93ee4f396d8",
+  "focusEditorAtEnd": "5077eda0ccbca68c138e24af2da4b126882b51c8be8ffdb0b57c26ba1e3726ad",
+  "confirmMessageSent": "3a34f487eac0d2b5afeaf3a3a410da496d081f969f07a7f35001e4bb0badfbfb",
+  "sendMessage": "aedb21848f307f92c17bcc3bdf67e36e0ab097896577366cb7a62cf490f0d39c",
+  "getConnection": "b336fd7819d186ce7e8dad17d1e7a54ca8657b852e27dffa57a43d9a911abe20",
+  "fetchExpiringRows": "e1f4164ad8c975cd151faadb67e5096733cf881bd7f14e6d0867d2e3e8aa9a61",
+  "fmtDateDDMMYYYY": "4a08e64d6f3ffab27496c60d80833e876d3f903503a2c5abce0c6d59fa791e90",
+  "fmtMoney": "d3fcbd035c6fedc13fc897803f827f8fe3cee8e93ef1f7fa1576829f255bfbad",
+  "lineForItemPantalla": "62f64459acde5df29ce0e25594b1ded5b2fa9cff11cec5e5d5f17f9e62d8aac5",
+  "lineForItemCompleta": "c41bac71061acfc9a3009d4b63220164d21a0495bac94f2f220c75e9532be190",
+  "lineForItem": "16eddefd263e2192eaf59c0646773765eae857ac2311b1626ead32710d177e08"
+}

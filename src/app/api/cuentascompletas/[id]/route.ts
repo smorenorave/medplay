@@ -1,3 +1,4 @@
+import { passwordExpiryTransaction, expiryHeaders, type ExpiryRemoval } from "@/lib/passwordExpiryCleanup";
 import { withRouteTiming } from "@/lib/routeTiming";
 import { consumeInventory, InventoryUnavailableError } from "@/lib/consumeInventory";
 import { deleteEmailForRecord } from "@/lib/deleteEmailForRecord";
@@ -194,6 +195,14 @@ async function handlePATCH(req: Request, ctx: RouteCtx) {
       );
     }
     const c = parsed.data;
+    let expiryRemoval: ExpiryRemoval | null = null;
+    const adminId = await getAuthenticatedAdminId(req);
+    const runTransaction = async (work: Parameters<typeof passwordExpiryTransaction>[4]) => {
+      const result = await passwordExpiryTransaction(prisma, { tipo: "completa", id: idStr }, c.contrasena, adminId, work);
+      expiryRemoval = result.deletion;
+      return result.value;
+    };
+
 
     const credentialPlatformId =
       c.plataforma_id ?? current.plataforma_id;
@@ -260,7 +269,7 @@ async function handlePATCH(req: Request, ctx: RouteCtx) {
 
     // ===== Caso 1: NO cambia el contacto =====
     if (!wantsChangeContacto || !oldContacto) {
-      await prisma.$transaction(async (tx) => {
+      await runTransaction(async (tx) => {
         await consumeInventory(tx, raw?.inventario_id, credentialPlatformId, credentialEmail);
         if (Object.keys(scalarData).length > 0) {
           await tx.cuentascompletas.update({ where: { id }, data: scalarData });
@@ -285,7 +294,7 @@ async function handlePATCH(req: Request, ctx: RouteCtx) {
         where: { id },
         include: { usuarios: { select: { contacto: true, nombre: true } } },
       });
-      return NextResponse.json(fresh ? shapeRow(fresh) : null, { status: 200 });
+      return NextResponse.json(fresh ? shapeRow(fresh) : null, { status: 200, headers: expiryHeaders(expiryRemoval) });
     }
 
     // ===== Caso 2: SÍ cambia el contacto =====
@@ -301,7 +310,7 @@ async function handlePATCH(req: Request, ctx: RouteCtx) {
 
     if (refCount === 1 && !targetUser) {
       // renombrar usuario actual y actualizar cuenta
-      await prisma.$transaction(async (tx) => {
+      await runTransaction(async (tx) => {
         await consumeInventory(tx, raw?.inventario_id, credentialPlatformId, credentialEmail);
         await tx.usuarios.update({
           where: { contacto: oldContacto ?? '' },
@@ -323,7 +332,7 @@ async function handlePATCH(req: Request, ctx: RouteCtx) {
       });
     } else {
       // conectar a usuario existente o crear uno nuevo
-      await prisma.$transaction(async (tx) => {
+      await runTransaction(async (tx) => {
         await consumeInventory(tx, raw?.inventario_id, credentialPlatformId, credentialEmail);
         if (!targetUser) {
           await tx.usuarios.create({
@@ -342,7 +351,7 @@ async function handlePATCH(req: Request, ctx: RouteCtx) {
         const remaining = await tx.cuentascompletas.count({
           where: { usuarios: { contacto: oldContacto ?? '' } },
         });
-        if (remaining === 0 && oldContacto) {
+        if (remaining === 0 && oldContacto && await tx.pantallas.count({ where: { contacto: oldContacto } }) === 0) {
           await tx.usuarios.delete({ where: { contacto: oldContacto } }).catch(() => {});
         }
         if (c.contrasena !== undefined && credentialEmail) {
@@ -359,8 +368,9 @@ async function handlePATCH(req: Request, ctx: RouteCtx) {
       where: { id },
       include: { usuarios: { select: { contacto: true, nombre: true } } },
     });
-    return NextResponse.json(fresh ? shapeRow(fresh) : null, { status: 200 });
+    return NextResponse.json(fresh ? shapeRow(fresh) : null, { status: 200, headers: expiryHeaders(expiryRemoval) });
   } catch (e: any) {
+    if (e?.message === "unauthorized-expiry-cleanup") return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     if (e instanceof InventoryUnavailableError) return NextResponse.json({ error: "inventory_unavailable", detail: e.message }, { status: 409 });
     if (e?.code === 'P2025') return NextResponse.json({ error: 'relation-or-row-not-found' }, { status: 404 });
     if (e?.code === 'P2003') return NextResponse.json({ error: 'foreign_key_violation' }, { status: 409 });

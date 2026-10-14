@@ -5,6 +5,7 @@ node_modules/
 .next/
 .logs/
 .locks/
+.local-vencidos/
 # Variables de entorno
 .env
 .env.local
