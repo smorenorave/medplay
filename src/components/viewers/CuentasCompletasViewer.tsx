@@ -1,9 +1,14 @@
 "use client";
+import RecordDeletionDialog from "@/components/RecordDeletionDialog";
+import type { DeletionSelection } from "@/lib/recordDeletionClient";
+import { assignmentStatusLabel } from "@/lib/expiredAccountSafety";
+import ColombiaDateInput from "@/components/ui/ColombiaDateInput";
+import { todayYMDBogota, addDaysYMD, addMonthsYMD, utcDateFromYMD, formatDateCO } from "@/lib/bogotaDate";
 import { usePageWindow } from "@/hooks/usePageWindow";
 import ResultsPagination from "@/components/ui/ResultsPagination";
 import { useInventoryRefresh } from "@/hooks/useInventoryRefresh";
 import { notifyInventoryConsumed } from "@/lib/inventoryChanges";
-import { deleteEmailsGlobally, readCurrentAccountData, registerAccountCache } from "@/lib/accountDataChanges";
+import { readCurrentAccountData, registerAccountCache } from "@/lib/accountDataChanges";
 import { useAccountDataRefresh } from "@/hooks/useAccountDataRefresh";
 
 import { recordPasswordChange } from "@/lib/passwordChanges";
@@ -56,13 +61,7 @@ const hasWindow = () => typeof window !== "undefined";
 const n = (x: unknown) =>
   x == null || x === "" || Number.isNaN(Number(x)) ? null : Number(x);
 
-const todayYMDLocal = () => {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
-};
+const todayYMDLocal = todayYMDBogota;
 
 function normalizeRow(r: any): Cuenta {
   return {
@@ -188,16 +187,7 @@ const clamp = (val: unknown, min: number) => {
 };
 
 /** YYYY-MM-DD + meses (conserva fin de mes) */
-function addMonthsYYYYMMDD(ymd: string, months: number): string {
-  if (!ymd || !Number.isFinite(months)) return "";
-  const [y, m, d] = ymd.split("-").map(Number);
-  const base = new Date(y, (m ?? 1) - 1, d ?? 1);
-  if (Number.isNaN(base.getTime())) return "";
-  const target = new Date(base);
-  target.setMonth(target.getMonth() + months);
-  if (target.getDate() !== (d ?? 1)) target.setDate(0);
-  return target.toISOString().slice(0, 10);
-}
+function addMonthsYYYYMMDD(ymd: string, months: number): string { return addMonthsYMD(ymd, months); }
 
 /* =========================================================
  * Portal
@@ -221,69 +211,8 @@ function ModalPortal({ children }: { children: React.ReactNode }) {
  * ======================================================= */
 const normEmail = (s?: string | null) => (s ?? "").trim().toLowerCase();
 
-async function existsInInventario(
-  plataforma_id: number | null | undefined,
-  correo: string
-): Promise<boolean> {
-  const email = normEmail(correo);
-  try {
-    const base = `/api/inventario`;
-    const url =
-      plataforma_id != null
-        ? `${base}?q=${encodeURIComponent(
-            email
-          )}&plataforma_id=${plataforma_id}`
-        : `${base}?q=${encodeURIComponent(email)}`;
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) return false;
-    const data = await res.json();
-    const arr: any[] = Array.isArray(data)
-      ? data
-      : Array.isArray(data?.items)
-      ? data.items
-      : [];
-    return arr.some((r) => String(r?.correo ?? "").toLowerCase() === email);
-  } catch {
-    return false;
-  }
-}
-async function ensureInInventario(
-  plataforma_id?: number | null,
-  correo?: string | null,
-  clave?: string | null
-) {
-  if (!correo) return;
-  const email = normEmail(correo);
-  try {
-    if (await existsInInventario(plataforma_id ?? null, email)) return;
-    const body: any = { correo: email };
-    if (plataforma_id != null) body.plataforma_id = plataforma_id;
-    if (clave && clave.trim().length > 0) body.clave = clave;
-    await fetch("/api/inventario", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-  } catch {
-    /* best-effort */
-  }
-}
-
 /** conteo local por (correo + plataforma) sobre la vista cargada */
-function countLocalByEmailAndPlatform(
-  all: Cuenta[],
-  correo: string | null | undefined,
-  plataforma_id: number | null | undefined
-): number {
-  if (!correo || plataforma_id == null) return 0;
-  const email = (correo ?? "").trim().toLowerCase();
-  const pid = Number(plataforma_id);
-  return all.reduce((acc, r) => {
-    const sameEmail = (r.correo ?? "").trim().toLowerCase() === email;
-    const samePlat = Number(r.plataforma_id) === pid;
-    return acc + (sameEmail && samePlat ? 1 : 0);
-  }, 0);
-}
+
 
 /* =========================================================
  * Componente principal
@@ -407,42 +336,10 @@ export default function CuentasCompletasViewer() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   // eliminación individual
-  const [deleteTarget, setDeleteTarget] = useState<{
-    id: number;
-    label?: string;
-  } | null>(null);
-  const [checkingArchive, setCheckingArchive] = useState(false);
-  const [canArchive, setCanArchive] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteErr, setDeleteErr] = useState<string | null>(null);
-  const [deleteAction, setDeleteAction] = useState<"archive" | "purge" | null>(
-    null
-  );
-  const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
 
-  // eliminación masiva
-  type BulkItem = {
-    id: number;
-    label?: string;
-    canArchive: boolean;
-    plataforma_id: number | null;
-    correo: string | null;
-    contrasena: string | null;
-  };
-  const [bulkOpen, setBulkOpen] = useState(false);
-  const [bulkItems, setBulkItems] = useState<BulkItem[]>([]);
-  const [bulkAssessing, setBulkAssessing] = useState(false);
-  const [bulkErr, setBulkErr] = useState<string | null>(null);
-  const [bulkProcessing, setBulkProcessing] = useState(false);
-  const [bulkProgress, setBulkProgress] = useState(0);
-  const [bulkSummary, setBulkSummary] = useState<{
-    total: number;
-    archived: number;
-    purged: number;
-    failed: number;
-  } | null>(null);
+// eliminación masiva
 
-  const mounted = useRef(false);
+const mounted = useRef(false);
 
   useEffect(() => {
     if (!edit) return;
@@ -562,26 +459,24 @@ export default function CuentasCompletasViewer() {
   const filtered = useMemo(() => {
     const term = normSearch(q);
     const pid: number | null = platFilter === "all" ? null : Number(platFilter);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const warning = new Date(today);
-    warning.setDate(warning.getDate() + 7);
+    const today = utcDateFromYMD(todayYMDBogota());
+    const warning = utcDateFromYMD(addDaysYMD(todayYMDBogota(), 7));
 
     return rows.filter((r) => {
       if (pid !== null && r.plataforma_id !== pid) return false;
-      const expires = r.fecha_vencimiento ? new Date(`${r.fecha_vencimiento}T00:00:00`) : null;
-      const status = normSearch(r.estado);
+      const expires = r.fecha_vencimiento ? utcDateFromYMD(r.fecha_vencimiento) : null;
+      const status = assignmentStatusLabel(r);
       if (quickFilter === "notes" && !r.comentario?.trim()) return false;
       if (quickFilter === "expired" && (!expires || expires >= today)) return false;
       if (quickFilter === "expiring" && (!expires || expires < today || expires > warning)) return false;
-      if (quickFilter === "active" && ((expires && expires < today) || status.includes("venc"))) return false;
+      if (quickFilter === "active" && (status !== "ACTIVA" && status !== "VENCE HOY")) return false;
       if (!term) return true;
 
       const hay =
         normSearch(r.nombre).includes(term) ||
         normSearch(r.contacto).includes(term) ||
         normSearch(r.correo).includes(term) ||
-        normSearch(r.estado).includes(term) ||
+        normSearch(assignmentStatusLabel(r)).includes(term) ||
         normSearch(r.proveedor).includes(term) ||
         normSearch(r.comentario).includes(term);
 
@@ -592,16 +487,14 @@ export default function CuentasCompletasViewer() {
   const resultPage = usePageWindow(filtered, JSON.stringify([q, platFilter, quickFilter]));
 
   const overview = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const warning = new Date(today);
-    warning.setDate(warning.getDate() + 7);
+    const today = utcDateFromYMD(todayYMDBogota());
+    const warning = utcDateFromYMD(addDaysYMD(todayYMDBogota(), 7));
     return rows.reduce(
       (acc, row) => {
-        const expires = row.fecha_vencimiento ? new Date(`${row.fecha_vencimiento}T00:00:00`) : null;
+        const expires = row.fecha_vencimiento ? utcDateFromYMD(row.fecha_vencimiento) : null;
         if (expires && expires < today) acc.expired += 1;
         else if (expires && expires <= warning) acc.expiring += 1;
-        else acc.active += 1;
+        else if (expires && Number.isFinite(expires.getTime())) acc.active += 1;
         if (row.comentario?.trim()) acc.notes += 1;
         return acc;
       },
@@ -826,307 +719,17 @@ export default function CuentasCompletasViewer() {
   /* =========================================================
    * Eliminación (individual y masiva) con inventario opcional
    * ======================================================= */
-  const openDelete = async (id: number, label?: string) => {
-    setDeleteTarget({ id, label });
-    setDeleteErr(null);
-    setDeleteAction(null);
-    setCanArchive(false);
-    setCheckingArchive(true);
-
-    try {
-      const victimLocal = rows.find((r) => r.id === id) || null;
-      let correo = victimLocal?.correo ?? null;
-      let plataforma_id = victimLocal?.plataforma_id ?? null;
-
-      if (!correo || plataforma_id == null) {
-        const resolved = await (async () => {
-          try {
-            const res = await fetch(`/api/cuentascompletas/${id}`, {
-              cache: "no-store",
-            });
-            if (!res.ok) return null;
-            const j = await res.json();
-            return {
-              correo: j?.item?.correo ?? j?.correo ?? null,
-              plataforma_id: j?.item?.plataforma_id ?? j?.plataforma_id ?? null,
-            };
-          } catch {
-            return null;
-          }
-        })();
-        if (resolved) {
-          if (!correo) correo = resolved.correo;
-          if (plataforma_id == null) plataforma_id = resolved.plataforma_id;
-        }
-      }
-
-      setDeleteTarget({
-        id,
-        label: label ?? (correo ? correo : `#${id}`),
-      });
-
-      if (!correo || plataforma_id == null) {
-        setCanArchive(false);
-        return;
-      }
-
-      // usar SOLO las filas cargadas (lo que "miras")
-      const usesLocal = countLocalByEmailAndPlatform(
-        rows,
-        correo,
-        plataforma_id
-      );
-      setCanArchive(usesLocal <= 1);
-    } catch (e: any) {
-      setDeleteErr(e?.message ?? "Error al verificar estado del correo.");
-    } finally {
-      setCheckingArchive(false);
-    }
-  };
-
+  const [deletionItems, setDeletionItems] = useState<DeletionSelection[]>([]);
+  const openDelete = (id: number, label?: string) => setDeletionItems([{ tipo: "completa", id: String(id), label: label || rows.find(r => r.id === id)?.correo || String(id) }]);
+  const openBulkSelected = () => setDeletionItems(rows.filter(r => selectedIds.has(r.id)).map(r => ({ tipo: "completa", id: String(r.id), label: r.correo || String(r.id) })));
   useAccountDataRefresh(forceRefresh);
 
-  const doDelete = async (archive: boolean) => {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    setDeleteErr(null);
-    setDeleteAction(archive ? "archive" : "purge");
-    try {
-      const victim = rows.find((r) => r.id === deleteTarget.id) || null;
-      let victimPlataforma = victim?.plataforma_id ?? null;
-      let victimCorreo = victim?.correo ?? null;
-      let victimClave = victim?.contrasena ?? null;
-
-      if ((!victimCorreo || victimPlataforma == null) && archive) {
-        try {
-          const resolved = await fetch(
-            `/api/cuentascompletas/${deleteTarget.id}?scope=record`,
-            { cache: "no-store" }
-          ).then((r) => (r.ok ? r.json() : null));
-          if (resolved) {
-            if (!victimCorreo)
-              victimCorreo = resolved?.item?.correo ?? resolved?.correo ?? null;
-            if (victimPlataforma == null)
-              victimPlataforma =
-                resolved?.item?.plataforma_id ??
-                resolved?.plataforma_id ??
-                null;
-            if (!victimClave)
-              victimClave =
-                resolved?.item?.contrasena ?? resolved?.contrasena ?? null;
-          }
-        } catch {}
-      }
-
-      if (!archive) {
-        await deleteEmailsGlobally([victimCorreo], "Eliminación definitiva desde Cuentas completas");
-        await forceRefresh();
-        setSelectedIds(new Set());
-        setDeleteTarget(null);
-        setDeleteMsg("Correo eliminado de todas las cuentas, pantallas e inventario.");
-        return;
-      }
-
-      if (archive && victimCorreo && victimPlataforma != null) {
-        await ensureInInventario(
-          victimPlataforma as number | null,
-          victimCorreo,
-          victimClave
-        );
-      }
-
-      const res = await fetch(`/api/cuentascompletas/${deleteTarget.id}?scope=record`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j?.error ?? "No se pudo eliminar");
-      }
-      await res.json().catch(() => ({}));
-
-      const next = removeFromCache(deleteTarget.id);
-      setRows(next);
-      broadcastInvalidate();
-
-      setDeleteMsg("Cuenta completa eliminada correctamente.");
-      setSelectedIds((prev) => {
-        const s = new Set(prev);
-        s.delete(deleteTarget.id);
-        return s;
-      });
-      setDeleteTarget(null);
-    } catch (e: any) {
-      setDeleteErr(e?.message ?? "Error al eliminar");
-    } finally {
-      setDeleting(false);
-      setDeleteAction(null);
-    }
-  };
-
-  // ==== BULK ====
-  type Built = {
-    id: number;
-    label?: string;
-    canArchive: boolean;
-    plataforma_id: number | null;
-    correo: string | null;
-    contrasena: string | null;
-  };
-
-  const buildBulkItem = async (id: number): Promise<Built> => {
-    const local = rows.find((r) => r.id === id) || null;
-    let correo = local?.correo ?? null;
-    let plataforma_id = local?.plataforma_id ?? null;
-    let contrasena = local?.contrasena ?? null;
-
-    if (!correo || plataforma_id == null) {
-      const resolved = await (async () => {
-        try {
-          const res = await fetch(`/api/cuentascompletas/${id}`, {
-            cache: "no-store",
-          });
-          if (!res.ok) return null;
-          const j = await res.json();
-          return {
-            correo: j?.item?.correo ?? j?.correo ?? null,
-            plataforma_id: j?.item?.plataforma_id ?? j?.plataforma_id ?? null,
-            contrasena: j?.item?.contrasena ?? j?.contrasena ?? null,
-          };
-        } catch {
-          return null;
-        }
-      })();
-      if (resolved) {
-        if (!correo) correo = resolved.correo;
-        if (plataforma_id == null) plataforma_id = resolved.plataforma_id;
-        if (!contrasena) contrasena = resolved.contrasena;
-      }
-    }
-
-    let can = false;
-    if (correo && plataforma_id != null) {
-      const usesLocal = countLocalByEmailAndPlatform(
-        rows,
-        correo,
-        plataforma_id
-      );
-      can = usesLocal <= 1;
-    }
-    const label = correo ? correo : `#${id}`;
-    return {
-      id,
-      label,
-      canArchive: can,
-      plataforma_id: plataforma_id ?? null,
-      correo: correo ?? null,
-      contrasena: contrasena ?? null,
-    };
-  };
-
-  const openBulk = async (ids: number[]) => {
-    const unique = Array.from(new Set(ids));
-    if (unique.length === 0) return;
-    setBulkOpen(true);
-    setBulkErr(null);
-    setBulkSummary(null);
-    setBulkItems([]);
-    setBulkAssessing(true);
-    try {
-      const items: Built[] = [];
-      for (const id of unique) {
-        // eslint-disable-next-line no-await-in-loop
-        const it = await buildBulkItem(id);
-        items.push(it);
-      }
-      setBulkItems(items);
-    } catch (e: any) {
-      setBulkErr(e?.message ?? "Error preparando la eliminación masiva.");
-    } finally {
-      setBulkAssessing(false);
-    }
-  };
-  const openBulkSelected = () => openBulk(Array.from(selectedIds));
-
-  const runBulk = async (preferArchive: boolean) => {
-    if (!bulkOpen || bulkItems.length === 0) return;
-    setBulkProcessing(true);
-    setBulkErr(null);
-    setBulkProgress(0);
-    const total = bulkItems.length;
-    if (!preferArchive) {
-      try {
-        await deleteEmailsGlobally(bulkItems.map(item => item.correo), "Eliminación masiva desde Cuentas completas");
-        await forceRefresh();
-        setSelectedIds(new Set());
-        setBulkProgress(100);
-        setBulkSummary({ total, archived: 0, purged: total, failed: 0 });
-      } catch (error) {
-        setBulkErr((error as Error).message);
-      } finally { setBulkProcessing(false); }
-      return;
-    }
-    let archived = 0,
-      purged = 0,
-      failed = 0;
-
-    for (let i = 0; i < bulkItems.length; i++) {
-      const it = bulkItems[i];
-      try {
-        if (
-          preferArchive &&
-          it.canArchive &&
-          it.correo &&
-          it.plataforma_id != null
-        ) {
-          // eslint-disable-next-line no-await-in-loop
-          await ensureInInventario(
-            it.plataforma_id,
-            it.correo,
-            it.contrasena ?? null
-          );
-        }
-        // eslint-disable-next-line no-await-in-loop
-        const res = await fetch(`/api/cuentascompletas/${it.id}?scope=record`, {
-          method: "DELETE",
-        });
-        if (!res.ok) {
-          failed++;
-        } else {
-          if (
-            preferArchive &&
-            it.canArchive &&
-            it.correo &&
-            it.plataforma_id != null
-          )
-            archived++;
-          else purged++;
-          setRows((rs) => rs.filter((r) => r.id !== it.id));
-          setSelectedIds((prev) => {
-            const next = new Set(prev);
-            next.delete(it.id);
-            return next;
-          });
-          removeFromCache(it.id);
-        }
-      } catch {
-        failed++;
-      } finally {
-        setBulkProgress(Math.round(((i + 1) / total) * 100));
-      }
-    }
-
-    broadcastInvalidate();
-    setBulkSummary({ total, archived, purged, failed });
-    setBulkProcessing(false);
-  };
-
-  /* =========================================================
-   * Render
-   * ======================================================= */
   const selectedCount = selectedIds.size;
 
   return (
     <div className="p-4">
+      {!!deletionItems.length && <RecordDeletionDialog items={deletionItems} onClose={() => setDeletionItems([])} onDeleted={async () => { setSelectedIds(new Set()); await forceRefresh(); }} />}
+
       <div className="mb-5 flex flex-col gap-1">
         <span className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-400">Centro de operaciones</span>
         <h2 className="text-2xl font-semibold text-neutral-100">Gestión de cuentas completas</h2>
@@ -1226,11 +829,12 @@ export default function CuentasCompletasViewer() {
       <ResultsPagination {...resultPage} />
       <div className="grid gap-3 md:hidden">
         {resultPage.items.map((r) => {
-          const isExpired = Boolean(r.fecha_vencimiento && r.fecha_vencimiento <= todayYMDLocal());
+          const statusLabel = assignmentStatusLabel(r);
+          const isExpired = statusLabel === "VENCIDA";
           const platform = plataformas.find((p) => Number(p.id) === Number(r.plataforma_id))?.nombre ?? "Sin plataforma";
           return <article key={`mobile-${r.id}`} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="rounded-lg bg-violet-500/10 px-2 py-1 text-xs font-semibold text-violet-200">{platform}</span><span className={`rounded-lg px-2 py-1 text-xs font-semibold ${isExpired ? "bg-rose-500/10 text-rose-200" : "bg-emerald-500/10 text-emerald-200"}`}>{isExpired ? "Vencida" : "Activa"}</span></div><h3 className="mt-3 truncate font-semibold text-white">{r.nombre || r.contacto || "Cliente sin nombre"}</h3><p className="mt-1 truncate text-sm text-neutral-400">{r.correo || "Sin correo"}</p></div><input type="checkbox" className="size-5 shrink-0 accent-sky-500" aria-label={`Seleccionar cuenta ${r.id}`} checked={isRowSelected(r.id)} onChange={(event) => toggleRow(r.id, event.target.checked)} /></div>
-            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-neutral-500">Contacto</dt><dd className="mt-0.5 truncate font-medium text-neutral-200">{r.contacto || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Vencimiento</dt><dd className="mt-0.5 font-medium text-neutral-200">{r.fecha_vencimiento || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Total</dt><dd className="mt-0.5 font-medium text-neutral-200">{money(r.total_pagado_completa)}</dd></div><div><dt className="text-xs text-neutral-500">Proveedor</dt><dd className="mt-0.5 truncate font-medium text-neutral-200">{r.proveedor || "—"}</dd></div></dl>
+            <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="rounded-lg bg-violet-500/10 px-2 py-1 text-xs font-semibold text-violet-200">{platform}</span><span className={`rounded-lg px-2 py-1 text-xs font-semibold ${isExpired ? "bg-rose-500/10 text-rose-200" : "bg-emerald-500/10 text-emerald-200"}`}>{statusLabel}</span></div><h3 className="mt-3 truncate font-semibold text-white">{r.nombre || r.contacto || "Cliente sin nombre"}</h3><p className="mt-1 truncate text-sm text-neutral-400">{r.correo || "Sin correo"}</p></div><input type="checkbox" className="size-5 shrink-0 accent-sky-500" aria-label={`Seleccionar cuenta ${r.id}`} checked={isRowSelected(r.id)} onChange={(event) => toggleRow(r.id, event.target.checked)} /></div>
+            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-neutral-500">Contacto</dt><dd className="mt-0.5 truncate font-medium text-neutral-200">{r.contacto || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Vencimiento</dt><dd className="mt-0.5 font-medium text-neutral-200">{formatDateCO(r.fecha_vencimiento) || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Total</dt><dd className="mt-0.5 font-medium text-neutral-200">{money(r.total_pagado_completa)}</dd></div><div><dt className="text-xs text-neutral-500">Proveedor</dt><dd className="mt-0.5 truncate font-medium text-neutral-200">{r.proveedor || "—"}</dd></div></dl>
             {r.comentario && <p className="mt-4 line-clamp-2 rounded-xl bg-white/[0.035] p-3 text-xs leading-5 text-neutral-400">{r.comentario}</p>}
             <div className="mt-4 grid grid-cols-2 gap-2"><button type="button" onClick={() => openEdit(r)} className="min-h-11 rounded-xl bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98]">Editar</button><button type="button" onClick={() => openDelete(r.id, r.correo ?? undefined)} className="min-h-11 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm font-semibold text-rose-100 transition active:scale-[0.98]">Eliminar</button></div>
           </article>;
@@ -1392,13 +996,13 @@ export default function CuentasCompletasViewer() {
                   {r.meses_pagados ?? "—"}
                 </td>
                 <td className="px-3 py-2 text-center whitespace-nowrap">
-                  {r.fecha_compra || "—"}
+                  {formatDateCO(r.fecha_compra) || "—"}
                 </td>
                 <td className="px-3 py-2 text-center whitespace-nowrap">
-                  {r.fecha_vencimiento || "—"}
+                  {formatDateCO(r.fecha_vencimiento) || "—"}
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap">
-                  {r.estado || "—"}
+                  {assignmentStatusLabel(r)}
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap">
                   {r.proveedor || "—"}
@@ -1431,9 +1035,7 @@ export default function CuentasCompletasViewer() {
       <div className="mt-2 text-sm text-neutral-400">
         {rows.length} fila(s) en cache · {filtered.length} visible(s)
         {err && <span className="text-rose-400 ml-2">— {err}</span>}
-        {deleteMsg && (
-          <span className="text-emerald-400 ml-2">— {deleteMsg}</span>
-        )}
+
       </div>
 
       {/* Modal edición */}
@@ -1668,10 +1270,10 @@ export default function CuentasCompletasViewer() {
                   </label>
                   <label className="grid gap-1">
                     <span className="text-sm text-neutral-300">
-                      Fecha compra (YYYY-MM-DD)
+                      Fecha compra (dd/MM/yyyy)
                     </span>
                     <div className="flex items-center gap-2">
-                      <input
+                      <ColombiaDateInput
                         type="date"
                         className="flex-1 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600"
                         value={edit.fecha_compra ?? ""}
@@ -1695,7 +1297,7 @@ export default function CuentasCompletasViewer() {
                         type="button"
                         onClick={() => {
                           const input = document.querySelector(
-                            'input[type="date"]'
+                            'input[data-colombia-date]'
                           ) as HTMLInputElement;
                           input?.showPicker?.();
                         }}
@@ -1746,7 +1348,7 @@ export default function CuentasCompletasViewer() {
                     <span className="text-sm text-neutral-300">
                       Fecha vencimiento (auto)
                     </span>
-                    <input
+                    <ColombiaDateInput
                       type="date"
                       disabled
                       readOnly
@@ -1894,205 +1496,8 @@ export default function CuentasCompletasViewer() {
         </ModalPortal>
       )}
 
-      {/* Modal eliminar (individual) */}
-      {deleteTarget && (
-        <ModalPortal>
-          <div
-            className="fixed inset-0 z-50 bg-black/60 overflow-y-auto"
-            onClick={() => !deleting && setDeleteTarget(null)}
-          >
-            <div className="min-h-screen flex items-center justify-center p-4">
-              <div
-                className="w-full max-w-md rounded-xl border border-neutral-700 bg-neutral-900 p-4 text-neutral-100 shadow-xl"
-                onClick={(e) => e.stopPropagation()}
-                role="dialog"
-                aria-labelledby="modal-title"
-                aria-describedby="modal-desc"
-              >
-                <h4 id="modal-title" className="text-lg font-semibold mb-2">
-                  Eliminar cuenta completa
-                </h4>
-                <p id="modal-desc" className="text-sm text-neutral-300">
-                  {deleteTarget.label ? (
-                    <>
-                      <span className="opacity-80">({deleteTarget.label})</span>
-                      <br />
-                    </>
-                  ) : null}
-                  {checkingArchive
-                    ? "Verificando si es la última relación por correo y plataforma…"
-                    : canArchive
-                    ? "Es la última cuenta con este correo en esta plataforma. Puedes enviarla al inventario antes de eliminar."
-                    : "Existen más cuentas con este correo. La eliminación definitiva también las eliminará."}
-                </p>
 
-                <p className="mt-3 text-sm text-rose-200">Eliminar definitivamente borra todos los registros del correo en todas las plataformas, incluidas cuentas, pantallas e inventario. La operación queda auditada.</p>
-                {deleteErr && (
-                  <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">
-                    {deleteErr}
-                  </div>
-                )}
 
-                <div
-                  className={`mt-4 ${
-                    canArchive
-                      ? "grid gap-2 sm:grid-cols-2"
-                      : "flex justify-end gap-2"
-                  }`}
-                >
-                  {canArchive && (
-                    <button
-                      type="button"
-                      onClick={() => doDelete(true)}
-                      disabled={deleting || checkingArchive}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-700 bg-emerald-800/40 px-3 py-2 hover:bg-emerald-800/60 focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:opacity-60"
-                      title="Crear/asegurar inventario y eliminar"
-                    >
-                      {deleting && deleteAction === "archive"
-                        ? "Enviando…"
-                        : "Inventario + Eliminar"}
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => doDelete(false)}
-                    disabled={deleting}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-700 bg-red-800/40 px-3 py-2 hover:bg-red-800/60 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-60"
-                    title="Verificar asociaciones antes de confirmar la eliminación global"
-                  >
-                    {deleting && deleteAction === "purge"
-                      ? "Eliminando…"
-                      : "Revisar eliminación global"}
-                  </button>
-                </div>
-
-                <div className="mt-3 flex items-center justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setDeleteTarget(null)}
-                    disabled={deleting}
-                    className="rounded-lg border border-neutral-600 px-3 py-2 hover:bg-neutral-800 disabled:opacity-50"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </ModalPortal>
-      )}
-
-      {/* Modal eliminación MASIVA */}
-      {bulkOpen && (
-        <ModalPortal>
-          <div
-            className="fixed inset-0 z-50 bg-black/60 overflow-y-auto"
-            onClick={() => !bulkProcessing && setBulkOpen(false)}
-          >
-            <div className="min-h-screen flex items-center justify-center p-4">
-              <div
-                className="w-full max-w-xl rounded-xl border border-neutral-700 bg-neutral-900 p-4 text-neutral-100 shadow-xl"
-                onClick={(e) => e.stopPropagation()}
-                role="dialog"
-                aria-labelledby="bulk-title"
-                aria-describedby="bulk-desc"
-              >
-                <h4 id="bulk-title" className="text-lg font-semibold mb-2">
-                  Eliminar {bulkItems.length} cuenta(s)
-                </h4>
-
-                {bulkAssessing ? (
-                  <p className="text-sm text-neutral-300">
-                    Analizando registros para decidir inventario/eliminación…
-                  </p>
-                ) : (
-                  <>
-                    <p id="bulk-desc" className="text-sm text-neutral-300">
-                      Para cada registro: si es la última relación por{" "}
-                      <strong>correo + plataforma</strong>, se enviará al
-                      inventario y luego se eliminará; en caso contrario, se
-                      retirará solo el registro seleccionado.
-                    </p>
-
-                    <p className="mt-3 text-sm text-rose-200">Eliminar definitivamente borra todos los registros de los correos seleccionados, en todas las plataformas, incluidas otras cuentas, pantallas e inventario. Es una sola transacción.</p>
-                    {bulkErr && (
-                      <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">
-                        {bulkErr}
-                      </div>
-                    )}
-
-                    {bulkSummary && (
-                      <div className="mt-3 rounded-lg border border-neutral-700 bg-neutral-800/40 p-2 text-sm">
-                        <div>Total procesados: {bulkSummary.total}</div>
-                        <div>Enviados a inventario: {bulkSummary.archived}</div>
-                        <div>
-                          Registros eliminados: {bulkSummary.purged}
-                        </div>
-                        <div>Fallidos: {bulkSummary.failed}</div>
-                      </div>
-                    )}
-
-                    {bulkProcessing && (
-                      <div className="mt-3">
-                        <div className="h-2 w-full rounded bg-neutral-800 overflow-hidden">
-                          <div
-                            className="h-2 bg-emerald-600"
-                            style={{ width: `${bulkProgress}%` }}
-                          />
-                        </div>
-                        <div className="mt-1 text-xs text-neutral-400">
-                          {bulkProgress}%
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                      <button
-                        type="button"
-                        onClick={() => runBulk(true)}
-                        disabled={
-                          bulkAssessing ||
-                          bulkProcessing ||
-                          bulkItems.length === 0
-                        }
-                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-700 bg-emerald-800/40 px-3 py-2 hover:bg-emerald-800/60 focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:opacity-60"
-                      >
-                        Inventario (cuando aplique) + Eliminar
-                      </button>
-
-                      <button
-                        type="button"
-                        title="Elimina globalmente todos los registros de los correos seleccionados, incluidas otras plataformas e inventario"
-                        onClick={() => runBulk(false)}
-                        disabled={
-                          bulkAssessing ||
-                          bulkProcessing ||
-                          bulkItems.length === 0
-                        }
-                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-700 bg-red-800/40 px-3 py-2 hover:bg-red-800/60 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-60"
-                      >
-                        Revisar eliminación global
-                      </button>
-                    </div>
-
-                    <div className="mt-3 flex items-center justify-end">
-                      <button
-                        type="button"
-                        onClick={() => setBulkOpen(false)}
-                        disabled={bulkProcessing}
-                        className="rounded-lg border border-neutral-600 px-3 py-2 hover:bg-neutral-800 disabled:opacity-50"
-                      >
-                        Cerrar
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </ModalPortal>
-      )}
     </div>
   );
 }

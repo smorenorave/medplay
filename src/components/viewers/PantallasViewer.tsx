@@ -1,9 +1,14 @@
 "use client";
+import RecordDeletionDialog from "@/components/RecordDeletionDialog";
+import type { DeletionSelection } from "@/lib/recordDeletionClient";
+import { assignmentStatusLabel } from "@/lib/expiredAccountSafety";
+import ColombiaDateInput from "@/components/ui/ColombiaDateInput";
+import { addMonthsYMD, formatDateCO } from "@/lib/bogotaDate";
 import { usePageWindow } from "@/hooks/usePageWindow";
 import ResultsPagination from "@/components/ui/ResultsPagination";
 import { useInventoryRefresh } from "@/hooks/useInventoryRefresh";
 import { notifyInventoryConsumed } from "@/lib/inventoryChanges";
-import { applyAccountDeletion, readCurrentAccountData, registerAccountCache } from "@/lib/accountDataChanges";
+import { readCurrentAccountData, registerAccountCache } from "@/lib/accountDataChanges";
 import { useAccountDataRefresh } from "@/hooks/useAccountDataRefresh";
 
 import { recordPasswordChange } from "@/lib/passwordChanges";
@@ -24,7 +29,6 @@ import {
 
 import {
   mergePantallaIntoCache,
-  removePantallaFromCache,
   notifyPantallasChanged,
   LS_CACHE_KEY,
   BC_NAME,
@@ -194,16 +198,7 @@ const normSearch = (s?: string | null) =>
     .replace(/\s+/g, ""); // quita TODOS los espacios
 
 /** YYYY-MM-DD + meses (conserva fin de mes) */
-function addMonthsYYYYMMDD(ymd: string, months: number): string {
-  if (!ymd || !Number.isFinite(months)) return "";
-  const [y, m, d] = ymd.split("-").map(Number);
-  const base = new Date(y, (m ?? 1) - 1, d ?? 1);
-  if (Number.isNaN(base.getTime())) return "";
-  const target = new Date(base);
-  target.setMonth(target.getMonth() + months);
-  if (target.getDate() !== (d ?? 1)) target.setDate(0);
-  return target.toISOString().slice(0, 10);
-}
+function addMonthsYYYYMMDD(ymd: string, months: number): string { return addMonthsYMD(ymd, months); }
 
 /* =========================================================
  * Portal
@@ -473,36 +468,10 @@ export default function PantallasViewer() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   // eliminación individual
-  const [deleteTarget, setDeleteTarget] = useState<{
-    id: number;
-    label?: string;
-    cuentaId?: number;
-  } | null>(null);
-  const [checkingArchive, setCheckingArchive] = useState(false);
-  const [canArchive, setCanArchive] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteErr, setDeleteErr] = useState<string | null>(null);
-  const [deleteAction, setDeleteAction] = useState<"archive" | "purge" | null>(
-    null,
-  );
-  const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
 
-  // eliminación masiva
-  type BulkItem = { id: number; label?: string; cuentaId: number };
-  const [bulkOpen, setBulkOpen] = useState(false);
-  const [bulkItems, setBulkItems] = useState<BulkItem[]>([]);
-  const [bulkAssessing, setBulkAssessing] = useState(false);
-  const [bulkErr, setBulkErr] = useState<string | null>(null);
-  const [bulkProcessing, setBulkProcessing] = useState(false);
-  const [bulkProgress, setBulkProgress] = useState(0);
-  const [bulkSummary, setBulkSummary] = useState<{
-    total: number;
-    archived: number;
-    purged: number;
-    failed: number;
-  } | null>(null);
+// eliminación masiva
 
-  const mounted = useRef(false);
+const mounted = useRef(false);
 
   //recalcular modal
   useEffect(() => {
@@ -703,7 +672,7 @@ export default function PantallasViewer() {
         normSearch(r.nombre).includes(term) ||
         normSearch(r.contacto).includes(term) ||
         normSearch(r.correo).includes(term) ||
-        normSearch(r.estado).includes(term) ||
+        normSearch(assignmentStatusLabel(r)).includes(term) ||
         normSearch(r.proveedor).includes(term) ||
         normSearch(r.comentario).includes(term) ||
         normSearch(r.nro_pantalla).includes(term);
@@ -1203,105 +1172,17 @@ export default function PantallasViewer() {
   /* =========================================================
    * Eliminación (individual y masiva) con inventario opcional
    * ======================================================= */
-  const previewDeletion = async (id: number) => {
-    const res = await fetch(`/api/pantallas/${id}?deletion=preview`, { cache: "no-store" });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.error ?? "No se pudo verificar la cuenta.");
-    return result as { cuentaId: number; last: boolean };
-  };
-  const deleteRequest = async (id: number, cuentaId: number, action: "record" | "inventory" | "purge") => {
-    const res = await fetch(`/api/pantallas/${id}`, {
-      method: "DELETE", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cuentaId, action }),
-    });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.error ?? "No se pudo eliminar.");
-    removePantallaFromCache(id);
-    setRows(current => current.filter(row => row.id !== id));
-    applyAccountDeletion(result);
-    notifyPantallasChanged();
-    notifyInventoryConsumed();
-    setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next; });
-    return result;
-  };
-  const deletionRequest = useRef(0);
-  const openDelete = async (id: number, label?: string) => {
-    const request = ++deletionRequest.current;
-    setDeleteTarget({ id, label }); setDeleteErr(null); setDeleteAction(null);
-    setCanArchive(false); setCheckingArchive(true);
-    try {
-      const result = await previewDeletion(id);
-      if (request !== deletionRequest.current) return;
-      setDeleteTarget(current => current?.id === id ? { ...current, cuentaId: result.cuentaId } : current);
-      setCanArchive(result.last);
-    } catch (e: any) { if (request === deletionRequest.current) setDeleteErr(e.message); }
-    finally { if (request === deletionRequest.current) setCheckingArchive(false); }
-  };
+  const [deletionItems, setDeletionItems] = useState<DeletionSelection[]>([]);
+  const openDelete = (id: number, label?: string) => setDeletionItems([{ tipo: "pantalla", id: String(id), label: label || rows.find(r => r.id === id)?.correo || String(id) }]);
+  const openBulkSelected = () => setDeletionItems(rows.filter(r => selectedIds.has(r.id)).map(r => ({ tipo: "pantalla", id: String(r.id), label: r.correo || String(r.id) })));
   useAccountDataRefresh(forceRefresh);
-  const doDelete = async (archive: boolean) => {
-    if (!deleteTarget?.cuentaId || checkingArchive || deleting) return;
-    if (canArchive && !archive && !window.confirm("¿Eliminar definitivamente esta última pantalla y su cuenta? Las otras cuentas y clientes permanecerán intactos.")) return;
-    setDeleting(true); setDeleteErr(null); setDeleteAction(archive ? "archive" : "purge");
-    try {
-      await deleteRequest(deleteTarget.id, deleteTarget.cuentaId, canArchive ? (archive ? "inventory" : "purge") : "record");
-      setDeleteTarget(null); setDeleteMsg(archive ? "Cuenta enviada a inventario." : "Pantalla eliminada correctamente.");
-    } catch (e: any) { setDeleteErr(e.message); }
-    finally { setDeleting(false); setDeleteAction(null); }
-  };
-
-  // ==== BULK ====
-  const buildBulkItem = async (id: number): Promise<BulkItem> => {
-    const local = rows.find(row => row.id === id);
-    const preview = await previewDeletion(id);
-    return { id, cuentaId: preview.cuentaId, label: local ? `${local.correo} / ${local.nro_pantalla}` : `#${id}` };
-  };
-
-  const openBulk = async (ids: number[]) => {
-    const unique = Array.from(new Set(ids));
-    if (unique.length === 0) return;
-    setBulkOpen(true);
-    setBulkErr(null);
-    setBulkSummary(null);
-    setBulkItems([]);
-    setBulkAssessing(true);
-    try {
-      const items: BulkItem[] = [];
-      for (const id of unique) {
-        const it = await buildBulkItem(id);
-        items.push(it);
-      }
-      setBulkItems(items);
-    } catch (e: any) {
-      setBulkErr(e?.message ?? "Error preparando la eliminación masiva.");
-    } finally {
-      setBulkAssessing(false);
-    }
-  };
-  const openBulkSelected = () => openBulk(Array.from(selectedIds));
-
-  const runBulk = async (preferArchive: boolean) => {
-    if (!bulkOpen || !bulkItems.length || bulkProcessing) return;
-    if (!preferArchive && !window.confirm("¿Eliminar las pantallas seleccionadas y únicamente sus cuentas cuando queden vacías?")) return;
-    setBulkProcessing(true); setBulkErr(null); setBulkProgress(0);
-    let archived = 0, purged = 0, failed = 0;
-    for (let i = 0; i < bulkItems.length; i++) {
-      const it = bulkItems[i];
-      try {
-        const current = await previewDeletion(it.id);
-        if (current.cuentaId !== it.cuentaId) throw new Error("La asignación cambió de cuenta. Vuelve a revisar la selección.");
-        const result = await deleteRequest(it.id, current.cuentaId, current.last ? (preferArchive ? "inventory" : "purge") : "record");
-        if (result.archived) archived++; else purged++;
-      } catch (error) { failed++; setBulkErr((error as Error).message); }
-      finally { setBulkProgress(Math.round(((i + 1) / bulkItems.length) * 100)); }
-    }
-    setBulkSummary({ total: bulkItems.length, archived, purged, failed });
-    setBulkProcessing(false);
-  };
 
   const selectedCount = selectedIds.size;
 
   return (
     <div className="p-4">
+      {!!deletionItems.length && <RecordDeletionDialog items={deletionItems} onClose={() => setDeletionItems([])} onDeleted={async () => { setSelectedIds(new Set()); await forceRefresh(); }} />}
+
       <div className="mb-4">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-400">Centro de operaciones</p>
         <h2 className="mt-1 text-2xl font-semibold text-neutral-100">Gestión de pantallas</h2>
@@ -1383,14 +1264,15 @@ export default function PantallasViewer() {
       <ResultsPagination {...resultPage} />
       <div className="grid gap-3 md:hidden">
         {resultPage.items.map((r) => {
-          const isExpired = Boolean(r.fecha_vencimiento && r.fecha_vencimiento <= todayYMDBogota());
+          const statusLabel = assignmentStatusLabel(r);
+          const isExpired = statusLabel === "VENCIDA";
           const platform = plataformas.find((p) => Number(p.id) === Number(r.plataforma_id))?.nombre ?? "Sin plataforma";
           return <article key={`mobile-${r.id}`} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 shadow-sm">
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="rounded-lg bg-sky-500/10 px-2 py-1 text-xs font-semibold text-sky-200">{platform}</span><span className={`rounded-lg px-2 py-1 text-xs font-semibold ${isExpired ? "bg-rose-500/10 text-rose-200" : "bg-emerald-500/10 text-emerald-200"}`}>{isExpired ? "Vencida" : "Activa"}</span></div><h3 className="mt-3 truncate font-semibold text-white">{r.nombre || r.contacto || "Cliente sin nombre"}</h3><p className="mt-1 truncate text-sm text-neutral-400">{r.correo || "Sin correo"}</p></div>
+              <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="rounded-lg bg-sky-500/10 px-2 py-1 text-xs font-semibold text-sky-200">{platform}</span><span className={`rounded-lg px-2 py-1 text-xs font-semibold ${isExpired ? "bg-rose-500/10 text-rose-200" : "bg-emerald-500/10 text-emerald-200"}`}>{statusLabel}</span></div><h3 className="mt-3 truncate font-semibold text-white">{r.nombre || r.contacto || "Cliente sin nombre"}</h3><p className="mt-1 truncate text-sm text-neutral-400">{r.correo || "Sin correo"}</p></div>
               <input type="checkbox" className="size-5 shrink-0 accent-sky-500" aria-label={`Seleccionar pantalla ${r.id}`} checked={isRowSelected(r.id)} onChange={(event) => toggleRow(r.id, event.target.checked)} />
             </div>
-            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-neutral-500">Pantalla</dt><dd className="mt-0.5 font-medium text-neutral-200">{r.nro_pantalla || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Vencimiento</dt><dd className="mt-0.5 font-medium text-neutral-200">{r.fecha_vencimiento || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Contacto</dt><dd className="mt-0.5 truncate font-medium text-neutral-200">{r.contacto || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Total</dt><dd className="mt-0.5 font-medium text-neutral-200">{money(r.total_pagado)}</dd></div></dl>
+            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-neutral-500">Pantalla</dt><dd className="mt-0.5 font-medium text-neutral-200">{r.nro_pantalla || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Vencimiento</dt><dd className="mt-0.5 font-medium text-neutral-200">{formatDateCO(r.fecha_vencimiento) || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Contacto</dt><dd className="mt-0.5 truncate font-medium text-neutral-200">{r.contacto || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Total</dt><dd className="mt-0.5 font-medium text-neutral-200">{money(r.total_pagado)}</dd></div></dl>
             {r.comentario && <p className="mt-4 line-clamp-2 rounded-xl bg-white/[0.035] p-3 text-xs leading-5 text-neutral-400">{r.comentario}</p>}
             <div className="mt-4 grid grid-cols-2 gap-2"><button type="button" onClick={() => openEdit(r)} className="min-h-11 rounded-xl bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98]">Editar</button><button type="button" onClick={() => openDelete(r.id, `${r.correo ?? ""} / ${r.nro_pantalla ?? ""}`)} className="min-h-11 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm font-semibold text-rose-100 transition active:scale-[0.98]">Eliminar</button></div>
           </article>;
@@ -1639,13 +1521,13 @@ export default function PantallasViewer() {
                         {r.meses_pagados ?? "—"}
                       </td>
                       <td className="px-3 py-2 text-center whitespace-nowrap">
-                        {r.fecha_compra || "—"}
+                        {formatDateCO(r.fecha_compra) || "—"}
                       </td>
                       <td className="px-3 py-2 text-center whitespace-nowrap">
-                        {r.fecha_vencimiento || "—"}
+                        {formatDateCO(r.fecha_vencimiento) || "—"}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
-                        {r.estado || "—"}
+                        {assignmentStatusLabel(r)}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         {r.proveedor || "—"}
@@ -1680,9 +1562,7 @@ export default function PantallasViewer() {
       <div className="mt-2 text-sm text-neutral-400">
         {rows.length} fila(s) en cache · {filtered.length} visible(s)
         {err && <span className="text-rose-400 ml-2">— {err}</span>}
-        {deleteMsg && (
-          <span className="text-emerald-400 ml-2">— {deleteMsg}</span>
-        )}
+
       </div>
 
       {/* Modal edición */}
@@ -2009,10 +1889,10 @@ export default function PantallasViewer() {
                   </label>
                   <label className="grid gap-1">
                     <span className="text-sm text-neutral-300">
-                      Fecha compra (YYYY-MM-DD)
+                      Fecha compra (dd/MM/yyyy)
                     </span>
                     <div className="flex items-center gap-2">
-                      <input
+                      <ColombiaDateInput
                         type="date"
                         className="flex-1 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600"
                         value={edit.fecha_compra ?? ""}
@@ -2036,7 +1916,7 @@ export default function PantallasViewer() {
                         type="button"
                         onClick={() => {
                           const input = document.querySelector(
-                            'input[type="date"]',
+                            'input[data-colombia-date]',
                           ) as HTMLInputElement;
                           input?.showPicker?.();
                         }}
@@ -2086,7 +1966,7 @@ export default function PantallasViewer() {
                     <span className="text-sm text-neutral-300">
                       Fecha vencimiento (auto)
                     </span>
-                    <input
+                    <ColombiaDateInput
                       type="date"
                       disabled
                       readOnly
@@ -2226,198 +2106,8 @@ export default function PantallasViewer() {
         </ModalPortal>
       )}
 
-      {/* Modal eliminar (individual) */}
-      {deleteTarget && (
-        <ModalPortal>
-          <div
-            className="fixed inset-0 z-50 bg-black/60 overflow-y-auto"
-            onClick={() => !deleting && setDeleteTarget(null)}
-          >
-            <div className="min-h-screen flex items-center justify-center p-4">
-              <div
-                className="w-full max-w-md rounded-xl border border-neutral-700 bg-neutral-900 p-4 text-neutral-100 shadow-xl"
-                onClick={(e) => e.stopPropagation()}
-                role="dialog"
-                aria-labelledby="modal-title"
-                aria-describedby="modal-desc"
-              >
-                <h4 id="modal-title" className="text-lg font-semibold mb-2">
-                  Eliminar pantalla
-                </h4>
-                <p id="modal-desc" className="text-sm text-neutral-300">
-                  {deleteTarget.label ? (
-                    <>
-                      <span className="opacity-80">({deleteTarget.label})</span>
-                      <br />
-                    </>
-                  ) : null}
-                  {checkingArchive
-                    ? "Verificando las asignaciones de esta cuenta…"
-                    : canArchive
-                      ? "Esta es la última pantalla asignada de la cuenta. ¿Qué deseas hacer con la cuenta?"
-                      : "¿Deseas eliminar esta pantalla asignada al cliente seleccionado? Solo se eliminará este registro. Las demás pantallas y la cuenta permanecerán intactas."}
-                </p>
-                {deleteErr && (
-                  <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">
-                    {deleteErr}
-                  </div>
-                )}
 
-                <div
-                  className={`mt-4 ${
-                    canArchive
-                      ? "grid gap-2 sm:grid-cols-2"
-                      : "flex justify-end gap-2"
-                  }`}
-                >
-                  {canArchive && (
-                    <button
-                      type="button"
-                      onClick={() => doDelete(true)}
-                      disabled={deleting || checkingArchive}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-700 bg-emerald-800/40 px-3 py-2 hover:bg-emerald-800/60 focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:opacity-60"
-                      title="Crear/asegurar inventario y eliminar"
-                    >
-                      {deleting && deleteAction === "archive"
-                        ? "Enviando…"
-                        : "Enviar cuenta a inventario"}
-                    </button>
-                  )}
 
-                  <button
-                    type="button"
-                    onClick={() => doDelete(false)}
-                    disabled={deleting || checkingArchive || !deleteTarget.cuentaId}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-700 bg-red-800/40 px-3 py-2 hover:bg-red-800/60 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-60"
-                    title="Eliminar únicamente la asignación seleccionada"
-                  >
-                    {deleting && deleteAction === "purge"
-                      ? "Eliminando…"
-                      : canArchive ? "Eliminar definitivamente" : "Eliminar pantalla"}
-                  </button>
-                </div>
-
-                <div className="mt-3 flex items-center justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setDeleteTarget(null)}
-                    disabled={deleting}
-                    className="rounded-lg border border-neutral-600 px-3 py-2 hover:bg-neutral-800 disabled:opacity-50"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </ModalPortal>
-      )}
-
-      {/* Modal eliminación MASIVA */}
-      {bulkOpen && (
-        <ModalPortal>
-          <div
-            className="fixed inset-0 z-50 bg-black/60 overflow-y-auto"
-            onClick={() => !bulkProcessing && setBulkOpen(false)}
-          >
-            <div className="min-h-screen flex items-center justify-center p-4">
-              <div
-                className="w-full max-w-xl rounded-xl border border-neutral-700 bg-neutral-900 p-4 text-neutral-100 shadow-xl"
-                onClick={(e) => e.stopPropagation()}
-                role="dialog"
-                aria-labelledby="bulk-title"
-                aria-describedby="bulk-desc"
-              >
-                <h4 id="bulk-title" className="text-lg font-semibold mb-2">
-                  Eliminar {bulkItems.length} pantalla(s)
-                </h4>
-
-                {bulkAssessing ? (
-                  <p className="text-sm text-neutral-300">
-                    Analizando registros para decidir inventario/eliminación…
-                  </p>
-                ) : (
-                  <>
-                    <p id="bulk-desc" className="text-sm text-neutral-300">
-                      Solo se eliminarán las filas seleccionadas. Para la última asignación de cada cuenta, elige enviar la cuenta a inventario o eliminarla definitivamente.
-                    </p>
-                    {bulkErr && (
-                      <div className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 p-2 text-sm text-red-200">
-                        {bulkErr}
-                      </div>
-                    )}
-
-                    {bulkSummary && (
-                      <div className="mt-3 rounded-lg border border-neutral-700 bg-neutral-800/40 p-2 text-sm">
-                        <div>Total procesados: {bulkSummary.total}</div>
-                        <div>Enviados a inventario: {bulkSummary.archived}</div>
-                        <div>
-                          Registros eliminados: {bulkSummary.purged}
-                        </div>
-                        <div>Fallidos: {bulkSummary.failed}</div>
-                      </div>
-                    )}
-
-                    {bulkProcessing && (
-                      <div className="mt-3">
-                        <div className="h-2 w-full rounded bg-neutral-800 overflow-hidden">
-                          <div
-                            className="h-2 bg-emerald-600"
-                            style={{ width: `${bulkProgress}%` }}
-                          />
-                        </div>
-                        <div className="mt-1 text-xs text-neutral-400">
-                          {bulkProgress}%
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                      <button
-                        type="button"
-                        onClick={() => runBulk(true)}
-                        disabled={
-                          bulkAssessing ||
-                          bulkProcessing ||
-                          bulkItems.length === 0
-                        }
-                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-700 bg-emerald-800/40 px-3 py-2 hover:bg-emerald-800/60 focus:outline-none focus:ring-2 focus:ring-emerald-600 disabled:opacity-60"
-                      >
-                        Inventario (cuando aplique) + Eliminar
-                      </button>
-
-                      <button
-                        type="button"
-                        title="Eliminar solo las filas seleccionadas y sus cuentas si quedan vacías"
-                        onClick={() => runBulk(false)}
-                        disabled={
-                          bulkAssessing ||
-                          bulkProcessing ||
-                          bulkItems.length === 0
-                        }
-                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-700 bg-red-800/40 px-3 py-2 hover:bg-red-800/60 focus:outline-none focus:ring-2 focus:ring-red-600 disabled:opacity-60"
-                      >
-                        Eliminar seleccionadas
-                      </button>
-                    </div>
-
-                    <div className="mt-3 flex items-center justify-end">
-                      <button
-                        type="button"
-                        onClick={() => setBulkOpen(false)}
-                        disabled={bulkProcessing}
-                        className="rounded-lg border border-neutral-600 px-3 py-2 hover:bg-neutral-800 disabled:opacity-50"
-                      >
-                        Cerrar
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </ModalPortal>
-      )}
     </div>
   );
 }

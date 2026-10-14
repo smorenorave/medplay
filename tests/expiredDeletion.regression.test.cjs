@@ -157,9 +157,9 @@ test('confirmed inventory preserves the selected credentials and every user', as
   assert.equal(f.state.usuarios.length, 1); assert.equal(f.state.emailDeletionAudit.length, 0);
 });
 
-test('an explicitly active assignment blocks removal even with an old expiry', async () => {
+test('a stale ACTIVA label does not block confirmed removal of an expired assignment', async () => {
   const f = fixture('completa'); f.state.cuentascompletas[0].estado = 'ACTIVA';
-  const before = structuredClone(f.state); await assert.rejects(safeRemove(f, 'completa'), /usuarios activos/); assert.deepEqual(f.state, before);
+  await safeRemove(f, 'completa'); assert.equal(f.state.cuentascompletas.length, 0);
 });
 
 test('ordinary non-final complete deletion affects only its selected expired record', async () => {
@@ -249,8 +249,19 @@ test('bulk rolls back deletions if audit persistence fails', async () => {
   assert.deepEqual(f.state, before);
 });
 test('all blocked bulk does not write audit or revision', async () => {
-  const f = fixture('completa', 2); f.state.cuentascompletas[0].estado = 'ACTIVA'; f.state.cuentascompletas[1].fecha_vencimiento = null;
+  const f = fixture('completa', 2); f.state.cuentascompletas[0].estado = 'ACTIVA'; f.state.cuentascompletas[0].fecha_vencimiento = new Date('2099-01-01'); f.state.cuentascompletas[1].fecha_vencimiento = null;
   const before = structuredClone(f.state);
   const result = await bulk(f, [{ tipo: 'completa', id: '1' }, { tipo: 'completa', id: '2' }]);
   assert.equal(result.eliminated, 0); assert.equal(result.skipped.length, 2); assert.deepEqual(f.state, before);
+});
+
+for (const kind of ['completa', 'pantalla']) test('bulk removes yesterday expiry with stale ACTIVA label: ' + kind, async () => {
+  const { todayYMDBogota, addDaysYMD } = require('../lib/bogotaDate.ts');
+  const f = fixture(kind);
+  const table = kind === 'completa' ? 'cuentascompletas' : 'pantallas';
+  f.state[table][0].fecha_vencimiento = addDaysYMD(todayYMDBogota(), -1);
+  f.state[table][0].estado = 'ACTIVA';
+  const result = await bulk(f, [{ tipo: kind, id: '1' }]);
+  assert.equal(result.eliminated, 1);
+  assert.equal(result.skipped.length, 0);
 });

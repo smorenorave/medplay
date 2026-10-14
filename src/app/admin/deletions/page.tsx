@@ -1,4 +1,5 @@
 "use client";
+import ColombiaDateInput from "@/components/ui/ColombiaDateInput";
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -98,8 +99,8 @@ export default function DeletionAuditPage() {
         <label className="grid gap-1 text-sm">Correo<input className={field} value={filters.correo} onChange={event => setFilters({ ...filters, correo: event.target.value })} placeholder="Buscar correo" /></label>
         <label className="grid gap-1 text-sm">Clave<input className={field} value={filters.clave} onChange={event => setFilters({ ...filters, clave: event.target.value })} placeholder="Buscar clave" /></label>
         <label className="grid gap-1 text-sm">Plataforma<select aria-label="Plataforma" className={field} value={filters.plataforma} onChange={event => setFilters({ ...filters, plataforma: event.target.value })}><option value="">Todas las plataformas</option>{platforms.map(platform => <option key={platform.id} value={platform.id}>{platform.nombre}</option>)}</select></label>
-        <label className="grid gap-1 text-sm">Desde<input type="date" className={field} value={filters.desde} onChange={event => setFilters({ ...filters, desde: event.target.value })} /></label>
-        <label className="grid gap-1 text-sm">Hasta<input type="date" className={field} value={filters.hasta} onChange={event => setFilters({ ...filters, hasta: event.target.value })} /></label>
+        <label className="grid gap-1 text-sm">Desde<ColombiaDateInput type="date" className={field} value={filters.desde} onChange={event => setFilters({ ...filters, desde: event.target.value })} /></label>
+        <label className="grid gap-1 text-sm">Hasta<ColombiaDateInput type="date" className={field} value={filters.hasta} onChange={event => setFilters({ ...filters, hasta: event.target.value })} /></label>
         <label className="grid gap-1 text-sm">Orden<select aria-label="Orden" className={field} value={filters.order} onChange={event => setFilters({ ...filters, order: event.target.value })}><option value="desc">Más recientes primero</option><option value="asc">Más antiguas primero</option></select></label>
         <div className="flex gap-2 sm:col-span-3"><button className={button} disabled={busy}>Buscar</button><button type="button" className={button} disabled={busy} onClick={() => setRevision(value => value + 1)}>Actualizar</button></div>
       </form>

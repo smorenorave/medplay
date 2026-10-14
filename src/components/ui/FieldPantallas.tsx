@@ -1,6 +1,7 @@
 // components/ui/FieldPantallas.tsx
 "use client";
 
+import ColombiaDateInput from "./ColombiaDateInput";
 import React, { useId } from "react";
 import type { HTMLInputTypeAttribute, InputHTMLAttributes } from "react";
 
@@ -34,6 +35,7 @@ export function FieldPantallas({
   ...rest // pattern, title, inputMode, placeholder, onInvalid, onInput, min, step, etc.
 }: FieldPantallasProps) {
   const id = useId();
+  const Input = type === "date" ? ColombiaDateInput : "input";
 
   const inputClasses =
     inputClassName ??
@@ -48,7 +50,7 @@ export function FieldPantallas({
         {labelRight ? <div className="ml-3">{labelRight}</div> : null}
       </div>
 
-      <input
+      <Input
         id={id}
         type={type}
         value={value}

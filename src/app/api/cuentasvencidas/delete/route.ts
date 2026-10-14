@@ -66,7 +66,7 @@ export async function GET(request: Request) {
     const selectedActive = hasActiveAssignment(screen ?? (account as { fecha_vencimiento?: Date | string | null; estado?: string | null }));
     const active = [...screens, ...complete].some(hasActiveAssignment);
     const isLast = target.tipo === "pantalla" ? screens.length === 1 && complete.length === 0 : complete.length === 1 && screens.length === 0;
-    return { selectedId: target.id, selectedType: target.tipo, expired: !selectedActive, selectedActive, isLast, remaining: screens.length + complete.length, active, warning: selectedActive ? "El registro seleccionado no está vencido o sigue marcado como activo. No se realizó ningún cambio." : null, correo: account.correo, clave: account.contrasena, plataformaId: account.plataforma_id };
+    return { selectedId: target.id, selectedType: target.tipo, expired: !selectedActive, selectedActive, isLast, remaining: screens.length + complete.length, active, warning: selectedActive ? "El registro seleccionado tiene una fecha de vencimiento futura o no verificable. No se realizó ningún cambio." : null, correo: account.correo, clave: account.contrasena, plataformaId: account.plataforma_id };
   }, { isolationLevel: "Serializable" });
   return result ? NextResponse.json(result, { headers: { "Cache-Control": "no-store" } }) : NextResponse.json({ error: "El registro ya no existe" }, { status: 404 });
   } catch (error) {

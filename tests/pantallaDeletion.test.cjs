@@ -100,11 +100,13 @@ test('ambiguous inventory or credential conflict changes nothing', async () => {
 test('consecutive selected IDs retain unselected assignments', async () => {
   const f = fixture(); for (const id of [1, 3, 5]) await remove(f, id); assert.deepEqual(f.state.screens.map(s => s.id), [2, 4, 6]);
 });
-test('viewer individual and bulk paths cannot call global deletion', () => {
-  const viewer = fs.readFileSync('src/components/viewers/PantallasViewer.tsx', 'utf8');
-  assert.doesNotMatch(viewer, /deleteEmailsGlobally|ELIMINAR TODO|account-deletions|ensureInInventario/);
-  assert.match(viewer, /deleteRequest\(deleteTarget.id, deleteTarget.cuentaId/); assert.match(viewer, /deleteRequest\(it.id, current.cuentaId/);
-  assert.match(viewer, /disabled=\{deleting \|\| checkingArchive \|\| !deleteTarget.cuentaId\}/);
+test('all three viewers use the shared deletion dialog without global deletion or browser confirmation', () => {
+  for (const name of ['PantallasViewer', 'CuentasCompletasViewer', 'CuentasVencidasViewer']) {
+    const viewer = fs.readFileSync('src/components/viewers/' + name + '.tsx', 'utf8');
+    assert.doesNotMatch(viewer, /deleteEmailsGlobally|ELIMINAR TODO|account-deletions|ensureInInventario/);
+    assert.match(viewer, /<RecordDeletionDialog/);
+    assert.doesNotMatch(fs.readFileSync('src/components/RecordDeletionDialog.tsx', 'utf8'), /window\.(confirm|prompt)|ELIMINAR TODO/);
+  }
 });
 
 const Module = require('node:module');
@@ -133,4 +135,13 @@ test('actual endpoint previews authoritative account count and commits one assig
   assert.deepEqual(await preview.json(), { cuentaId: 1, last: false, count: 6 });
   const response = await request({ cuentaId: 1, action: 'record' }); assert.equal(response.status, 200);
   assert.equal((await response.json()).count, 5); assert.equal(routeFixture.state.screens.length, 5);
+});
+
+test('shared module delegates screen preview and deletion to the preserved transaction', async () => {
+  const { recordDeletion } = require('../lib/recordDeletion.ts');
+  const f = fixture(2), target = { tipo: 'pantalla', id: '1' };
+  assert.deepEqual(await recordDeletion(f.db, target, 1), { cuentaId: '1', last: false, count: 2 });
+  await recordDeletion(f.db, target, 1, { cuentaId: '1', action: 'record' });
+  assert.deepEqual(f.state.screens.map(row => row.id), [2]);
+  assert.equal(f.state.accounts.length, 1);
 });

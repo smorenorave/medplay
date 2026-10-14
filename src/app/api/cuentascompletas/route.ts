@@ -1,3 +1,4 @@
+import { todayYMDBogota, utcDateFromYMD } from "@/lib/bogotaDate";
 import { withRouteTiming } from "@/lib/routeTiming";
 import { consumeInventory, InventoryUnavailableError } from "@/lib/consumeInventory";
 // src/app/api/cuentascompletas/route.ts
@@ -82,9 +83,7 @@ async function handleGET(req: Request) {
 
       const hoy =
         parseYMDToUTCDate(hoyParam) ??
-        new Date(
-          Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate())
-        );
+        utcDateFromYMD(todayYMDBogota());
 
       const manana =
         parseYMDToUTCDate(mananaParam) ??

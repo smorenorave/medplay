@@ -1,4 +1,5 @@
 "use client";
+import { formatDateCO } from "@/lib/bogotaDate";
 import { settleWithConcurrency } from "@/lib/settleWithConcurrency";
 import { useInventoryRefresh } from "@/hooks/useInventoryRefresh";
 import { upsertCuentaCompartida } from "@/lib/cuentasCompartidasUpsert";
@@ -25,17 +26,7 @@ import {
 } from "@/lib/pantallasMutationBus";
 
 /* ===================== Ticket cliente ===================== */
-const fmtDateHuman = (isoOrYYYYMMDD?: string | null) => {
-  if (!isoOrYYYYMMDD) return "—";
-  const d = /^\d{4}-\d{2}-\d{2}$/.test(isoOrYYYYMMDD)
-    ? parseLocalDateStr(isoOrYYYYMMDD)
-    : new Date(isoOrYYYYMMDD);
-  if (!d || Number.isNaN(d.getTime())) return "—";
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yy = d.getFullYear();
-  return `${dd}/${mm}/${yy}`;
-};
+const fmtDateHuman = (value?: string | null) => formatDateCO(value) || "—";
 const fmtMoneyClient = (n: number | null | undefined) =>
   n == null || Number.isNaN(Number(n))
     ? "—"

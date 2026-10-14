@@ -1,5 +1,9 @@
 "use client";
-import { deleteExpiredAccounts, readCurrentAccountData, registerAccountCache } from "@/lib/accountDataChanges";
+import RecordDeletionDialog from "@/components/RecordDeletionDialog";
+import type { DeletionSelection } from "@/lib/recordDeletionClient";
+import ColombiaDateInput from "@/components/ui/ColombiaDateInput";
+import { formatDateCO } from "@/lib/bogotaDate";
+import { readCurrentAccountData, registerAccountCache } from "@/lib/accountDataChanges";
 import { useAccountDataRefresh } from "@/hooks/useAccountDataRefresh";
 
 
@@ -362,60 +366,16 @@ export default function CuentasPantallasVencidasPage() {
   const pwInputRef = useRef<HTMLInputElement | null>(null);
   const refreshSeq = useRef(0);
   const dateRef = useRef<HTMLInputElement | null>(null);
-  const [deletionError, setDeletionError] = useState("");
-  const [checkingDeletion, setCheckingDeletion] = useState(false);
-  const definitiveWarning = "¿Estás seguro de que deseas eliminar esta cuenta definitivamente? Esta acción no se puede deshacer y la cuenta NO será enviada al inventario.";
-  // Eliminar simple
-  const [delModal, setDelModal] = useState<{
-    open: boolean;
-    row: Registro | null;
-    busy?: boolean;
-    definitive?: boolean;
-    comment?: string;
-    identity?: { correo: string; clave: string; plataformaId: number; confirmado: true };
-  }>({
-    open: false,
-    row: null,
-    busy: false,
-  });
+
+// Eliminar simple
+
 
   // Inventario (último)
-  const [invModal, setInvModal] = useState<{
-    open: boolean;
-    row: Registro | null;
-    busy?: boolean;
-    remaining?: number;
-    identity?: { correo: string; clave: string; plataformaId: number; confirmado: true };
-    comment?: string;
-  }>({ open: false, row: null, busy: false, comment: "" });
+
 
   // Bulk
-  const bulkInFlight = useRef(false);
-  const [bulkModal, setBulkModal] = useState<{
-    open: boolean;
-    rows: Registro[];
-    lastKeys: Set<string>;
-    normalKeys: Set<string>;
-    scope: "selected" | "visible" | null;
-    busy?: boolean;
-    progress?: number;
-    total?: number;
-    confirmed?: boolean;
-    error?: string;
-    result?: { eliminated: number; skipped: { tipo: string; id: string; correo?: string; reason: string }[] };
-    blocked?: { key: string; correo: string }[];
-  }>({
-    open: false,
-    rows: [],
-    lastKeys: new Set(),
-    normalKeys: new Set(),
-    scope: null,
-    busy: false,
-    progress: 0,
-    total: 0,
-  });
 
-  /* Boot con caché */
+/* Boot con caché */
   useEffect(() => {
     (async () => {
       setErr(null);
@@ -593,101 +553,11 @@ export default function CuentasPantallasVencidasPage() {
   }, [rows, view, dq, platFilter, tipoFilter, searchIndex]);
 
   /* ====== Inventario: check + helpers ====== */
-  const serverCheckIsLast = async (r: Registro) => {
-    const response = await fetch("/api/cuentasvencidas/delete?tipo=" + (r.tipo === "cuenta" ? "completa" : "pantalla") + "&id=" + encodeURIComponent(String(r.id)), { cache: "no-store" });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "No se pudo verificar la cuenta. No se realizó ningún cambio.");
-    return data as { selectedId: string; selectedType: "pantalla" | "completa"; expired: boolean; selectedActive: boolean; isLast: boolean; remaining: number; active: boolean; warning?: string; correo: string; clave: string; plataformaId: number };
-  };
-
+  const [deletionItems, setDeletionItems] = useState<DeletionSelection[]>([]);
+  const selectionFor = (r: Registro): DeletionSelection => ({ tipo: r.tipo === "cuenta" ? "completa" : "pantalla", id: String(r.id), label: r.correo || String(r.id) });
+  const onAskDelete = (r: Registro) => setDeletionItems([selectionFor(r)]);
+  const askBulkDelete = () => setDeletionItems(rows.filter(r => selected.has(`${r.tipo}:${r.id}`)).map(selectionFor));
   useAccountDataRefresh(forceRefresh);
-
-  const deleteRowDirect = async (r: Registro, motivo?: string, destino: "inventario" | "eliminar" | "registro" = "inventario", identity?: { correo: string; clave: string; plataformaId: number; confirmado: true }) => {
-    await deleteExpiredAccounts([{ tipo: r.tipo === "cuenta" ? "completa" : "pantalla", id: String(r.id) }], motivo?.trim() || "Eliminación desde Vencimientos", destino, identity);
-    await forceRefresh();
-    setSelected(new Set());
-  };
-
-  const onAskDelete = async (r: Registro) => {
-    if (checkingDeletion) return;
-    setDeletionError(""); setCheckingDeletion(true);
-    let chk;
-    try {
-      chk = await serverCheckIsLast(r);
-      if (chk.selectedId !== String(r.id) || chk.selectedType !== (r.tipo === "cuenta" ? "completa" : "pantalla")) throw new Error("La respuesta no corresponde al registro seleccionado. Actualiza la lista.");
-      if (!chk.expired || chk.selectedActive) throw new Error(chk.warning || "El registro seleccionado no está vencido. No se realizó ningún cambio.");
-    } catch (error) { setDeletionError((error as Error).message); return; }
-    finally { setCheckingDeletion(false); }
-    if (chk.isLast) {
-      setInvModal({
-        open: true,
-        row: r,
-        remaining: chk.remaining,
-        identity: { correo: chk.correo, clave: chk.clave, plataformaId: chk.plataformaId, confirmado: true },
-        busy: false,
-        comment: "",
-      });
-    } else {
-      setDelModal({ open: true, row: r, busy: false });
-    }
-  };
-
-  /* ====== BULK ====== */
-  const collectRows = () =>
-    rows.filter((r) => selected.has(`${r.tipo}:${r.id}`));
-
-  const askBulkDelete = async () => {
-    if (checkingDeletion) return;
-    const list = collectRows();
-    if (list.length === 0) {
-      alert("No hay filas seleccionadas.");
-      return;
-    }
-
-    if (list.length > 100) { setDeletionError("Selecciona como máximo 100 registros por lote."); return; }
-    setCheckingDeletion(true);
-    setDeletionError("");
-    try {
-      // La verificación no bloquea el lote por asignaciones activas individuales.
-      const checks = await Promise.all(
-        list.map(async (r) => {
-          const chk = await serverCheckIsLast(r);
-          return { r, k: `${r.tipo}:${r.id}`, isLast: chk.isLast, active: chk.selectedActive };
-        })
-      );
-      const lastKeys = new Set(checks.filter((c) => c.isLast).map((c) => c.k));
-      const normalKeys = new Set(checks.filter((c) => !c.isLast).map((c) => c.k));
-      setBulkModal({
-        open: true,
-        rows: list,
-        lastKeys,
-        normalKeys,
-        scope: "selected",
-        busy: false,
-        progress: 0,
-        total: list.length,
-        confirmed: false,
-        blocked: checks.filter(c => c.active).map(c => ({ key: c.k, correo: c.r.correo || "—" })),
-      });
-    } catch (error) { setDeletionError((error as Error).message); }
-    finally { setCheckingDeletion(false); }
-  };
-
-  const processBulk = async () => {
-    if (!bulkModal.open || bulkInFlight.current || bulkModal.busy || !bulkModal.confirmed || bulkModal.result) return;
-    bulkInFlight.current = true;
-    const list = bulkModal.rows;
-    setBulkModal(m => ({ ...m, busy: true, progress: 0, error: undefined }));
-    try {
-      const result = await deleteExpiredAccounts(list.map(r => ({ tipo: r.tipo === "cuenta" ? "completa" : "pantalla", id: String(r.id) })), "Eliminación masiva desde Vencimientos", "eliminar", undefined, true);
-      setBulkModal(m => ({ ...m, busy: false, progress: list.length, result: { eliminated: result.eliminated ?? 0, skipped: result.skipped ?? [] } }));
-      setSelected(new Set());
-      try { await forceRefresh(); }
-      catch { setBulkModal(m => ({ ...m, error: "La operación terminó, pero no se pudo actualizar la lista. Recarga la vista." })); }
-    } catch (error) {
-      setBulkModal(m => ({ ...m, busy: false, error: (error as Error).message }));
-    } finally { bulkInFlight.current = false; }
-  };
 
   /* ====== Notificaciones (cola) ====== */
   const pwChangedEmails = useMemo(
@@ -887,6 +757,8 @@ export default function CuentasPantallasVencidasPage() {
   /* ====================== Render ====================== */
   return (
     <div className="mx-auto max-w-[1200px] space-y-5 p-3 sm:p-6">
+      {!!deletionItems.length && <RecordDeletionDialog items={deletionItems} onClose={() => setDeletionItems([])} onDeleted={async () => { setSelected(new Set()); await forceRefresh(); }} />}
+
       {/* Header */}
       <header className="flex flex-wrap items-center gap-3 justify-between">
         <div className="flex items-end gap-3">
@@ -1136,7 +1008,7 @@ export default function CuentasPantallasVencidasPage() {
         <div className="grid gap-3 md:hidden">
           {filtered.map((r) => <article key={`mobile-${r.tipo}-${r.id}`} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
             <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap gap-2"><span className="rounded-lg bg-sky-500/10 px-2 py-1 text-xs font-semibold text-sky-200">{platformName(r.plataforma_id)}</span><span className="rounded-lg bg-white/5 px-2 py-1 text-xs font-semibold text-neutral-300">{r.tipo === "pantalla" ? "Pantalla" : "Cuenta completa"}</span></div><h3 className="mt-3 truncate font-semibold text-white">{r.nombre || r.contacto || "Cliente sin nombre"}</h3><p className="mt-1 truncate text-sm text-neutral-400">{r.correo || "Sin correo"}</p></div><input type="checkbox" className="size-5 shrink-0 accent-sky-500" checked={selected.has(`${r.tipo}:${r.id}`)} onChange={() => setSelected((previous) => { const next = new Set(previous); const key = `${r.tipo}:${r.id}`; next.has(key) ? next.delete(key) : next.add(key); return next; })} aria-label={`Seleccionar ${r.tipo} ${r.id}`} /></div>
-            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-neutral-500">Vencimiento</dt><dd className="mt-0.5 font-medium text-rose-200">{r.fecha_vencimiento || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Contacto</dt><dd className="mt-0.5 truncate font-medium text-neutral-200">{r.contacto || "—"}</dd></div></dl>
+            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-neutral-500">Vencimiento</dt><dd className="mt-0.5 font-medium text-rose-200">{formatDateCO(r.fecha_vencimiento) || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Contacto</dt><dd className="mt-0.5 truncate font-medium text-neutral-200">{r.contacto || "—"}</dd></div></dl>
             {r.comentario && <p className="mt-4 line-clamp-2 rounded-xl bg-white/[0.035] p-3 text-xs leading-5 text-neutral-400">{r.comentario}</p>}
             <button type="button" onClick={() => openEdit(r)} className="mt-4 min-h-11 w-full rounded-xl bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98]">Ver y editar</button>
             <button type="button" onClick={() => void onAskDelete(r)} className="mt-2 min-h-11 w-full rounded-xl border border-neutral-700 px-3 py-2 text-sm text-neutral-200">Gestionar cuenta</button>
@@ -1265,10 +1137,10 @@ export default function CuentasPantallasVencidasPage() {
                   </Td>
 
                   <Td className="text-center whitespace-nowrap">
-                    {r.fecha_compra || "—"}
+                    {formatDateCO(r.fecha_compra) || "—"}
                   </Td>
                   <Td className="text-center whitespace-nowrap">
-                    {r.fecha_vencimiento || "—"}
+                    {formatDateCO(r.fecha_vencimiento) || "—"}
                   </Td>
                   <Td className="text-right whitespace-nowrap">
                     {money(r.total_pagado)}
@@ -1292,329 +1164,15 @@ export default function CuentasPantallasVencidasPage() {
         </div>
       </section>
 
-      {deletionError && <Modal onClose={() => setDeletionError("")}>
-        <div className="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-900 text-neutral-100 shadow-xl">
-          <div className="px-5 py-3 border-b border-neutral-800"><h3 className="font-semibold">Eliminar registro</h3></div>
-          <div className="p-5 space-y-3 text-sm"><p role="alert" className="text-rose-200">{deletionError}</p></div>
-          <div className="px-5 py-3 border-t border-neutral-800 flex justify-end"><button className="px-3 py-2 rounded-lg border border-neutral-600 hover:bg-neutral-800" onClick={() => setDeletionError("")}>Cerrar</button></div>
-        </div>
-      </Modal>}
+
       {/* Modal eliminar simple */}
-      {delModal.open && delModal.row && (
-        <Modal onClose={() => setDelModal({ open: false, row: null })}>
-          <div className="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-900 text-neutral-100 shadow-xl">
-            <div className="px-5 py-3 border-b border-neutral-800 flex items-center justify-between">
-              <h3 className="font-semibold">Eliminar registro</h3>
-              <button
-                className="px-2 py-1 hover:text-white"
-                onClick={() => setDelModal({ open: false, row: null })}
-                disabled={!!delModal.busy}
-              >
-                ✕
-              </button>
-            </div>
-            <div className="p-5 space-y-3 text-sm">
-              {delModal.definitive && <p className="text-rose-200">{definitiveWarning}</p>}
-              {!delModal.definitive && <p>Este registro está vencido y tiene otros registros asociados. Se eliminará únicamente este registro y los demás permanecerán sin cambios.</p>}
-              <p className="text-neutral-400">La eliminación afecta exclusivamente al registro confirmado. No elimina usuarios, otras cuentas ni información compartida. Se registra en auditoría según la configuración de la plataforma.</p>
-              <p>
-                ¿Seguro que deseas eliminar este registro{" "}
-                <b>
-                  {delModal.row.tipo === "pantalla"
-                    ? "Pantalla"
-                    : "Cuenta completa"}
-                </b>{" "}
-                de la plataforma{" "}
-                <b>{platformName(delModal.row.plataforma_id)}</b>?
-              </p>
-            </div>
-            <div className="px-5 py-3 border-t border-neutral-800 flex items-center justify-end gap-2">
-              <button
-                className="px-3 py-2 rounded-lg border border-neutral-600 hover:bg-neutral-800"
-                onClick={() => setDelModal({ open: false, row: null })}
-                disabled={!!delModal.busy}
-              >
-                Cancelar
-              </button>
-              <button
-                className="px-3 py-2 rounded-lg border border-rose-800 bg-rose-900/40 hover:bg-rose-900/60 disabled:opacity-60"
-                onClick={async () => {
-                  if (!delModal.row) return;
-                  setDelModal((m) => ({ ...m, busy: true }));
-                  try {
-                    await deleteRowDirect(delModal.row, delModal.comment, delModal.definitive ? "eliminar" : "registro", delModal.identity);
-                    setDelModal({ open: false, row: null });
-                  } catch (e: any) {
-                    setDeletionError(e?.message ?? "Error al eliminar");
-                    setDelModal({ open: false, row: null });
-                    setDelModal((m) => ({ ...m, busy: false }));
-                  }
-                }}
-                disabled={!!delModal.busy}
-              >
-                {delModal.busy ? "Eliminando…" : "Eliminar definitivamente"}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+
 
       {/* Modal inventario (último) */}
-      {invModal.open && invModal.row && (
-        <Modal onClose={() => setInvModal({ open: false, row: null })}>
-          <div className="w-full max-w-lg rounded-2xl border border-neutral-800 bg-neutral-900 text-neutral-100 shadow-xl">
-            <div className="px-5 py-3 border-b border-neutral-800 flex items-center justify-between">
-              <h3 className="font-semibold">
-                Último registro asociado
-              </h3>
-              <button
-                className="px-2 py-1 hover:text-white"
-                onClick={() => setInvModal({ open: false, row: null })}
-                disabled={!!invModal.busy}
-              >
-                ✕
-              </button>
-            </div>
-            <div className="p-5 space-y-3 text-sm">
-              <p>
-                Este es el último registro asociado a esta cuenta. Selecciona qué deseas hacer. Correo:{" "}
-                <b>{invModal.row.correo}</b> en la plataforma{" "}
-                <b>{platformName(invModal.row.plataforma_id)}</b> dentro de{" "}
-                <b>
-                  {invModal.row.tipo === "cuenta"
-                    ? "Cuentas completas"
-                    : "Pantallas"}
-                </b>
-                .
-              </p>
-              <p>Correo: <b>{invModal.identity?.correo}</b></p><p>Contraseña: <b>{invModal.identity?.clave}</b></p>
-              {typeof invModal.remaining === "number" && (
-                <p className="text-neutral-400">
-                  Registros restantes (estimado): {invModal.remaining}
-                </p>
-              )}
-              <label className="grid gap-1">
-                <span className="text-sm text-neutral-300">
-                  Comentario / motivo (opcional)
-                </span>
-                <textarea
-                  rows={3}
-                  className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                  value={invModal.comment ?? ""}
-                  onChange={(e) =>
-                    setInvModal((m) => ({ ...m, comment: e.target.value }))
-                  }
-                  placeholder="Ej: Última pantalla/cuenta. Se archiva por vencimiento."
-                />
-              </label>
-              <p>
-                Puedes conservarlo en <b>Inventario</b> o eliminarlo definitivamente. La eliminación definitiva se guarda en auditoría solo para las plataformas habilitadas en Configuración.
-              </p>
-              <p className="text-rose-200">El servidor vuelve a verificar la cuenta y sus asignaciones antes de guardar. Si algo cambió, la operación se cancela.</p>
-            </div>
-            <div className="px-5 py-3 border-t border-neutral-800 flex flex-wrap items-center justify-between gap-2">
-              <button
-                className="px-3 py-2 rounded-lg border border-neutral-600 hover:bg-neutral-800"
-                onClick={() => setInvModal({ open: false, row: null })}
-                disabled={!!invModal.busy}
-              >
-                Cancelar
-              </button>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  className="px-3 py-2 rounded-lg border border-rose-700 bg-rose-900/40 hover:bg-rose-900/60 disabled:opacity-60"
-                  disabled={!!invModal.busy}
-                  onClick={() => {
-                    if (!invModal.row) return;
-                    setDelModal({ open: true, row: invModal.row, definitive: true, comment: invModal.comment, identity: invModal.identity });
-                    setInvModal({ open: false, row: null });
-                  }}
-                >Eliminar definitivamente</button>
-                {/* Enviar a inventario y eliminar */}
-                <button
-                  className="px-3 py-2 rounded-lg border border-amber-700 bg-amber-800/40 hover:bg-amber-800/60 disabled:opacity-60"
-                  onClick={async () => {
-                    if (!invModal.row) return;
-                    setInvModal((m) => ({ ...m, busy: true }));
-                    try {
-                      const r = invModal.row;
-                      await deleteRowDirect(r, invModal.comment, "inventario", invModal.identity);
-                      setInvModal({ open: false, row: null });
-                    } catch (e: any) {
-                      setDeletionError(e?.message ?? "Error al procesar inventario/eliminar");
-                      setInvModal({ open: false, row: null });
-                      setInvModal((m) => ({ ...m, busy: false }));
-                    }
-                  }}
-                  disabled={!!invModal.busy}
-                >
-                  {invModal.busy
-                    ? "Procesando…"
-                    : "Enviar al inventario"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </Modal>
-      )}
 
       {/* Modal BULK */}
-      {bulkModal.open && (
-        <Modal
-          onClose={() =>
-            !bulkModal.busy &&
-            setBulkModal({
-              open: false,
-              rows: [],
-              lastKeys: new Set(),
-              normalKeys: new Set(),
-              scope: null,
-              busy: false,
-              progress: 0,
-              total: 0,
-            })
-          }
-        >
-          <div className="w-full max-w-lg max-h-[90vh] overflow-auto rounded-2xl border border-neutral-800 bg-neutral-900 text-neutral-100 shadow-xl">
-            <div className="px-5 py-3 border-b border-neutral-800 flex items-center justify-between">
-              <h3 className="font-semibold">Eliminar en lote</h3>
-              <button
-                className="px-2 py-1 hover:text-white"
-                onClick={() =>
-                  setBulkModal({
-                    open: false,
-                    rows: [],
-                    lastKeys: new Set(),
-                    normalKeys: new Set(),
-                    scope: null,
-                    busy: false,
-                    progress: 0,
-                    total: 0,
-                  })
-                }
-                disabled={!!bulkModal.busy}
-              >
-                ✕
-              </button>
-            </div>
-            <div className="p-5 space-y-3 text-sm">
-              <p className="text-rose-200">La eliminación será definitiva, incluidos los últimos registros. Solo se omitirán los registros con asignaciones activas o que ya no existan. No se enviarán al inventario.</p>
-              <p>
-                Total a procesar: <b>{bulkModal.total}</b>
-              </p>
-              <p>
-                Registros normales: <b>{bulkModal.normalKeys.size}</b>
-              </p>
-              <p>
-                Registros “últimos” (correo+plataforma dentro de su tipo):{" "}
-                <b>{bulkModal.lastKeys.size}</b>
-              </p>
-              {/* Últimos registros incluidos en la selección */}
-              {(() => {
-                const lastSelected = bulkModal.rows.filter((r) =>
-                  bulkModal.lastKeys.has(`${r.tipo}:${r.id}`)
-                );
-                if (lastSelected.length === 0) return null;
 
-                const copy = async () => {
-                  try {
-                    const text = lastSelected
-                      .map((r) => r.correo || "")
-                      .filter(Boolean)
-                      .join(", ");
-                    await navigator.clipboard.writeText(text);
-                    alert("Correos copiados al portapapeles.");
-                  } catch {
-                    alert("No se pudo copiar al portapapeles.");
-                  }
-                };
-
-                return (
-                  <div className="rounded-md border border-neutral-700 p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="font-semibold">
-                        Últimos registros detectados ({lastSelected.length})
-                      </div>
-                      <button
-                        onClick={copy}
-                        className="rounded-md border border-neutral-700 px-2 py-1 hover:bg-neutral-800"
-                      >
-                        Copiar correos
-                      </button>
-                    </div>
-
-                    <ul className="mt-2 max-h-40 overflow-auto list-disc pl-5 space-y-1">
-                      {lastSelected.map((r, i) => (
-                        <li key={`${r.tipo}:${r.id}-${i}`}>
-                          <span className="font-medium">{r.correo || "—"}</span>
-                          <span className="text-neutral-400">
-                            {" "}
-                            — {platformName(r.plataforma_id)} ·{" "}
-                            {r.tipo === "pantalla" ? "Pantalla" : "Cuenta"}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                );
-              })()}
-
-
-              {!!bulkModal.blocked?.length && !bulkModal.result && (
-                <div className="rounded-md border border-amber-700 p-3">
-                  Se omitirán por asignaciones activas ({bulkModal.blocked.length}):
-                  <ul className="max-h-32 overflow-auto list-disc pl-5">{bulkModal.blocked.map(row => <li key={row.key}>{row.correo} · {row.key}</li>)}</ul>
-                </div>
-              )}
-              {!bulkModal.result && <label className="flex items-start gap-2">
-                <input type="checkbox" className="mt-1" checked={!!bulkModal.confirmed} disabled={bulkModal.busy}
-                  onChange={e => setBulkModal(m => ({ ...m, confirmed: e.target.checked }))} />
-                <span>Entiendo que se eliminarán definitivamente los registros seleccionados, incluidos los últimos registros, y deseo continuar</span>
-              </label>}
-              {bulkModal.error && <p role="alert" className="text-rose-200">{bulkModal.error}</p>}
-              {bulkModal.result && <div role="status" className="rounded-md border border-neutral-700 p-3">
-                <p>Eliminados: <b>{bulkModal.result.eliminated}</b>. Omitidos: <b>{bulkModal.result.skipped.length}</b>.</p>
-                <ul className="max-h-40 overflow-auto list-disc pl-5">{bulkModal.result.skipped.map(row => <li key={`${row.tipo}:${row.id}`}>{row.correo || "Registro"} · {row.tipo}:{row.id}: {row.reason}</li>)}</ul>
-              </div>}
-
-              {bulkModal.busy && (
-                <div className="rounded-md border border-neutral-700 p-3">
-                  Procesando… {bulkModal.progress}/{bulkModal.total}
-                </div>
-              )}
-            </div>
-            <div className="px-5 py-3 border-t border-neutral-800 flex items-center justify-end gap-2">
-              <button
-                className="px-3 py-2 rounded-lg border border-neutral-600 hover:bg-neutral-800"
-                onClick={() =>
-                  setBulkModal({
-                    open: false,
-                    rows: [],
-                    lastKeys: new Set(),
-                    normalKeys: new Set(),
-                    scope: null,
-                    busy: false,
-                    progress: 0,
-                    total: 0,
-                  })
-                }
-                disabled={!!bulkModal.busy}
-              >
-                {bulkModal.result ? "Cerrar" : "Cancelar"}
-              </button>
-              <button
-                className="px-3 py-2 rounded-lg border border-rose-800 bg-rose-900/40 hover:bg-rose-900/60 disabled:opacity-60"
-                onClick={() => void processBulk()}
-                disabled={!!bulkModal.busy || !bulkModal.confirmed || !!bulkModal.result}
-              >
-                {bulkModal.busy ? "Eliminando…" : "Eliminar selección"}
-              </button>
-
-            </div>
-          </div>
-        </Modal>
-      )}
 
       {/* Modal de edición */}
       {edit && (
@@ -1726,7 +1284,7 @@ export default function CuentasPantallasVencidasPage() {
 
               <Field label="Fecha de compra">
                 <div className="flex items-center gap-2">
-                  <input
+                  <ColombiaDateInput
                     ref={dateRef}
                     type="date"
                     className="flex-1 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600"
@@ -1790,7 +1348,7 @@ export default function CuentasPantallasVencidasPage() {
               <Field label="Fecha de vencimiento (auto)" full>
                 <input
                   className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none"
-                  value={computedVencimiento || ""}
+                  value={formatDateCO(computedVencimiento) || ""}
                   readOnly
                 />
               </Field>

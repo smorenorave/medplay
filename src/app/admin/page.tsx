@@ -91,7 +91,7 @@ const API_PLATAFORMAS  = '/api/plataformas';
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const endOfMonth = (d = new Date()) => new Date(d.getFullYear(), d.getMonth() + 1, 0);
 const monthName = (y: number, m1to12: number) =>
-  new Date(y, m1to12 - 1, 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+  new Date(y, m1to12 - 1, 1).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
 
 const toMoney = (v: number | string | null | undefined): number => {
   if (v == null || v === '') return 0;
@@ -181,9 +181,9 @@ async function fetchAll<T = any>(urlBase: string, opts: { limit?: number } = {})
 
 /* ====================== Componente ====================== */
 export default function AdminPanel() {
-  const now = new Date();
-  const [year, setYear] = useState<number>(now.getFullYear());
-  const [month, setMonth] = useState<number>(now.getMonth() + 1);
+  const now = todayYMDBogota();
+  const [year, setYear] = useState<number>(Number(now.slice(0, 4)));
+  const [month, setMonth] = useState<number>(Number(now.slice(5, 7)));
 
   const [pantallas, setPantallas] = useState<Pantalla[]>([]);
   const [completas, setCompletas] = useState<CuentaCompleta[]>([]);
@@ -246,7 +246,7 @@ export default function AdminPanel() {
     const pull = (iso?: string|null) => { const m = String(iso ?? '').match(/^(\d{4})/); if (m) years.add(Number(m[1])); };
     pantallas.forEach(p => { pull(p.fecha_compra); pull(p.fecha_vencimiento); });
     completas.forEach(c => { pull(c.fecha_compra); pull(c.fecha_vencimiento); });
-    for (let offset = 0; offset < 6; offset++) years.add(now.getFullYear() - offset);
+    for (let offset = 0; offset < 6; offset++) years.add(Number(now.slice(0, 4)) - offset);
     return Array.from(years.values()).sort((a,b)=>b-a);
   }, [pantallas, completas]);
 
@@ -564,7 +564,7 @@ export default function AdminPanel() {
             {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
           <select className="rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100" value={month} onChange={e=>setMonth(+e.target.value)}>
-            {Array.from({length:12}).map((_,i) => <option key={i+1} value={i+1}>{new Date(2020,i,1).toLocaleDateString('es-ES',{month:'long'})}</option>)}
+            {Array.from({length:12}).map((_,i) => <option key={i+1} value={i+1}>{new Date(2020,i,1).toLocaleDateString('es-CO',{month:'long'})}</option>)}
           </select>
 
           <span className="rounded-md border border-sky-700/60 bg-sky-950/40 px-3 py-2 text-sm text-sky-100">

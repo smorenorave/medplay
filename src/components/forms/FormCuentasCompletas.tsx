@@ -1,5 +1,6 @@
 // src/components/forms/FormCuentaCompletas.tsx
 "use client";
+import { formatDateCO } from "@/lib/bogotaDate";
 import { settleWithConcurrency } from "@/lib/settleWithConcurrency";
 import { useInventoryRefresh } from "@/hooks/useInventoryRefresh";
 import { inventoryEpoch, notifyInventoryConsumed } from "@/lib/inventoryChanges";
@@ -172,17 +173,7 @@ async function refreshCuentasStampOnce(): Promise<number> {
 }
 
 /* ===== Helpers Ticket (FormCuentaCompletas) ===== */
-const fmtDateHumanCC = (yyyyMmDdOrIso?: string | null) => {
-  if (!yyyyMmDdOrIso) return "—";
-  const d = /^\d{4}-\d{2}-\d{2}$/.test(yyyyMmDdOrIso)
-    ? parseLocalDateStr(yyyyMmDdOrIso)
-    : new Date(yyyyMmDdOrIso);
-  if (!d || Number.isNaN(d.getTime())) return "—";
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yy = d.getFullYear();
-  return `${dd}/${mm}/${yy}`;
-};
+const fmtDateHumanCC = (value?: string | null) => formatDateCO(value) || "—";
 const fmtMoneyClientCC = (n?: number | null) =>
   n == null || Number.isNaN(Number(n))
     ? "—"

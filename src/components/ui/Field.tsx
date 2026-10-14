@@ -1,6 +1,7 @@
 // components/ui/Field.tsx
 'use client';
 
+import ColombiaDateInput from "./ColombiaDateInput";
 import React, { useId } from 'react';
 import type { HTMLInputTypeAttribute, InputHTMLAttributes } from 'react';
 
@@ -37,6 +38,7 @@ export default function Field({
   ...rest // pattern, title, inputMode, placeholder, onInvalid, onInput, min, step, etc.
 }: Props) {
   const id = useId();
+  const Input = type === "date" ? ColombiaDateInput : "input";
 
   const inputClasses =
     inputClassName ??
@@ -51,7 +53,7 @@ export default function Field({
         {labelRight ? <div className="ml-3">{labelRight}</div> : null}
       </div>
 
-      <input
+      <Input
         id={id}
         type={type}
         value={value}
