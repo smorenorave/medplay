@@ -11,9 +11,23 @@ export default function RecordDeletionDialog({ items, onClose, onDeleted }: Prop
   const [error, setError] = useState("");
   const [result, setResult] = useState<{ deleted: number; archived: number; failed: string[] } | null>(null);
   const running = useRef(false);
+  const inspectionQueue = useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
     let cancelled = false;
-    Promise.all(items.map(previewRecordDeletion)).then(data => { if (!cancelled) setPreviews(data); })
+    // Previews acquire database locks. Starting the whole selection at once can
+    // deadlock overlapping account scans and exhaust the connection pool.
+    setLoading(true); setPreviews([]); setError(""); setResult(null);
+    const inspect = async () => {
+      const data: DeletionPreview[] = [];
+      for (const item of items) {
+        if (cancelled) return;
+        data.push(await previewRecordDeletion(item));
+      }
+      if (!cancelled) setPreviews(data);
+    };
+    const inspection = inspectionQueue.current.then(inspect);
+    inspectionQueue.current = inspection.catch(() => {});
+    inspection
       .catch(reason => { if (!cancelled) setError(reason.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     const previous = document.body.style.overflow;

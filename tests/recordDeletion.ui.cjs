@@ -27,6 +27,7 @@ async function main() {
     const platform = { id: 1, nombre: 'Test', cantidad_pantallas: 6 };
     const baseRow = { cuenta_id: 71, plataforma_id: 1, correo: 'same@example.com', contrasena: 'key', contacto: '3001234567', nombre: 'Prueba', fecha_compra: '2026-09-13', fecha_vencimiento: '2026-10-13', estado: 'ACTIVA', meses_pagados: 1, total_pagado: 6900 };
     let rows = [], tipo = 'completa', calls = [], revision = 0, failId = null;
+    let activePreviews = 0, maxPreviews = 0;
     await context.route('**/api/**', async route => {
       const req = route.request(), pathname = new URL(req.url()).pathname;
       let data = { ok: true }, status = 200;
@@ -34,7 +35,14 @@ async function main() {
         const body = req.postDataJSON();
         calls.push({ method: req.method(), body });
         const row = rows.find(r => String(r.id) === body.target.id);
-        if (req.method() === 'POST') data = { cuentaId: tipo === 'pantalla' ? '71' : body.target.id, count: rows.length, last: rows.length === 1 };
+        if (req.method() === 'POST') {
+          activePreviews++; maxPreviews = Math.max(maxPreviews, activePreviews);
+          const overlaps = activePreviews > 1;
+          await new Promise(resolve => setTimeout(resolve, 60));
+          if (overlaps) { status = 503; data = { error: 'Conflicto simulado entre verificaciones simultáneas' }; }
+          else data = { cuentaId: tipo === 'pantalla' ? '71' : body.target.id, count: rows.length, last: rows.length === 1 };
+          activePreviews--;
+        }
         else if (body.target.id === failId) { status = 409; data = { error: 'Conflicto simulado; registro conservado' }; }
         else { assert.ok(row); assert.equal(body.target.tipo, tipo); rows = rows.filter(r => r !== row); data = { archived: body.decision.action === 'inventory', revision: String(++revision), correos: [] }; }
       } else if (pathname === '/api/account-deletions') throw Error('Unexpected global deletion');
@@ -69,16 +77,25 @@ async function main() {
       await page.getByRole('dialog').waitFor({ state: 'hidden' }); assert.equal(rows.length, 0); assert.equal(calls.at(-1).body.decision.action, 'inventory');
       await open(1); await trash().click(); await page.getByRole('dialog').getByRole('button', { name: 'Eliminar definitivamente', exact: true }).click();
       await page.getByRole('dialog').waitFor({ state: 'hidden' }); assert.equal(rows.length, 0); assert.equal(calls.at(-1).body.decision.action, 'purge');
-      await open(3);
+      await open(5);
       for (const box of await page.locator('tbody tr').filter({ hasText: baseRow.correo }).getByRole('checkbox').all()) await box.check();
       await page.getByRole('button', { name: 'Eliminar seleccionados', exact: true }).click();
       await page.getByRole('dialog').getByRole('button', { name: 'Enviar al inventario y eliminar', exact: true }).click();
-      await page.getByRole('status').getByText('Eliminados: 3.', { exact: false }).waitFor();
-      assert.deepEqual(calls.filter(c=>c.method==='DELETE').map(c=>c.body.decision.action), ['record', 'record', 'inventory']);
+      await page.getByRole('status').getByText('Eliminados: 5.', { exact: false }).waitFor();
+      assert.deepEqual(calls.filter(c=>c.method==='DELETE').map(c=>c.body.decision.action), ['record', 'record', 'record', 'record', 'inventory']);
+      assert.equal(rows.length, 0);
+      await open(5);
+      for (const box of await page.locator('tbody tr').filter({ hasText: baseRow.correo }).getByRole('checkbox').all()) await box.check();
+      await page.getByRole('button', { name: 'Eliminar seleccionados', exact: true }).click();
+      await page.getByRole('dialog').getByRole('button', { name: 'Eliminar definitivamente', exact: true }).click();
+      await page.getByRole('status').getByText('Eliminados: 5.', { exact: false }).waitFor();
+      assert.equal(rows.length, 0);
+      assert.deepEqual(calls.filter(c=>c.method==='DELETE').map(c=>c.body.decision.action), ['record', 'record', 'record', 'record', 'purge']);
       assert.equal(dialogs, 0);
       console.log('PASS', view, tipo, 'cancelar, intermedio, último/inventario, último/definitivo, lote, cero popups');
     }
     assert.deepEqual(errors, []);
+    assert.equal(maxPreviews, 1, 'Selection preparation must not overlap locking previews');
   } finally {
     if (browser) await browser.close();
     if (process.platform === 'win32' && server.exitCode === null) {
