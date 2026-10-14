@@ -1,6 +1,5 @@
 "use client";
 import { applyPasswordExpiryDeletion } from "@/lib/passwordExpiryClient";
-import PasswordManagedRecords from "@/components/PasswordManagedRecords";
 import RecordDeletionDialog from "@/components/RecordDeletionDialog";
 import type { DeletionSelection } from "@/lib/recordDeletionClient";
 import ColombiaDateInput from "@/components/ui/ColombiaDateInput";
@@ -297,7 +296,6 @@ export default function CuentasPantallasVencidasPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set()); // key = tipo:id
 
   const rows = useMemo(() => allRows.filter(row => !row.passwordManagedAt), [allRows]);
-  const managedRows = useMemo(() => allRows.filter(row => !!row.passwordManagedAt), [allRows]);
 
   // Editar
   const [edit, setEdit] = useState<EditState | null>(null);
@@ -463,11 +461,10 @@ export default function CuentasPantallasVencidasPage() {
   }, [rows, view, dq, platFilter, tipoFilter, searchIndex]);
 
   /* ====== Inventario: check + helpers ====== */
-  const [managedDeletion, setManagedDeletion] = useState(false);
   const [deletionItems, setDeletionItems] = useState<DeletionSelection[]>([]);
   const selectionFor = (r: Registro): DeletionSelection => ({ tipo: r.tipo === "cuenta" ? "completa" : "pantalla", id: String(r.id), label: r.correo || String(r.id) });
-  const onAskDelete = (r: Registro) => { setManagedDeletion(false); setDeletionItems([selectionFor(r)]); };
-  const askBulkDelete = () => { setManagedDeletion(false); setDeletionItems(rows.filter(r => selected.has(`${r.tipo}:${r.id}`)).map(selectionFor)); };
+  const onAskDelete = (r: Registro) => { setDeletionItems([selectionFor(r)]); };
+  const askBulkDelete = () => { setDeletionItems(rows.filter(r => selected.has(`${r.tipo}:${r.id}`)).map(selectionFor)); };
   useAccountDataRefresh(forceRefresh);
 
   /* ====== Editar ====== */
@@ -658,7 +655,7 @@ export default function CuentasPantallasVencidasPage() {
 
   return (
     <div className="mx-auto max-w-[1200px] space-y-5 p-3 sm:p-6">
-      {!!deletionItems.length && <RecordDeletionDialog assignmentOnly={managedDeletion} items={deletionItems} onClose={() => setDeletionItems([])} onDeleted={async () => { setSelected(new Set()); await forceRefresh(); }} />}
+      {!!deletionItems.length && <RecordDeletionDialog items={deletionItems} onClose={() => setDeletionItems([])} onDeleted={async () => { setSelected(new Set()); await forceRefresh(); }} />}
 
       {/* Header */}
       <header className="flex flex-wrap items-center gap-3 justify-between">
@@ -726,8 +723,7 @@ export default function CuentasPantallasVencidasPage() {
         </select>
       </section>
 
-      <PasswordManagedRecords items={managedRows as unknown as Parameters<typeof PasswordManagedRecords>[0]["items"]} onDelete={item => { setManagedDeletion(true); setDeletionItems([item]); }} />
-  {/* KPIs */}
+      {/* KPIs */}
       <section className="grid gap-3 sm:grid-cols-3 lg:grid-cols-3">
         <KPI title="Anteriores (vencidas)" value={kpiAnteriores} />
         <KPI title="Vencen hoy" value={kpiHoy} />
