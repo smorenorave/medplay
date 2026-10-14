@@ -16,6 +16,7 @@ Module._resolveFilename = function(request, ...args) {
   return resolve.call(this, request, ...args);
 };
 const complete = require('../src/app/api/cuentascompletas/route.ts');
+require.cache[require.resolve('../lib/adminSession.ts')] = { exports: { getAuthenticatedAdminId: async () => 1 } };
 const completeEdit = require('../src/app/api/cuentascompletas/[id]/route.ts');
 const screen = require('../src/app/api/pantallas/route.ts');
 const screenEdit = require('../src/app/api/pantallas/[id]/route.ts');
@@ -36,6 +37,8 @@ function fixture() {
   function matches(row, where = {}) {
     return Object.entries(where).every(([key, value]) => {
       if (key === 'usuarios') return row.contacto === value.contacto;
+      if (value && typeof value === 'object' && 'in' in value) return value.in.some(id => String(id) === String(row[key]));
+      if (key === 'id') return String(row[key]) === String(value);
       return value === undefined || row[key] === value;
     });
   }
@@ -55,6 +58,14 @@ function fixture() {
     }
   }
   const tx = {};
+  tx.$queryRaw = async (parts, email, platform) => {
+    const screens = parts.join('').includes('INNER JOIN');
+    return (screens ? state.pantallas : state.cuentascompletas).filter(row => {
+      const account = screens ? state.cuentascompartidas.find(c => c.id === row.cuenta_id) : row;
+      return account.correo.trim().toLowerCase() === email && account.plataforma_id === platform;
+    }).map(row => ({ id: row.id, cuenta_id: row.cuenta_id }));
+  };
+  tx.accountDataRevision = { upsert: async () => ({ revision: 1n }) };
   for (const table of Object.keys(state)) {
     const check = method => { if (failure === `${table}.${method}`) throw new Error('Injected save failure'); };
     const find = ({ where } = {}) => decorate(table, state[table].find(row => matches(row, where)));

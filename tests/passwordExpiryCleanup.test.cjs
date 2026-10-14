@@ -24,19 +24,20 @@ function fixture() {
     const model = key => ({
       findUnique: async ({where}) => draft[key].find(r=>r.id===where.id) ?? null,
       findMany: async ({where}) => draft[key].filter(r=>where.id.in.includes(r.id)),
-      deleteMany: async ({where}) => {
+      updateMany: async ({where,data}) => {
         if (fail === key) throw Error('injected failure');
-        const matches = r=>where.id.in.includes(r.id) && r.fecha_vencimiento && r.fecha_vencimiento <= where.fecha_vencimiento.lte;
-        const count = draft[key].filter(matches).length;
-        draft[key] = draft[key].filter(r=>!matches(r)); return {count};
+        const rows = draft[key].filter(r=>where.id.in.includes(r.id));
+        for(const row of rows) Object.assign(row,data);
+        return {count:rows.length};
       },
     });
     const tx = {
       cuentascompletas: model('complete'), pantallas: model('screens'),
-      $queryRaw: async (parts, correo, cutoff) => {
-        assert.match(parts.join(''), /fecha_vencimiento <= /);
+      cuentascompartidas: { updateMany: async ({where,data}) => { for(const row of draft.screens) if(where.id.in.includes(row.cuenta_id)) Object.assign(row.cuentascompartidas,data); return {count:where.id.in.length}; } },
+      $queryRaw: async (parts, correo, platform) => {
+        assert.match(parts.join(''), /plataforma_id = /);
         const key = parts.join('').includes('INNER JOIN') ? 'screens' : 'complete';
-        return draft[key].filter(r=>(r.correo ?? r.cuentascompartidas.correo).trim().toLowerCase()===correo && r.fecha_vencimiento && r.fecha_vencimiento <= cutoff).map(r=>({id:r.id}));
+        return draft[key].filter(r=>(r.correo ?? r.cuentascompartidas.correo).trim().toLowerCase()===correo && (r.plataforma_id ?? r.cuentascompartidas.plataforma_id) === platform).map(r=>({id:r.id,cuenta_id:r.cuenta_id}));
       },
       deletedAccountHistory: { create: async ({data}) => { if(fail==='audit') throw Error('audit failure'); draft.history.push(data); } },
       accountDataRevision: {upsert: async()=>{ if(fail==='revision') throw Error('revision failure'); return {revision:BigInt(++draft.revision)}; }},
@@ -57,34 +58,39 @@ function edit(f, options={}) {
    return 'saved';
  });
 }
-test('expired password edit removes all expired normalized email assignments across types/platforms, includes today and preserves future/missing dates/other email',async()=>{
- const f=fixture(); const result=await edit(f);
- assert.equal(result.value,'saved'); assert.equal(result.deletion.deleted,4);
- assert.deepEqual(f.state.screens.map(r=>r.id),[3]); assert.deepEqual(f.state.complete.map(r=>r.id),[2n,3n]);
- assert.equal(f.state.history.length,4); assert.deepEqual(f.state.users,['keep']); assert.deepEqual(f.state.inventory,['keep']); assert.equal(f.state.account.contrasena,'new');
- assert.equal(JSON.parse(expiryHeaders(result.deletion)['X-Expired-Records-Deleted']).deleted,4);
-});
-test('three expired screens are all really removed',async()=>{const f=fixture(); f.state.screens[2].fecha_vencimiento=date(-1); await edit(f); assert.deepEqual(f.state.screens.map(r=>r.id),[]);});
-test('complete account edit also deletes expired screens',async()=>{const f=fixture(); const r=await edit(f,{target:{tipo:'completa',id:'1'}}); assert.equal(r.deletion.deleted,4);});
-for(const fail of ['screens','complete','audit','revision']) test('rollback credentials and all removals on '+fail,async()=>{const f=fixture();const original=structuredClone(f.state); f.fail(fail);await assert.rejects(edit(f));assert.deepEqual(f.state,original);});
-for(const options of [{password:'old'},{target:{tipo:'pantalla',id:'3'}},{renew:true},{move:true}]) test('no cleanup for unchanged, valid, renewed or reassigned service '+JSON.stringify(options),async()=>{const f=fixture(); const r=await edit(f,options);assert.equal(r.deletion,null);assert.equal(f.state.screens.length,4);assert.equal(f.state.complete.length,3);});
-test('unauthenticated destructive edit rolls back',async()=>{const f=fixture();const original=structuredClone(f.state);await assert.rejects(edit(f,{admin:null}));assert.deepEqual(f.state,original);});
 
-for (const tipo of ['pantalla', 'completa']) test('changing password of a service expiring today deletes today and older, keeps tomorrow: '+tipo, async()=>{
- const f=fixture();
- if(tipo==='completa') f.state.complete[0].fecha_vencimiento=date(0);
- const result=await edit(f,{target:{tipo,id:tipo==='pantalla'?'4':'1'}});
- assert.equal(result.deletion.deleted,4);
- assert.deepEqual(f.state.screens.map(r=>r.id),[3]);
- assert.deepEqual(f.state.complete.map(r=>r.id),[2n,3n]);
- assert.equal(f.state.screens[0].fecha_vencimiento.toISOString(),date(1).toISOString());
+test('A: three assignments move together without deleting or losing their data',async()=>{
+ const f=fixture(); f.state.screens.pop(); const before=structuredClone(f.state);
+ const result=await edit(f);
+ assert.equal(result.deletion.managed,3); assert.equal(f.state.screens.length,3);
+ for(const [i,row] of f.state.screens.entries()) {
+   assert.ok(row.passwordManagedAt instanceof Date);
+   const original=before.screens[i];
+   for(const field of ['id','contacto','fecha_vencimiento','cuenta_id']) assert.deepEqual(row[field],original[field]);
+ }
+ assert.deepEqual(f.state.complete,before.complete); assert.deepEqual(f.state.history,[]);
+ assert.deepEqual(f.state.users,before.users); assert.deepEqual(f.state.inventory,before.inventory);
+ assert.equal(JSON.parse(expiryHeaders(result.deletion)['X-Password-Records-Managed']).managed,3);
 });
-test('legacy browser flags never hide records and password queue no longer creates them',()=>{
- const map=new Map([['__pw_resolved_expirations_v1',JSON.stringify({'same@example.com':'2099-01-01'})]]);
- global.localStorage={getItem:k=>map.get(k)??null,setItem:(k,v)=>map.set(k,v)};
- global.window={dispatchEvent(){}};
- const {recordPasswordChange,isResolvedExpiration}=require('../lib/passwordChanges.ts');
- const legacy=map.get('__pw_resolved_expirations_v1');recordPasswordChange(' SAME@example.com ','new',1);
- assert.equal(map.get('__pw_resolved_expirations_v1'),legacy);assert.equal(isResolvedExpiration('same@example.com',today),false);
- delete global.window;delete global.localStorage;
+test('B/C: same email in another platform and another email on same platform stay unchanged',async()=>{
+ const f=fixture(); f.state.complete[1].plataforma_id=1;
+ const original=structuredClone(f.state.complete); await edit(f);
+ assert.deepEqual(f.state.complete,original);
 });
+test('complete and screen assignments in same platform are managed together regardless of expiry',async()=>{
+ const f=fixture(); f.state.complete[0].plataforma_id=1; f.state.complete[2].plataforma_id=1;
+ const result=await edit(f);assert.equal(result.deletion.managed,6);
+ assert.equal(f.state.complete.filter(r=>r.passwordManagedAt).length,2);
+ assert.equal(f.state.screens.length,4);
+});
+test('E: subsequent reads and repeated changes retain same IDs without duplicate records',async()=>{
+ const f=fixture();await edit(f);const ids=f.state.screens.map(r=>r.id);
+ await edit(f,{password:'again'});
+ assert.deepEqual(f.state.screens.map(r=>r.id),ids);
+ assert.equal(f.state.screens.filter(r=>r.passwordManagedAt).length,4);
+});
+for(const fail of ['screens','complete','revision']) test('rollback password and all management changes on '+fail,async()=>{
+ const f=fixture(), before=structuredClone(f.state); f.fail(fail);await assert.rejects(edit(f));assert.deepEqual(f.state,before);
+});
+test('unchanged password does not mark records',async()=>{const f=fixture();const r=await edit(f,{password:'old'});assert.equal(r.deletion,null);assert.ok(f.state.screens.every(r=>!r.passwordManagedAt));});
+test('unauthenticated password change does not mutate data',async()=>{const f=fixture(),before=structuredClone(f.state);await assert.rejects(edit(f,{admin:null}));assert.deepEqual(f.state,before);});

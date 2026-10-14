@@ -1,5 +1,6 @@
 "use client";
 import { applyPasswordExpiryDeletion } from "@/lib/passwordExpiryClient";
+import PasswordManagedRecords from "@/components/PasswordManagedRecords";
 import RecordDeletionDialog from "@/components/RecordDeletionDialog";
 import type { DeletionSelection } from "@/lib/recordDeletionClient";
 import ColombiaDateInput from "@/components/ui/ColombiaDateInput";
@@ -19,13 +20,14 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 import { usePlataformas } from "@/hooks/usePlataformas";
-import { getDaily, setDaily, todayYMDLocal } from "@/lib/dailyCache";
-import { readPasswordChanges, writePasswordChanges, recordPasswordChange, deletePasswordChange, PASSWORD_CHANGES_KEY, PASSWORD_CHANGES_EVENT } from "@/lib/passwordChanges";
+import { setDaily, todayYMDLocal } from "@/lib/dailyCache";
+import { recordPasswordChange } from "@/lib/passwordChanges";
 
 /* ====================== Tipos ====================== */
 type TipoRegistro = "cuenta" | "pantalla";
 
 type Base = {
+  passwordManagedAt?: string | null;
   id: number;
   plataforma_id: number | null;
   contacto: string;
@@ -57,7 +59,7 @@ type ViewFilter = "todos" | "hoy" | "manana" | "anteriores";
 type TipoFilter = "all" | "cuenta" | "pantalla";
 
 /* ====================== Constantes (ajusta si necesitas) ====================== */
-const DAILY_KEY = "__vencidas_daily_v6";
+const DAILY_KEY = "__vencidas_daily_v7";
 const CUENTAS_BASE = "/api/cuentascompletas";
 const PANTALLAS_BASE = "/api/pantallas";
 /** Normaliza texto para búsqueda: minúsculas, sin tildes y sin espacios */
@@ -270,6 +272,10 @@ async function fetchVencidasHoyMananaFromServer(): Promise<Registro[]> {
   const key = (x: Registro) => `${x.tipo}:${x.id}`;
   const map = new Map<string, Registro>();
   [...cuentas, ...pantallas].forEach((r) => map.set(key(r), r));
+  const response = await fetch("/api/password-managed-records", { cache: "no-store" });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "No se pudieron cargar los registros gestionados.");
+  for (const row of result.items) map.set(key(row), row);
   return Array.from(map.values());
 }
 
@@ -290,72 +296,8 @@ export default function CuentasPantallasVencidasPage() {
 
   const [selected, setSelected] = useState<Set<string>>(new Set()); // key = tipo:id
 
-  // Cola notificación
-  type PwQueueItem = {
-    pw: string;
-    plataforma_id?: number;
-  };
-
-  const [pwNewByEmail, setPwNewByEmail] = useState<Record<string, PwQueueItem>>(
-    () => readPasswordChanges()
-  );
-  const rows = allRows;
-  const updateHistory = (update: (prev: Record<string, PwQueueItem>) => Record<string, PwQueueItem>) => {
-    writePasswordChanges(update(readPasswordChanges()));
-  };
-
-  // Añadir manualmente a la cola
-  const [manualEmails, setManualEmails] = useState("");
-  const [manualPw, setManualPw] = useState("");
-  const [manualPlatform, setManualPlatform] = useState<number | "">("");
-
-  const splitEmails = (raw: string) =>
-    raw
-      .split(/[\s,;]+/g) // separa por espacios, comas o ;
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean);
-
-  const isValidEmail = (email: string) =>
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-  const addManualToQueue = () => {
-    const emails = splitEmails(manualEmails);
-    const pw = (manualPw || "").trim();
-
-    if (emails.length === 0) {
-      alert("Escribe al menos un correo.");
-      return;
-    }
-    if (!pw) {
-      alert("Escribe la nueva clave.");
-      return;
-    }
-    if (!manualPlatform) {
-      alert("Selecciona la plataforma.");
-      return;
-    }
-
-    const invalid = emails.filter((e) => !isValidEmail(e));
-    if (invalid.length > 0) {
-      alert(`Correos inválidos:\n${invalid.slice(0, 10).join("\n")}${invalid.length > 10 ? "\n…" : ""}`);
-      return;
-    }
-
-    updateHistory((prev) => {
-      const next = { ...prev };
-      for (const e of emails) {
-        next[e] = {
-          pw,
-          plataforma_id: Number(manualPlatform),
-        };
-      }
-      return next;
-    });
-
-    setManualEmails("");
-    setManualPw("");
-    setManualPlatform("");
-  };
+  const rows = useMemo(() => allRows.filter(row => !row.passwordManagedAt), [allRows]);
+  const managedRows = useMemo(() => allRows.filter(row => !!row.passwordManagedAt), [allRows]);
 
   // Editar
   const [edit, setEdit] = useState<EditState | null>(null);
@@ -377,12 +319,6 @@ export default function CuentasPantallasVencidasPage() {
   useEffect(() => {
     (async () => {
       setErr(null);
-      const cached = getDaily<Registro[]>(DAILY_KEY);
-      if (cached && cached.length) {
-        setRows(cached);
-        setSource("cache");
-        return;
-      }
       try {
         setLoading(true);
         const data = await fetchVencidasHoyManana();
@@ -397,15 +333,7 @@ export default function CuentasPantallasVencidasPage() {
     })();
   }, []);
 
-  /* ====== Refresco con mínima diferencia (anti-parpadeo) ====== */
-  const keyOf = (r: Registro) => `${r.tipo}:${r.id}`;
-  const sameKeys = (a: Registro[], b: Registro[]) => {
-    if (a.length !== b.length) return false;
-    const sa = new Set(a.map(keyOf));
-    for (const k of b.map(keyOf)) if (!sa.has(k)) return false;
-    return true;
-  };
-
+  // Always accept current server fields: a management change keeps the same IDs.
   const forceRefresh = async () => {
     try {
       const seq = ++refreshSeq.current;
@@ -415,7 +343,7 @@ export default function CuentasPantallasVencidasPage() {
       if (seq !== refreshSeq.current) return; // respuesta tardía: descartar
       setDaily(DAILY_KEY, data);
       setSource("server");
-      setRows((prev) => (sameKeys(prev, data) ? prev : data));
+      setRows(data);
     } catch (e: any) {
       setErr(e?.message ?? "No se pudo refrescar.");
     } finally {
@@ -463,21 +391,6 @@ export default function CuentasPantallasVencidasPage() {
       window.removeEventListener("storage", onStorage);
     };
   }, []); // solo una vez
-
-  useEffect(() => {
-    const sync = () => {
-      setPwNewByEmail(readPasswordChanges());
-    };
-    const onStorage = (event: StorageEvent) => {
-      if (!event.key || event.key === PASSWORD_CHANGES_KEY) sync();
-    };
-    window.addEventListener(PASSWORD_CHANGES_EVENT, sync);
-    window.addEventListener("storage", onStorage);
-    return () => {
-      window.removeEventListener(PASSWORD_CHANGES_EVENT, sync);
-      window.removeEventListener("storage", onStorage);
-    };
-  }, []);
 
   /* Plataforma */
   const platformMap = useMemo(() => {
@@ -550,17 +463,13 @@ export default function CuentasPantallasVencidasPage() {
   }, [rows, view, dq, platFilter, tipoFilter, searchIndex]);
 
   /* ====== Inventario: check + helpers ====== */
+  const [managedDeletion, setManagedDeletion] = useState(false);
   const [deletionItems, setDeletionItems] = useState<DeletionSelection[]>([]);
   const selectionFor = (r: Registro): DeletionSelection => ({ tipo: r.tipo === "cuenta" ? "completa" : "pantalla", id: String(r.id), label: r.correo || String(r.id) });
-  const onAskDelete = (r: Registro) => setDeletionItems([selectionFor(r)]);
-  const askBulkDelete = () => setDeletionItems(rows.filter(r => selected.has(`${r.tipo}:${r.id}`)).map(selectionFor));
+  const onAskDelete = (r: Registro) => { setManagedDeletion(false); setDeletionItems([selectionFor(r)]); };
+  const askBulkDelete = () => { setManagedDeletion(false); setDeletionItems(rows.filter(r => selected.has(`${r.tipo}:${r.id}`)).map(selectionFor)); };
   useAccountDataRefresh(forceRefresh);
 
-  /* ====== Notificaciones (cola) ====== */
-  const pwChangedEmails = useMemo(
-    () => Object.keys(pwNewByEmail),
-    [pwNewByEmail]
-  );
   /* ====== Editar ====== */
   const openEdit = useCallback(
     (r: Registro, focus: "contacto" | "contrasena" = "contacto") => {
@@ -747,19 +656,9 @@ export default function CuentasPantallasVencidasPage() {
     });
   };
 
-  const copyEmails = async () => {
-    try {
-      await navigator.clipboard.writeText(pwChangedEmails.join(", "));
-      alert("Correos copiados.");
-    } catch {
-      alert("No se pudo copiar al portapapeles.");
-    }
-  };
-
-  /* ====================== Render ====================== */
   return (
     <div className="mx-auto max-w-[1200px] space-y-5 p-3 sm:p-6">
-      {!!deletionItems.length && <RecordDeletionDialog items={deletionItems} onClose={() => setDeletionItems([])} onDeleted={async () => { setSelected(new Set()); await forceRefresh(); }} />}
+      {!!deletionItems.length && <RecordDeletionDialog assignmentOnly={managedDeletion} items={deletionItems} onClose={() => setDeletionItems([])} onDeleted={async () => { setSelected(new Set()); await forceRefresh(); }} />}
 
       {/* Header */}
       <header className="flex flex-wrap items-center gap-3 justify-between">
@@ -827,143 +726,8 @@ export default function CuentasPantallasVencidasPage() {
         </select>
       </section>
 
-      {/* Acciones notificación */}
-      <section className="rounded-2xl border border-neutral-800 bg-neutral-950/40 p-4 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="text-sm font-semibold text-neutral-200">
-            Correos con <em>cambio de clave</em> ({pwChangedEmails.length})
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={copyEmails}
-              disabled={pwChangedEmails.length === 0}
-              className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800 disabled:opacity-60"
-            >
-              Copiar correos
-            </button>
-            <button
-              type="button"
-              onClick={() => writePasswordChanges({})}
-              disabled={pwChangedEmails.length === 0}
-              className="rounded-lg border border-red-900 bg-red-950/40 px-3 py-2 text-red-200 hover:bg-red-950/70 disabled:opacity-60"
-              title="Limpiar el historial de cambios de clave"
-            >
-              Limpiar lista
-            </button>
-          </div>
-        </div>
-        {/* Añadir manualmente */}
-        <div className="rounded-xl border border-neutral-800 bg-neutral-950/50 p-3">
-          <div className="text-sm font-semibold text-neutral-200 mb-2">
-            Añadir registros manualmente
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <input
-              value={manualEmails}
-              onChange={(e) => setManualEmails(e.target.value)}
-              placeholder="Correo(s): uno o varios (separados por coma/espacio/salto de línea)…"
-              className="flex-1 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600"
-            />
-
-            <input
-              value={manualPw}
-              onChange={(e) => setManualPw(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") addManualToQueue();
-              }}
-              placeholder="Nueva clave…"
-              className="sm:w-64 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600"
-            />
-
-            <select
-              value={manualPlatform}
-              onChange={(e) =>
-                setManualPlatform(e.target.value ? Number(e.target.value) : "")
-              }
-              className="sm:w-56 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 [&>option]:bg-neutral-900 [&>option]:text-neutral-100"
-            >
-              <option value="">Seleccionar plataforma</option>
-              {plataformas.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {(p as any).nombre ?? p.id}
-                </option>
-              ))}
-            </select>
-
-            <button
-              type="button"
-              onClick={addManualToQueue}
-              className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 hover:bg-neutral-800"
-              title="Añadir al historial"
-            >
-              Añadir
-            </button>
-          </div>
-          <div className="mt-2 text-xs text-neutral-400">
-            Tip: puedes pegar varios correos separados por comas, espacios o saltos de línea.
-          </div>
-        </div>
-
-
-        <div className="flex flex-col gap-2">
-          {pwChangedEmails.length === 0 ? (
-            <span className="text-neutral-400 text-sm">
-              No hay cambios de clave registrados (se añaden al guardar un registro con
-              contraseña cambiada).
-            </span>
-          ) : (
-            pwChangedEmails.map((email) => (
-              <div key={email} className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-2 rounded-full border border-neutral-700 px-3 py-1 text-sm text-neutral-200">
-                  {email}
-                  <button
-                    type="button"
-                    className="text-red-300 hover:text-red-200"
-                    onClick={() => {
-                      if (window.confirm(`¿Borrar el registro de cambio de clave de ${email}? La cuenta y su contraseña se conservarán.`)) {
-                        deletePasswordChange(email);
-                      }
-                    }}
-                    title="Borrar únicamente este registro"
-                  >
-                    Borrar
-                  </button>
-                </span>
-
-                {/* 👇 AQUÍ VA EXACTAMENTE */}
-                {pwNewByEmail[email]?.plataforma_id && (
-                  <span className="text-xs text-neutral-400">
-                    {platformName(pwNewByEmail[email].plataforma_id)}
-                  </span>
-                )}
-
-                <input
-                  type="text"
-                  placeholder="Nueva clave…"
-                  value={pwNewByEmail[email]?.pw ?? ""}
-                  onChange={(e) =>
-                    updateHistory((prev) => ({
-                      ...prev,
-                      [email]: {
-                        ...prev[email],
-                        pw: e.target.value,
-                      },
-                    }))
-                  }
-                  className="min-w-[240px] flex-1 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600"
-                />
-              </div>
-            ))
-          )}
-        </div>
-        <p className="text-xs text-neutral-400">
-          Nota: el script solo enviará si la fecha de vencimiento es{" "}
-          <strong>posterior</strong> a HOY (lo valida en MySQL).
-        </p>
-      </section>
-
-      {/* KPIs */}
+      <PasswordManagedRecords items={managedRows as unknown as Parameters<typeof PasswordManagedRecords>[0]["items"]} onDelete={item => { setManagedDeletion(true); setDeletionItems([item]); }} />
+  {/* KPIs */}
       <section className="grid gap-3 sm:grid-cols-3 lg:grid-cols-3">
         <KPI title="Anteriores (vencidas)" value={kpiAnteriores} />
         <KPI title="Vencen hoy" value={kpiHoy} />

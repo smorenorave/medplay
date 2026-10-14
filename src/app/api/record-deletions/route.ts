@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 
 const id = z.string().regex(/^[1-9]\d*$/).max(20);
 const target = z.object({ tipo: z.enum(["pantalla", "completa"]), id }).strict().refine(value => BigInt(value.id) <= (value.tipo === "pantalla" ? 2147483647n : 18446744073709551615n));
-const decision = z.object({ cuentaId: id, action: z.enum(["record", "inventory", "purge"]) }).strict();
+const decision = z.object({ cuentaId: id, action: z.enum(["record", "inventory", "purge", "assignment"]) }).strict();
 async function handle(request: Request, remove: boolean) {
   const adminId = await getAuthenticatedAdminId(request);
   if (!adminId) return NextResponse.json({ error: "No autorizado" }, { status: 401 });

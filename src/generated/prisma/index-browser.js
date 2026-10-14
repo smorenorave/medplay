@@ -131,6 +131,7 @@ exports.Prisma.CuentascompartidasScalarFieldEnum = {
 };
 
 exports.Prisma.CuentascompletasScalarFieldEnum = {
+  passwordManagedAt: 'passwordManagedAt',
   id: 'id',
   contacto: 'contacto',
   plataforma_id: 'plataforma_id',
@@ -149,6 +150,7 @@ exports.Prisma.CuentascompletasScalarFieldEnum = {
 };
 
 exports.Prisma.PantallasScalarFieldEnum = {
+  passwordManagedAt: 'passwordManagedAt',
   id: 'id',
   cuenta_id: 'cuenta_id',
   contacto: 'contacto',

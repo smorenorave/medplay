@@ -22,6 +22,7 @@ model cuentascompartidas {
 }
 
 model cuentascompletas {
+  passwordManagedAt               DateTime?
   id                              BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
   contacto                        String      @db.VarChar(191)
   plataforma_id                   Int
@@ -49,6 +50,7 @@ model cuentascompletas {
 }
 
 model pantallas {
+  passwordManagedAt      DateTime?
   id                     Int                @id @default(autoincrement())
   cuenta_id              Int
   contacto               String             @db.VarChar(191)

@@ -3268,6 +3268,7 @@ export namespace Prisma {
   }
 
   export type CuentascompletasMinAggregateOutputType = {
+    passwordManagedAt: Date | null
     id: bigint | null
     contacto: string | null
     plataforma_id: number | null
@@ -3286,6 +3287,7 @@ export namespace Prisma {
   }
 
   export type CuentascompletasMaxAggregateOutputType = {
+    passwordManagedAt: Date | null
     id: bigint | null
     contacto: string | null
     plataforma_id: number | null
@@ -3304,6 +3306,7 @@ export namespace Prisma {
   }
 
   export type CuentascompletasCountAggregateOutputType = {
+    passwordManagedAt: number
     id: number
     contacto: number
     plataforma_id: number
@@ -3342,6 +3345,7 @@ export namespace Prisma {
   }
 
   export type CuentascompletasMinAggregateInputType = {
+    passwordManagedAt?: true
     id?: true
     contacto?: true
     plataforma_id?: true
@@ -3360,6 +3364,7 @@ export namespace Prisma {
   }
 
   export type CuentascompletasMaxAggregateInputType = {
+    passwordManagedAt?: true
     id?: true
     contacto?: true
     plataforma_id?: true
@@ -3378,6 +3383,7 @@ export namespace Prisma {
   }
 
   export type CuentascompletasCountAggregateInputType = {
+    passwordManagedAt?: true
     id?: true
     contacto?: true
     plataforma_id?: true
@@ -3483,6 +3489,7 @@ export namespace Prisma {
   }
 
   export type CuentascompletasGroupByOutputType = {
+    passwordManagedAt: Date | null
     id: bigint
     contacto: string
     plataforma_id: number
@@ -3520,6 +3527,7 @@ export namespace Prisma {
 
 
   export type cuentascompletasSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    passwordManagedAt?: boolean
     id?: boolean
     contacto?: boolean
     plataforma_id?: boolean
@@ -3542,6 +3550,7 @@ export namespace Prisma {
 
 
   export type cuentascompletasSelectScalar = {
+    passwordManagedAt?: boolean
     id?: boolean
     contacto?: boolean
     plataforma_id?: boolean
@@ -3559,7 +3568,7 @@ export namespace Prisma {
     total_pagado_proveedor_completa?: boolean
   }
 
-  export type cuentascompletasOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "contacto" | "plataforma_id" | "proveedor" | "fecha_compra" | "fecha_vencimiento" | "meses_pagados" | "total_pagado_completa" | "estado" | "comentario" | "updatedAt" | "contrasena" | "correo" | "total_ganado" | "total_pagado_proveedor_completa", ExtArgs["result"]["cuentascompletas"]>
+  export type cuentascompletasOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"passwordManagedAt" | "id" | "contacto" | "plataforma_id" | "proveedor" | "fecha_compra" | "fecha_vencimiento" | "meses_pagados" | "total_pagado_completa" | "estado" | "comentario" | "updatedAt" | "contrasena" | "correo" | "total_ganado" | "total_pagado_proveedor_completa", ExtArgs["result"]["cuentascompletas"]>
   export type cuentascompletasInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     plataformas?: boolean | plataformasDefaultArgs<ExtArgs>
     usuarios?: boolean | usuariosDefaultArgs<ExtArgs>
@@ -3572,6 +3581,7 @@ export namespace Prisma {
       usuarios: Prisma.$usuariosPayload<ExtArgs>
     }
     scalars: $Extensions.GetPayloadResult<{
+      passwordManagedAt: Date | null
       id: bigint
       contacto: string
       plataforma_id: number
@@ -3670,8 +3680,8 @@ export namespace Prisma {
      * // Get first 10 Cuentascompletas
      * const cuentascompletas = await prisma.cuentascompletas.findMany({ take: 10 })
      * 
-     * // Only select the `id`
-     * const cuentascompletasWithIdOnly = await prisma.cuentascompletas.findMany({ select: { id: true } })
+     * // Only select the `passwordManagedAt`
+     * const cuentascompletasWithPasswordManagedAtOnly = await prisma.cuentascompletas.findMany({ select: { passwordManagedAt: true } })
      * 
      */
     findMany<T extends cuentascompletasFindManyArgs>(args?: SelectSubset<T, cuentascompletasFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$cuentascompletasPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
@@ -3958,6 +3968,7 @@ export namespace Prisma {
    * Fields of the cuentascompletas model
    */
   interface cuentascompletasFieldRefs {
+    readonly passwordManagedAt: FieldRef<"cuentascompletas", 'DateTime'>
     readonly id: FieldRef<"cuentascompletas", 'BigInt'>
     readonly contacto: FieldRef<"cuentascompletas", 'String'>
     readonly plataforma_id: FieldRef<"cuentascompletas", 'Int'>
@@ -4365,6 +4376,7 @@ export namespace Prisma {
   }
 
   export type PantallasMinAggregateOutputType = {
+    passwordManagedAt: Date | null
     id: number | null
     cuenta_id: number | null
     contacto: string | null
@@ -4382,6 +4394,7 @@ export namespace Prisma {
   }
 
   export type PantallasMaxAggregateOutputType = {
+    passwordManagedAt: Date | null
     id: number | null
     cuenta_id: number | null
     contacto: string | null
@@ -4399,6 +4412,7 @@ export namespace Prisma {
   }
 
   export type PantallasCountAggregateOutputType = {
+    passwordManagedAt: number
     id: number
     cuenta_id: number
     contacto: number
@@ -4436,6 +4450,7 @@ export namespace Prisma {
   }
 
   export type PantallasMinAggregateInputType = {
+    passwordManagedAt?: true
     id?: true
     cuenta_id?: true
     contacto?: true
@@ -4453,6 +4468,7 @@ export namespace Prisma {
   }
 
   export type PantallasMaxAggregateInputType = {
+    passwordManagedAt?: true
     id?: true
     cuenta_id?: true
     contacto?: true
@@ -4470,6 +4486,7 @@ export namespace Prisma {
   }
 
   export type PantallasCountAggregateInputType = {
+    passwordManagedAt?: true
     id?: true
     cuenta_id?: true
     contacto?: true
@@ -4574,6 +4591,7 @@ export namespace Prisma {
   }
 
   export type PantallasGroupByOutputType = {
+    passwordManagedAt: Date | null
     id: number
     cuenta_id: number
     contacto: string
@@ -4610,6 +4628,7 @@ export namespace Prisma {
 
 
   export type pantallasSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    passwordManagedAt?: boolean
     id?: boolean
     cuenta_id?: boolean
     contacto?: boolean
@@ -4631,6 +4650,7 @@ export namespace Prisma {
 
 
   export type pantallasSelectScalar = {
+    passwordManagedAt?: boolean
     id?: boolean
     cuenta_id?: boolean
     contacto?: boolean
@@ -4647,7 +4667,7 @@ export namespace Prisma {
     total_pagado_proveedor?: boolean
   }
 
-  export type pantallasOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "cuenta_id" | "contacto" | "nro_pantalla" | "pin" | "fecha_compra" | "fecha_vencimiento" | "meses_pagados" | "total_pagado" | "estado" | "comentario" | "updatedAt" | "total_ganado" | "total_pagado_proveedor", ExtArgs["result"]["pantallas"]>
+  export type pantallasOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"passwordManagedAt" | "id" | "cuenta_id" | "contacto" | "nro_pantalla" | "pin" | "fecha_compra" | "fecha_vencimiento" | "meses_pagados" | "total_pagado" | "estado" | "comentario" | "updatedAt" | "total_ganado" | "total_pagado_proveedor", ExtArgs["result"]["pantallas"]>
   export type pantallasInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     usuarios?: boolean | usuariosDefaultArgs<ExtArgs>
     cuentascompartidas?: boolean | cuentascompartidasDefaultArgs<ExtArgs>
@@ -4660,6 +4680,7 @@ export namespace Prisma {
       cuentascompartidas: Prisma.$cuentascompartidasPayload<ExtArgs>
     }
     scalars: $Extensions.GetPayloadResult<{
+      passwordManagedAt: Date | null
       id: number
       cuenta_id: number
       contacto: string
@@ -4757,8 +4778,8 @@ export namespace Prisma {
      * // Get first 10 Pantallas
      * const pantallas = await prisma.pantallas.findMany({ take: 10 })
      * 
-     * // Only select the `id`
-     * const pantallasWithIdOnly = await prisma.pantallas.findMany({ select: { id: true } })
+     * // Only select the `passwordManagedAt`
+     * const pantallasWithPasswordManagedAtOnly = await prisma.pantallas.findMany({ select: { passwordManagedAt: true } })
      * 
      */
     findMany<T extends pantallasFindManyArgs>(args?: SelectSubset<T, pantallasFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$pantallasPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
@@ -5045,6 +5066,7 @@ export namespace Prisma {
    * Fields of the pantallas model
    */
   interface pantallasFieldRefs {
+    readonly passwordManagedAt: FieldRef<"pantallas", 'DateTime'>
     readonly id: FieldRef<"pantallas", 'Int'>
     readonly cuenta_id: FieldRef<"pantallas", 'Int'>
     readonly contacto: FieldRef<"pantallas", 'String'>
@@ -17485,6 +17507,7 @@ export namespace Prisma {
 
 
   export const CuentascompletasScalarFieldEnum: {
+    passwordManagedAt: 'passwordManagedAt',
     id: 'id',
     contacto: 'contacto',
     plataforma_id: 'plataforma_id',
@@ -17506,6 +17529,7 @@ export namespace Prisma {
 
 
   export const PantallasScalarFieldEnum: {
+    passwordManagedAt: 'passwordManagedAt',
     id: 'id',
     cuenta_id: 'cuenta_id',
     contacto: 'contacto',
@@ -17892,16 +17916,16 @@ export namespace Prisma {
 
 
   /**
-   * Reference to a field of type 'BigInt'
+   * Reference to a field of type 'DateTime'
    */
-  export type BigIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BigInt'>
+  export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime'>
     
 
 
   /**
-   * Reference to a field of type 'DateTime'
+   * Reference to a field of type 'BigInt'
    */
-  export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime'>
+  export type BigIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BigInt'>
     
 
 
@@ -18013,6 +18037,7 @@ export namespace Prisma {
     AND?: cuentascompletasWhereInput | cuentascompletasWhereInput[]
     OR?: cuentascompletasWhereInput[]
     NOT?: cuentascompletasWhereInput | cuentascompletasWhereInput[]
+    passwordManagedAt?: DateTimeNullableFilter<"cuentascompletas"> | Date | string | null
     id?: BigIntFilter<"cuentascompletas"> | bigint | number
     contacto?: StringFilter<"cuentascompletas"> | string
     plataforma_id?: IntFilter<"cuentascompletas"> | number
@@ -18033,6 +18058,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasOrderByWithRelationInput = {
+    passwordManagedAt?: SortOrderInput | SortOrder
     id?: SortOrder
     contacto?: SortOrder
     plataforma_id?: SortOrder
@@ -18058,6 +18084,7 @@ export namespace Prisma {
     AND?: cuentascompletasWhereInput | cuentascompletasWhereInput[]
     OR?: cuentascompletasWhereInput[]
     NOT?: cuentascompletasWhereInput | cuentascompletasWhereInput[]
+    passwordManagedAt?: DateTimeNullableFilter<"cuentascompletas"> | Date | string | null
     contacto?: StringFilter<"cuentascompletas"> | string
     plataforma_id?: IntFilter<"cuentascompletas"> | number
     proveedor?: StringNullableFilter<"cuentascompletas"> | string | null
@@ -18077,6 +18104,7 @@ export namespace Prisma {
   }, "id">
 
   export type cuentascompletasOrderByWithAggregationInput = {
+    passwordManagedAt?: SortOrderInput | SortOrder
     id?: SortOrder
     contacto?: SortOrder
     plataforma_id?: SortOrder
@@ -18103,6 +18131,7 @@ export namespace Prisma {
     AND?: cuentascompletasScalarWhereWithAggregatesInput | cuentascompletasScalarWhereWithAggregatesInput[]
     OR?: cuentascompletasScalarWhereWithAggregatesInput[]
     NOT?: cuentascompletasScalarWhereWithAggregatesInput | cuentascompletasScalarWhereWithAggregatesInput[]
+    passwordManagedAt?: DateTimeNullableWithAggregatesFilter<"cuentascompletas"> | Date | string | null
     id?: BigIntWithAggregatesFilter<"cuentascompletas"> | bigint | number
     contacto?: StringWithAggregatesFilter<"cuentascompletas"> | string
     plataforma_id?: IntWithAggregatesFilter<"cuentascompletas"> | number
@@ -18124,6 +18153,7 @@ export namespace Prisma {
     AND?: pantallasWhereInput | pantallasWhereInput[]
     OR?: pantallasWhereInput[]
     NOT?: pantallasWhereInput | pantallasWhereInput[]
+    passwordManagedAt?: DateTimeNullableFilter<"pantallas"> | Date | string | null
     id?: IntFilter<"pantallas"> | number
     cuenta_id?: IntFilter<"pantallas"> | number
     contacto?: StringFilter<"pantallas"> | string
@@ -18143,6 +18173,7 @@ export namespace Prisma {
   }
 
   export type pantallasOrderByWithRelationInput = {
+    passwordManagedAt?: SortOrderInput | SortOrder
     id?: SortOrder
     cuenta_id?: SortOrder
     contacto?: SortOrder
@@ -18167,6 +18198,7 @@ export namespace Prisma {
     AND?: pantallasWhereInput | pantallasWhereInput[]
     OR?: pantallasWhereInput[]
     NOT?: pantallasWhereInput | pantallasWhereInput[]
+    passwordManagedAt?: DateTimeNullableFilter<"pantallas"> | Date | string | null
     cuenta_id?: IntFilter<"pantallas"> | number
     contacto?: StringFilter<"pantallas"> | string
     nro_pantalla?: StringFilter<"pantallas"> | string
@@ -18185,6 +18217,7 @@ export namespace Prisma {
   }, "id">
 
   export type pantallasOrderByWithAggregationInput = {
+    passwordManagedAt?: SortOrderInput | SortOrder
     id?: SortOrder
     cuenta_id?: SortOrder
     contacto?: SortOrder
@@ -18210,6 +18243,7 @@ export namespace Prisma {
     AND?: pantallasScalarWhereWithAggregatesInput | pantallasScalarWhereWithAggregatesInput[]
     OR?: pantallasScalarWhereWithAggregatesInput[]
     NOT?: pantallasScalarWhereWithAggregatesInput | pantallasScalarWhereWithAggregatesInput[]
+    passwordManagedAt?: DateTimeNullableWithAggregatesFilter<"pantallas"> | Date | string | null
     id?: IntWithAggregatesFilter<"pantallas"> | number
     cuenta_id?: IntWithAggregatesFilter<"pantallas"> | number
     contacto?: StringWithAggregatesFilter<"pantallas"> | string
@@ -19147,6 +19181,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasCreateInput = {
+    passwordManagedAt?: Date | string | null
     id?: bigint | number
     proveedor?: string | null
     fecha_compra?: Date | string | null
@@ -19165,6 +19200,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasUncheckedCreateInput = {
+    passwordManagedAt?: Date | string | null
     id?: bigint | number
     contacto: string
     plataforma_id: number
@@ -19183,6 +19219,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasUpdateInput = {
+    passwordManagedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     id?: BigIntFieldUpdateOperationsInput | bigint | number
     proveedor?: NullableStringFieldUpdateOperationsInput | string | null
     fecha_compra?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -19201,6 +19238,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasUncheckedUpdateInput = {
+    passwordManagedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     id?: BigIntFieldUpdateOperationsInput | bigint | number
     contacto?: StringFieldUpdateOperationsInput | string
     plataforma_id?: IntFieldUpdateOperationsInput | number
@@ -19219,6 +19257,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasCreateManyInput = {
+    passwordManagedAt?: Date | string | null
     id?: bigint | number
     contacto: string
     plataforma_id: number
@@ -19237,6 +19276,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasUpdateManyMutationInput = {
+    passwordManagedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     id?: BigIntFieldUpdateOperationsInput | bigint | number
     proveedor?: NullableStringFieldUpdateOperationsInput | string | null
     fecha_compra?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -19253,6 +19293,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasUncheckedUpdateManyInput = {
+    passwordManagedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     id?: BigIntFieldUpdateOperationsInput | bigint | number
     contacto?: StringFieldUpdateOperationsInput | string
     plataforma_id?: IntFieldUpdateOperationsInput | number
@@ -19271,6 +19312,7 @@ export namespace Prisma {
   }
 
   export type pantallasCreateInput = {
+    passwordManagedAt?: Date | string | null
     nro_pantalla: string
     pin?: string | null
     fecha_compra: Date | string
@@ -19287,6 +19329,7 @@ export namespace Prisma {
   }
 
   export type pantallasUncheckedCreateInput = {
+    passwordManagedAt?: Date | string | null
     id?: number
     cuenta_id: number
     contacto: string
@@ -19304,6 +19347,7 @@ export namespace Prisma {
   }
 
   export type pantallasUpdateInput = {
+    passwordManagedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     nro_pantalla?: StringFieldUpdateOperationsInput | string
     pin?: NullableStringFieldUpdateOperationsInput | string | null
     fecha_compra?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -19320,6 +19364,7 @@ export namespace Prisma {
   }
 
   export type pantallasUncheckedUpdateInput = {
+    passwordManagedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     id?: IntFieldUpdateOperationsInput | number
     cuenta_id?: IntFieldUpdateOperationsInput | number
     contacto?: StringFieldUpdateOperationsInput | string
@@ -19337,6 +19382,7 @@ export namespace Prisma {
   }
 
   export type pantallasCreateManyInput = {
+    passwordManagedAt?: Date | string | null
     id?: number
     cuenta_id: number
     contacto: string
@@ -19354,6 +19400,7 @@ export namespace Prisma {
   }
 
   export type pantallasUpdateManyMutationInput = {
+    passwordManagedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     nro_pantalla?: StringFieldUpdateOperationsInput | string
     pin?: NullableStringFieldUpdateOperationsInput | string | null
     fecha_compra?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -19368,6 +19415,7 @@ export namespace Prisma {
   }
 
   export type pantallasUncheckedUpdateManyInput = {
+    passwordManagedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     id?: IntFieldUpdateOperationsInput | number
     cuenta_id?: IntFieldUpdateOperationsInput | number
     contacto?: StringFieldUpdateOperationsInput | string
@@ -20482,17 +20530,6 @@ export namespace Prisma {
     _max?: NestedBoolFilter<$PrismaModel>
   }
 
-  export type BigIntFilter<$PrismaModel = never> = {
-    equals?: bigint | number | BigIntFieldRefInput<$PrismaModel>
-    in?: bigint[] | number[]
-    notIn?: bigint[] | number[]
-    lt?: bigint | number | BigIntFieldRefInput<$PrismaModel>
-    lte?: bigint | number | BigIntFieldRefInput<$PrismaModel>
-    gt?: bigint | number | BigIntFieldRefInput<$PrismaModel>
-    gte?: bigint | number | BigIntFieldRefInput<$PrismaModel>
-    not?: NestedBigIntFilter<$PrismaModel> | bigint | number
-  }
-
   export type DateTimeNullableFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
     in?: Date[] | string[] | null
@@ -20502,6 +20539,17 @@ export namespace Prisma {
     gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
+  }
+
+  export type BigIntFilter<$PrismaModel = never> = {
+    equals?: bigint | number | BigIntFieldRefInput<$PrismaModel>
+    in?: bigint[] | number[]
+    notIn?: bigint[] | number[]
+    lt?: bigint | number | BigIntFieldRefInput<$PrismaModel>
+    lte?: bigint | number | BigIntFieldRefInput<$PrismaModel>
+    gt?: bigint | number | BigIntFieldRefInput<$PrismaModel>
+    gte?: bigint | number | BigIntFieldRefInput<$PrismaModel>
+    not?: NestedBigIntFilter<$PrismaModel> | bigint | number
   }
 
   export type DecimalNullableFilter<$PrismaModel = never> = {
@@ -20543,6 +20591,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasCountOrderByAggregateInput = {
+    passwordManagedAt?: SortOrder
     id?: SortOrder
     contacto?: SortOrder
     plataforma_id?: SortOrder
@@ -20570,6 +20619,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasMaxOrderByAggregateInput = {
+    passwordManagedAt?: SortOrder
     id?: SortOrder
     contacto?: SortOrder
     plataforma_id?: SortOrder
@@ -20588,6 +20638,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasMinOrderByAggregateInput = {
+    passwordManagedAt?: SortOrder
     id?: SortOrder
     contacto?: SortOrder
     plataforma_id?: SortOrder
@@ -20614,6 +20665,20 @@ export namespace Prisma {
     total_pagado_proveedor_completa?: SortOrder
   }
 
+  export type DateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | null
+    notIn?: Date[] | string[] | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedDateTimeNullableFilter<$PrismaModel>
+    _max?: NestedDateTimeNullableFilter<$PrismaModel>
+  }
+
   export type BigIntWithAggregatesFilter<$PrismaModel = never> = {
     equals?: bigint | number | BigIntFieldRefInput<$PrismaModel>
     in?: bigint[] | number[]
@@ -20628,20 +20693,6 @@ export namespace Prisma {
     _sum?: NestedBigIntFilter<$PrismaModel>
     _min?: NestedBigIntFilter<$PrismaModel>
     _max?: NestedBigIntFilter<$PrismaModel>
-  }
-
-  export type DateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | null
-    notIn?: Date[] | string[] | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
-    _count?: NestedIntNullableFilter<$PrismaModel>
-    _min?: NestedDateTimeNullableFilter<$PrismaModel>
-    _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
 
   export type DecimalNullableWithAggregatesFilter<$PrismaModel = never> = {
@@ -20686,6 +20737,7 @@ export namespace Prisma {
   }
 
   export type pantallasCountOrderByAggregateInput = {
+    passwordManagedAt?: SortOrder
     id?: SortOrder
     cuenta_id?: SortOrder
     contacto?: SortOrder
@@ -20712,6 +20764,7 @@ export namespace Prisma {
   }
 
   export type pantallasMaxOrderByAggregateInput = {
+    passwordManagedAt?: SortOrder
     id?: SortOrder
     cuenta_id?: SortOrder
     contacto?: SortOrder
@@ -20729,6 +20782,7 @@ export namespace Prisma {
   }
 
   export type pantallasMinOrderByAggregateInput = {
+    passwordManagedAt?: SortOrder
     id?: SortOrder
     cuenta_id?: SortOrder
     contacto?: SortOrder
@@ -21654,16 +21708,16 @@ export namespace Prisma {
     connect?: usuariosWhereUniqueInput
   }
 
+  export type NullableDateTimeFieldUpdateOperationsInput = {
+    set?: Date | string | null
+  }
+
   export type BigIntFieldUpdateOperationsInput = {
     set?: bigint | number
     increment?: bigint | number
     decrement?: bigint | number
     multiply?: bigint | number
     divide?: bigint | number
-  }
-
-  export type NullableDateTimeFieldUpdateOperationsInput = {
-    set?: Date | string | null
   }
 
   export type NullableDecimalFieldUpdateOperationsInput = {
@@ -22343,17 +22397,6 @@ export namespace Prisma {
     _max?: NestedBoolFilter<$PrismaModel>
   }
 
-  export type NestedBigIntFilter<$PrismaModel = never> = {
-    equals?: bigint | number | BigIntFieldRefInput<$PrismaModel>
-    in?: bigint[] | number[]
-    notIn?: bigint[] | number[]
-    lt?: bigint | number | BigIntFieldRefInput<$PrismaModel>
-    lte?: bigint | number | BigIntFieldRefInput<$PrismaModel>
-    gt?: bigint | number | BigIntFieldRefInput<$PrismaModel>
-    gte?: bigint | number | BigIntFieldRefInput<$PrismaModel>
-    not?: NestedBigIntFilter<$PrismaModel> | bigint | number
-  }
-
   export type NestedDateTimeNullableFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
     in?: Date[] | string[] | null
@@ -22363,6 +22406,17 @@ export namespace Prisma {
     gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
+  }
+
+  export type NestedBigIntFilter<$PrismaModel = never> = {
+    equals?: bigint | number | BigIntFieldRefInput<$PrismaModel>
+    in?: bigint[] | number[]
+    notIn?: bigint[] | number[]
+    lt?: bigint | number | BigIntFieldRefInput<$PrismaModel>
+    lte?: bigint | number | BigIntFieldRefInput<$PrismaModel>
+    gt?: bigint | number | BigIntFieldRefInput<$PrismaModel>
+    gte?: bigint | number | BigIntFieldRefInput<$PrismaModel>
+    not?: NestedBigIntFilter<$PrismaModel> | bigint | number
   }
 
   export type NestedDecimalNullableFilter<$PrismaModel = never> = {
@@ -22387,6 +22441,20 @@ export namespace Prisma {
     not?: NestedDateTimeFilter<$PrismaModel> | Date | string
   }
 
+  export type NestedDateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | null
+    notIn?: Date[] | string[] | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedDateTimeNullableFilter<$PrismaModel>
+    _max?: NestedDateTimeNullableFilter<$PrismaModel>
+  }
+
   export type NestedBigIntWithAggregatesFilter<$PrismaModel = never> = {
     equals?: bigint | number | BigIntFieldRefInput<$PrismaModel>
     in?: bigint[] | number[]
@@ -22401,20 +22469,6 @@ export namespace Prisma {
     _sum?: NestedBigIntFilter<$PrismaModel>
     _min?: NestedBigIntFilter<$PrismaModel>
     _max?: NestedBigIntFilter<$PrismaModel>
-  }
-
-  export type NestedDateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | null
-    notIn?: Date[] | string[] | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
-    _count?: NestedIntNullableFilter<$PrismaModel>
-    _min?: NestedDateTimeNullableFilter<$PrismaModel>
-    _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
 
   export type NestedDecimalNullableWithAggregatesFilter<$PrismaModel = never> = {
@@ -22568,6 +22622,7 @@ export namespace Prisma {
   }
 
   export type pantallasCreateWithoutCuentascompartidasInput = {
+    passwordManagedAt?: Date | string | null
     nro_pantalla: string
     pin?: string | null
     fecha_compra: Date | string
@@ -22583,6 +22638,7 @@ export namespace Prisma {
   }
 
   export type pantallasUncheckedCreateWithoutCuentascompartidasInput = {
+    passwordManagedAt?: Date | string | null
     id?: number
     contacto: string
     nro_pantalla: string
@@ -22664,6 +22720,7 @@ export namespace Prisma {
     AND?: pantallasScalarWhereInput | pantallasScalarWhereInput[]
     OR?: pantallasScalarWhereInput[]
     NOT?: pantallasScalarWhereInput | pantallasScalarWhereInput[]
+    passwordManagedAt?: DateTimeNullableFilter<"pantallas"> | Date | string | null
     id?: IntFilter<"pantallas"> | number
     cuenta_id?: IntFilter<"pantallas"> | number
     contacto?: StringFilter<"pantallas"> | string
@@ -22904,6 +22961,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasCreateWithoutPlataformasInput = {
+    passwordManagedAt?: Date | string | null
     id?: bigint | number
     proveedor?: string | null
     fecha_compra?: Date | string | null
@@ -22921,6 +22979,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasUncheckedCreateWithoutPlataformasInput = {
+    passwordManagedAt?: Date | string | null
     id?: bigint | number
     contacto: string
     proveedor?: string | null
@@ -23016,6 +23075,7 @@ export namespace Prisma {
     AND?: cuentascompletasScalarWhereInput | cuentascompletasScalarWhereInput[]
     OR?: cuentascompletasScalarWhereInput[]
     NOT?: cuentascompletasScalarWhereInput | cuentascompletasScalarWhereInput[]
+    passwordManagedAt?: DateTimeNullableFilter<"cuentascompletas"> | Date | string | null
     id?: BigIntFilter<"cuentascompletas"> | bigint | number
     contacto?: StringFilter<"cuentascompletas"> | string
     plataforma_id?: IntFilter<"cuentascompletas"> | number
@@ -23060,6 +23120,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasCreateWithoutUsuariosInput = {
+    passwordManagedAt?: Date | string | null
     id?: bigint | number
     proveedor?: string | null
     fecha_compra?: Date | string | null
@@ -23077,6 +23138,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasUncheckedCreateWithoutUsuariosInput = {
+    passwordManagedAt?: Date | string | null
     id?: bigint | number
     plataforma_id: number
     proveedor?: string | null
@@ -23104,6 +23166,7 @@ export namespace Prisma {
   }
 
   export type pantallasCreateWithoutUsuariosInput = {
+    passwordManagedAt?: Date | string | null
     nro_pantalla: string
     pin?: string | null
     fecha_compra: Date | string
@@ -23119,6 +23182,7 @@ export namespace Prisma {
   }
 
   export type pantallasUncheckedCreateWithoutUsuariosInput = {
+    passwordManagedAt?: Date | string | null
     id?: number
     cuenta_id: number
     nro_pantalla: string
@@ -23749,6 +23813,7 @@ export namespace Prisma {
   }
 
   export type pantallasCreateManyCuentascompartidasInput = {
+    passwordManagedAt?: Date | string | null
     id?: number
     contacto: string
     nro_pantalla: string
@@ -23765,6 +23830,7 @@ export namespace Prisma {
   }
 
   export type pantallasUpdateWithoutCuentascompartidasInput = {
+    passwordManagedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     nro_pantalla?: StringFieldUpdateOperationsInput | string
     pin?: NullableStringFieldUpdateOperationsInput | string | null
     fecha_compra?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -23780,6 +23846,7 @@ export namespace Prisma {
   }
 
   export type pantallasUncheckedUpdateWithoutCuentascompartidasInput = {
+    passwordManagedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     id?: IntFieldUpdateOperationsInput | number
     contacto?: StringFieldUpdateOperationsInput | string
     nro_pantalla?: StringFieldUpdateOperationsInput | string
@@ -23796,6 +23863,7 @@ export namespace Prisma {
   }
 
   export type pantallasUncheckedUpdateManyWithoutCuentascompartidasInput = {
+    passwordManagedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     id?: IntFieldUpdateOperationsInput | number
     contacto?: StringFieldUpdateOperationsInput | string
     nro_pantalla?: StringFieldUpdateOperationsInput | string
@@ -23820,6 +23888,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasCreateManyPlataformasInput = {
+    passwordManagedAt?: Date | string | null
     id?: bigint | number
     contacto: string
     proveedor?: string | null
@@ -23868,6 +23937,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasUpdateWithoutPlataformasInput = {
+    passwordManagedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     id?: BigIntFieldUpdateOperationsInput | bigint | number
     proveedor?: NullableStringFieldUpdateOperationsInput | string | null
     fecha_compra?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -23885,6 +23955,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasUncheckedUpdateWithoutPlataformasInput = {
+    passwordManagedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     id?: BigIntFieldUpdateOperationsInput | bigint | number
     contacto?: StringFieldUpdateOperationsInput | string
     proveedor?: NullableStringFieldUpdateOperationsInput | string | null
@@ -23902,6 +23973,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasUncheckedUpdateManyWithoutPlataformasInput = {
+    passwordManagedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     id?: BigIntFieldUpdateOperationsInput | bigint | number
     contacto?: StringFieldUpdateOperationsInput | string
     proveedor?: NullableStringFieldUpdateOperationsInput | string | null
@@ -23936,6 +24008,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasCreateManyUsuariosInput = {
+    passwordManagedAt?: Date | string | null
     id?: bigint | number
     plataforma_id: number
     proveedor?: string | null
@@ -23953,6 +24026,7 @@ export namespace Prisma {
   }
 
   export type pantallasCreateManyUsuariosInput = {
+    passwordManagedAt?: Date | string | null
     id?: number
     cuenta_id: number
     nro_pantalla: string
@@ -23969,6 +24043,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasUpdateWithoutUsuariosInput = {
+    passwordManagedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     id?: BigIntFieldUpdateOperationsInput | bigint | number
     proveedor?: NullableStringFieldUpdateOperationsInput | string | null
     fecha_compra?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -23986,6 +24061,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasUncheckedUpdateWithoutUsuariosInput = {
+    passwordManagedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     id?: BigIntFieldUpdateOperationsInput | bigint | number
     plataforma_id?: IntFieldUpdateOperationsInput | number
     proveedor?: NullableStringFieldUpdateOperationsInput | string | null
@@ -24003,6 +24079,7 @@ export namespace Prisma {
   }
 
   export type cuentascompletasUncheckedUpdateManyWithoutUsuariosInput = {
+    passwordManagedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     id?: BigIntFieldUpdateOperationsInput | bigint | number
     plataforma_id?: IntFieldUpdateOperationsInput | number
     proveedor?: NullableStringFieldUpdateOperationsInput | string | null
@@ -24020,6 +24097,7 @@ export namespace Prisma {
   }
 
   export type pantallasUpdateWithoutUsuariosInput = {
+    passwordManagedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     nro_pantalla?: StringFieldUpdateOperationsInput | string
     pin?: NullableStringFieldUpdateOperationsInput | string | null
     fecha_compra?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -24035,6 +24113,7 @@ export namespace Prisma {
   }
 
   export type pantallasUncheckedUpdateWithoutUsuariosInput = {
+    passwordManagedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     id?: IntFieldUpdateOperationsInput | number
     cuenta_id?: IntFieldUpdateOperationsInput | number
     nro_pantalla?: StringFieldUpdateOperationsInput | string
@@ -24051,6 +24130,7 @@ export namespace Prisma {
   }
 
   export type pantallasUncheckedUpdateManyWithoutUsuariosInput = {
+    passwordManagedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     id?: IntFieldUpdateOperationsInput | number
     cuenta_id?: IntFieldUpdateOperationsInput | number
     nro_pantalla?: StringFieldUpdateOperationsInput | string

@@ -26,14 +26,22 @@ async function main() {
     await context.addInitScript(() => localStorage.clear());
     const platform = { id: 1, nombre: 'Test', cantidad_pantallas: 6 };
     const baseRow = { cuenta_id: 71, plataforma_id: 1, correo: 'same@example.com', contrasena: 'key', contacto: '3001234567', nombre: 'Prueba', fecha_compra: '2026-09-12', fecha_vencimiento: '2026-10-13', estado: 'ACTIVA', meses_pagados: 1, total_pagado: 6900 };
-    let rows = [], tipo = 'completa', calls = [], revision = 0, failId = null;
+    let rows = [], tipo = 'completa', calls = [], revision = 0;
     await context.route('**/api/**', async route => {
       const req = route.request(), pathname = new URL(req.url()).pathname;
       let data = { ok: true }, status = 200, headers = {};
       if (req.method() === 'PATCH') {
-        calls.push(req.postDataJSON()); rows = rows.filter(r => r.fecha_vencimiento > '2026-10-13');
-        headers['X-Expired-Records-Deleted'] = JSON.stringify({ revision: String(++revision), deleted: 2, correos: [] }); data = {};
-      } else if (pathname === '/api/account-deletions') throw Error('Unexpected global deletion');
+        calls.push(req.postDataJSON());
+        for (const row of rows) if (row.correo === baseRow.correo && row.plataforma_id === 1) { row.passwordManagedAt = '2026-10-13T15:00:00Z'; row.contrasena = req.postDataJSON().contrasena; }
+        headers['X-Password-Records-Managed'] = JSON.stringify({ revision: String(++revision), managed: 3, correos: [] }); data = {};
+      }
+      else if (pathname === '/api/password-managed-records') data = { items: rows.filter(r => r.passwordManagedAt).map(r => ({...r, tipo: tipo === 'completa' ? 'cuenta' : 'pantalla', plataforma: 'Test'})) };
+      else if (pathname === '/api/record-deletions') {
+        const body = req.postDataJSON();
+        if (req.method() === 'POST') data = { cuentaId: tipo === 'completa' ? body.target.id : '71', count: 3, last: false };
+        else { assert.equal(body.decision.action, 'assignment'); rows = rows.filter(r => String(r.id) !== body.target.id); data = { revision: String(++revision), correos: [], archived: false }; }
+      }
+      else if (pathname === '/api/account-deletions') throw Error('Unexpected global deletion');
       else if (pathname === '/api/session/me') data = { authenticated: true, expiresAt: Date.now() + 3600000 };
       else if (pathname === '/api/plataformas') data = [platform];
       else if (pathname === '/api/dashboard') data = { salesToday: 0, activeScreens: 0, expiringSoon: 0, pendingAttention: 0, businessDate: '2026-10-13', topServices: [], lowStock: [], stockRotation: [] };
@@ -48,10 +56,11 @@ async function main() {
     await page.clock.install({ time: new Date('2026-10-14T02:30:00Z') });
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     let dialogs = 0; page.on('dialog', async dialog => { dialogs++; await dialog.dismiss(); });
-    for (const [view, type] of [['Cuentas completas', 'completa'], ['Pantallas', 'pantalla'], ['Vencimientos', 'completa'], ['Vencimientos', 'pantalla']]) {
+    for (const [view, type] of [['Vencimientos', 'completa'], ['Vencimientos', 'pantalla']]) {
       tipo = type;
       const open = async count => {
-        rows = Array.from({ length: count }, (_, i) => ({ ...baseRow, id: i+1, nro_pantalla: String(i+1) })); calls = []; revision++;
+        rows = Array.from({ length: count }, (_, i) => ({ ...baseRow, id: i+1, nro_pantalla: String(i+1), comentario: 'Conservar comentario', pin: '1234' }));
+        rows.push({ ...baseRow, id: 10, plataforma_id: 2 }, { ...baseRow, id: 11, correo: 'other@example.com' }); calls = []; revision++;
         await page.goto(base); await page.getByRole('navigation').getByRole('button', { name: view, exact: true }).click();
         if(view==='Vencimientos') await page.locator('select').filter({has:page.locator('option[value=\"todos\"]')}).selectOption('todos');
         await page.locator('tbody tr').filter({ hasText: baseRow.correo }).first().waitFor();
@@ -66,15 +75,21 @@ async function main() {
       await modal.locator('[data-test-password]').fill('new-password');
       await modal.getByRole('button',{name:'Guardar cambios'}).click();
       await modal.waitFor({state:'hidden'});
-      for(let attempt=0; attempt<100 && await page.locator('tbody').getByRole('button',{name:/Editar/i}).count()!==1;attempt++) await page.waitForTimeout(100);
-      assert.equal(await page.locator('tbody').getByRole('button',{name:/Editar/i}).count(),1,await page.locator('tbody').innerText());
-      assert.equal(rows.length,1); assert.equal(calls.length,1); assert.equal(calls[0].contrasena,'new-password');
+      const managed = page.getByRole('region', { name: 'Correos con cambio de clave' });
+      await managed.getByRole('heading', { name: 'Correos con cambio de clave (3)' }).waitFor();
+      assert.equal(rows.length,5); assert.equal(calls.length,1);
+      assert.equal(await managed.getByRole('button',{name:'Eliminar',exact:true}).count(),3);
+      assert.equal(await page.locator('tbody').getByRole('button',{name:/Editar/i}).count(),2);
+      assert.ok((await managed.innerText()).includes('Conservar comentario'));
       await page.reload(); await page.getByRole('navigation').getByRole('button',{name:view,exact:true}).click();
-      if(view==='Vencimientos') await page.locator('select').filter({has:page.locator('option[value="todos"]')}).selectOption('todos');
-      for(let attempt=0; attempt<100 && await page.locator('tbody').getByRole('button',{name:/Editar/i}).count()!==1;attempt++) await page.waitForTimeout(100);
-      assert.equal(await page.locator('tbody').getByRole('button',{name:/Editar/i}).count(),1,await page.locator('tbody').innerText());
-      assert.equal(dialogs,0);
-      console.log('PASS',view,tipo,'actualización desde servidor y recarga conserva sólo vigente');
+      await managed.getByRole('heading', { name: 'Correos con cambio de clave (3)' }).waitFor();
+      assert.equal(await page.locator('tbody').getByRole('button',{name:/Editar/i}).count(),2);
+      await managed.getByRole('button',{name:'Eliminar',exact:true}).first().click();
+      await page.getByRole('dialog').getByRole('button',{name:'Eliminar registro',exact:true}).click();
+      await page.getByRole('dialog').waitFor({state:'hidden'});
+      await managed.getByRole('heading', { name: 'Correos con cambio de clave (2)' }).waitFor();
+      assert.equal(rows.length,4); assert.equal(dialogs,0);
+      console.log('PASS',view,tipo,'A/B/C: 3 registros completos gestionados, otras cuentas intactas; E: recarga; D: eliminación individual');
     }
     assert.deepEqual(errors, []);
   } finally {

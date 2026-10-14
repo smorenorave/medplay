@@ -55,6 +55,14 @@ test('last assignment inventory preserves parent/credentials and removes client 
   await remove(f, 1, 'inventory'); assert.deepEqual(f.state.accounts, original); assert.equal(f.state.screens.length, 0);
   assert.deepEqual(f.state.inventory, [{ id: 1, plataforma_id: 1, correo: 'test@example.com', clave: 'test-key' }]);
 });
+
+test('managed last screen manual deletion retains parent, users and inventory', async () => {
+  const f = fixture(1); f.state.screens[0].passwordManagedAt = new Date();
+  const parent = structuredClone(f.state.accounts);
+  await remove(f, 1, 'assignment');
+  assert.equal(f.state.screens.length, 0); assert.deepEqual(f.state.accounts, parent);
+  assert.deepEqual(f.state.users, ['same-phone']); assert.equal(f.state.inventory.length, 0);
+});
 test('matching inventory is not duplicated or modified', async () => {
   const f = fixture(1); f.state.inventory.push({ id: 9, plataforma_id: 1, correo: 'test@example.com', clave: 'test-key' });
   await remove(f, 1, 'inventory'); assert.equal(f.state.inventory.length, 1); assert.equal(f.state.inventory[0].id, 9);

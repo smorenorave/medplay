@@ -5,7 +5,7 @@ export class PantallaDeletionError extends Error {
   constructor(message: string, public status = 409) { super(message); }
 }
 
-export type PantallaDecision = { cuentaId: number; action: "record" | "inventory" | "purge" };
+export type PantallaDecision = { cuentaId: number; action: "record" | "inventory" | "purge" | "assignment" };
 
 /** Lock the parent before counting children. Serializable also protects the child
  * range against reassignment/insertion and rolls back every write on conflict. */
@@ -22,7 +22,7 @@ export async function pantallaDeletion(db: PrismaClient, id: number, adminId: nu
         const count = await tx.pantallas.count({ where: { cuenta_id: account.id } });
         const last = count === 1;
         if (!decision) return { cuentaId: account.id, last, count };
-        if (decision.cuentaId !== account.id || last !== (decision.action !== "record")) {
+        if (decision.cuentaId !== account.id || (decision.action === "assignment" ? !row.passwordManagedAt : last !== (decision.action !== "record"))) {
           throw new PantallaDeletionError("Las asignaciones de la cuenta cambiaron. Cierra y vuelve a abrir la eliminación para elegir qué hacer.");
         }
         if (decision.action === "inventory") {

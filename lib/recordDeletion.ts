@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { pantallaDeletion, PantallaDeletionError } from "./pantallaDeletion";
 
 export type RecordTarget = { tipo: "pantalla" | "completa"; id: string };
-export type RecordDecision = { cuentaId: string; action: "record" | "inventory" | "purge" };
+export type RecordDecision = { cuentaId: string; action: "record" | "inventory" | "purge" | "assignment" };
 
 /** Shared scoped deletion. It never deletes all records matching an email. */
 export async function recordDeletion(db: PrismaClient, target: RecordTarget, adminId: number, decision?: RecordDecision) {
@@ -22,7 +22,7 @@ export async function recordDeletion(db: PrismaClient, target: RecordTarget, adm
         const related = await tx.$queryRaw<{ id: bigint }[]>`SELECT id FROM cuentascompletas WHERE LOWER(TRIM(correo)) = ${email} AND plataforma_id = ${row.plataforma_id} FOR UPDATE`;
         const count = related.length, last = count === 1;
         if (!decision) return { cuentaId: String(id), last, count };
-        if (decision.cuentaId !== String(id) || last !== (decision.action !== "record")) throw new PantallaDeletionError("Las asociaciones cambiaron. Vuelve a revisar la selección y su destino.");
+        if (decision.cuentaId !== String(id) || (decision.action === "assignment" ? !row.passwordManagedAt : last !== (decision.action !== "record"))) throw new PantallaDeletionError("Las asociaciones cambiaron. Vuelve a revisar la selección y su destino.");
         if (decision.action === "inventory") {
           const shared = await tx.$queryRaw<{ id: number }[]>`SELECT id FROM cuentascompartidas WHERE LOWER(TRIM(correo)) = ${email} AND plataforma_id = ${row.plataforma_id} FOR UPDATE`;
           if (shared.length) throw new PantallaDeletionError("Otra cuenta compartida utiliza este correo y plataforma. No se puede enviarla a inventario sin resolver esa asociación.");

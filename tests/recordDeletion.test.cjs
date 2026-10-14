@@ -47,6 +47,16 @@ test('last purge retains inventory, users and independent accounts', async () =>
   const f = fixture(1); f.state.inventory.push({ correo: 'same@example.com', plataforma_id: 1, clave: 'key' });
   await remove(f, 'purge'); assert.equal(f.state.accounts.length, 0); assert.equal(f.state.inventory.length, 1); assert.deepEqual(f.state.users, ['keep']);
 });
+
+test('D: managed complete account deletion only removes selected ID', async () => {
+  const f = fixture(3); f.state.accounts.forEach(row => row.passwordManagedAt = new Date());
+  const siblings = structuredClone(f.state.accounts.slice(1));
+  await remove(f, 'assignment');
+  assert.deepEqual(f.state.accounts, siblings); assert.deepEqual(f.state.users, ['keep']);
+});
+test('assignment-only action cannot bypass unmanaged last-account decision', async () => {
+  const f = fixture(1); await assert.rejects(remove(f, 'assignment')); assert.equal(f.state.accounts.length, 1);
+});
 for (const failure of ['inventory', 'history', 'delete']) test('rollback all changes on ' + failure + ' failure', async () => {
   const f = fixture(1), before = structuredClone(f.state); f.fail(failure);
   await assert.rejects(remove(f, 'inventory')); assert.deepEqual(f.state, before);
@@ -74,6 +84,7 @@ let routeFixture = fixture(1), adminId = 1;
 require.cache[require.resolve('../lib/db.ts')] = { exports: { prisma: new Proxy({}, { get: (_, key) => routeFixture.db[key] }) } };
 require.cache[require.resolve('../lib/adminSession.ts')] = { exports: { getAuthenticatedAdminId: async () => adminId } };
 const route = require('../src/app/api/record-deletions/route.ts');
+const managedRoute = require('../src/app/api/password-managed-records/route.ts');
 const request = (method, body) => route[method](new Request('http://localhost/api/record-deletions', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }));
 test('shared endpoint authenticates, rejects global payloads and requires explicit action', async () => {
   routeFixture = fixture(1); adminId = null; assert.equal((await request('POST', { target: { tipo: 'completa', id: '1' } })).status, 401); adminId = 1;
@@ -115,4 +126,20 @@ test('client distinguishes expired session, permission, malformed response and s
       await assert.rejects(previewRecordDeletion({ tipo: 'completa', id: '1' }), expected);
     }
   } finally { global.fetch = originalFetch; }
+});
+
+test('managed list is authenticated, persistent, full-data and preserves bigint IDs', async () => {
+  const req = new Request('http://localhost/api/password-managed-records');
+  adminId = null; assert.equal((await managedRoute.GET(req)).status, 401); adminId = 1;
+  let rows = [{ id: 9007199254740993n, correo: 'same@example.com', contrasena: 'key', comentario: 'keep', passwordManagedAt: new Date(), usuarios: { nombre: 'Cliente' }, plataformas: { nombre: 'Disney' }, total_pagado_completa: '12000' }];
+  routeFixture = { db: { $transaction: async work => work({
+    cuentascompletas: { findMany: async query => { assert.deepEqual(query.where, { passwordManagedAt: { not: null } }); return rows; } },
+    pantallas: { findMany: async query => { assert.deepEqual(query.where, { passwordManagedAt: { not: null } }); return []; } },
+  }) } };
+  for (let read = 0; read < 2; read++) {
+    const response = await managedRoute.GET(req), data = await response.json();
+    assert.equal(response.status, 200); assert.equal(data.items[0].id, '9007199254740993');
+    assert.equal(data.items[0].comentario, 'keep'); assert.equal(data.items[0].total_pagado, '12000');
+  }
+  rows = []; assert.deepEqual((await (await managedRoute.GET(req)).json()).items, []);
 });

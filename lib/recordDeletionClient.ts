@@ -16,7 +16,7 @@ export async function previewRecordDeletion(item: DeletionSelection): Promise<De
   const result = await readResponse(response);
   return result;
 }
-export async function deleteRecordSelection(item: DeletionSelection, preview: DeletionPreview, action: "record" | "inventory" | "purge") {
+export async function deleteRecordSelection(item: DeletionSelection, preview: DeletionPreview, action: "record" | "inventory" | "purge" | "assignment") {
   const response = await fetch("/api/record-deletions", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target: { tipo: item.tipo, id: item.id }, decision: { cuentaId: preview.cuentaId, action } }) });
   const result = await readResponse(response);
   applyAccountDeletion(result);

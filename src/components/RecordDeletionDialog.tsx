@@ -3,8 +3,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { deleteRecordSelection, previewRecordDeletion, type DeletionPreview, type DeletionSelection } from "@/lib/recordDeletionClient";
 
-type Props = { items: DeletionSelection[]; onClose: () => void; onDeleted: () => void | Promise<void> };
-export default function RecordDeletionDialog({ items, onClose, onDeleted }: Props) {
+type Props = { assignmentOnly?: boolean; items: DeletionSelection[]; onClose: () => void; onDeleted: () => void | Promise<void> };
+export default function RecordDeletionDialog({ items, onClose, onDeleted, assignmentOnly = false }: Props) {
   const [previews, setPreviews] = useState<DeletionPreview[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -45,7 +45,7 @@ export default function RecordDeletionDialog({ items, onClose, onDeleted }: Prop
           // A preceding deletion in this same batch can make the next row last.
           const current = items.length === 1 ? previews[index] : await previewRecordDeletion(item);
           if (current.cuentaId !== previews[index].cuentaId) throw new Error("La asignación cambió. Vuelve a revisar este registro.");
-          const response = await deleteRecordSelection(item, current, current.last ? (inventory ? "inventory" : "purge") : "record");
+          const response = await deleteRecordSelection(item, current, assignmentOnly ? "assignment" : current.last ? (inventory ? "inventory" : "purge") : "record");
           outcome.deleted++;
           if (response.archived) outcome.archived++;
         } catch (reason) { outcome.failed.push(`${item.label || item.id}: ${(reason as Error).message}`); }
@@ -58,7 +58,7 @@ export default function RecordDeletionDialog({ items, onClose, onDeleted }: Prop
     } finally { running.current = false; setBusy(false); }
   };
   if (typeof document === "undefined") return null;
-  const last = previews[0]?.last;
+  const last = !assignmentOnly && previews[0]?.last;
   return createPortal(<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4">
     <section role="dialog" aria-modal="true" aria-labelledby="record-deletion-title" className="max-h-[90vh] w-full max-w-xl overflow-auto rounded-2xl border border-neutral-700 bg-neutral-900 p-5 text-neutral-100 shadow-xl">
       <h2 id="record-deletion-title" className="text-lg font-semibold">{items.length === 1 ? "Eliminar registro" : `Eliminar ${items.length} registros seleccionados`}</h2>
@@ -73,7 +73,7 @@ export default function RecordDeletionDialog({ items, onClose, onDeleted }: Prop
       <div className="mt-5 flex flex-wrap justify-end gap-2">
         <button type="button" disabled={busy} onClick={onClose} className="rounded-lg border border-neutral-600 px-3 py-2">{result ? "Cerrar" : "Cancelar"}</button>
         {!result && <>
-          {(items.length > 1 || last) && <button type="button" disabled={busy || loading || previews.length !== items.length} onClick={() => void run(true)} className="rounded-lg bg-amber-800 px-3 py-2 disabled:opacity-50">Enviar al inventario y eliminar</button>}
+          {!assignmentOnly && (items.length > 1 || last) && <button type="button" disabled={busy || loading || previews.length !== items.length} onClick={() => void run(true)} className="rounded-lg bg-amber-800 px-3 py-2 disabled:opacity-50">Enviar al inventario y eliminar</button>}
           <button type="button" disabled={busy || loading || previews.length !== items.length} onClick={() => void run(false)} className="rounded-lg bg-rose-800 px-3 py-2 disabled:opacity-50">{busy ? "Procesando…" : items.length === 1 && !last ? "Eliminar registro" : "Eliminar definitivamente"}</button>
         </>}
       </div>
