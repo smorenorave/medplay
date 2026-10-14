@@ -4,7 +4,7 @@
 
 En los editores de Vencimientos, Pantallas y Cuentas completas, cambiar realmente la contraseña de una asignación vencida elimina de `pantallas` y `cuentascompletas` todas las asignaciones vencidas del mismo correo normalizado (`LOWER(TRIM(correo))`), incluyendo otras plataformas. No se compara la contraseña anterior para seleccionar los asociados.
 
-Vencido significa fecha anterior al día actual de Bogotá, no el campo `estado`. Hoy, fechas futuras y fechas nulas se conservan. Si el mismo guardado renueva el registro o lo cambia de correo, no se dispara la limpieza. Guardar sin cambiar contraseña tampoco la dispara.
+Vencido significa fecha menor o igual al día actual de Bogotá, no el campo `estado`. Se eliminan también los que vencen hoy; las fechas futuras y nulas se conservan. Si el mismo guardado renueva el registro o lo cambia de correo, no se dispara la limpieza. Guardar sin cambiar contraseña tampoco la dispara.
 
 Las contraseñas siguen sincronizándose con el alcance existente de plataforma + correo. La eliminación tiene el alcance por correo solicitado, independientemente de plataforma. Los contactos (`usuarios`), inventario y cuentas compartidas padre se conservan; no se ejecutan cascadas que puedan borrar servicios vigentes. Una cuenta compartida vacía puede seguir existiendo con la nueva contraseña.
 

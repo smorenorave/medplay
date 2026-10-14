@@ -20,7 +20,7 @@ import React, {
 import { createPortal } from "react-dom";
 import { usePlataformas } from "@/hooks/usePlataformas";
 import { getDaily, setDaily, todayYMDLocal } from "@/lib/dailyCache";
-import { readPasswordChanges, writePasswordChanges, recordPasswordChange, deletePasswordChange, isResolvedExpiration, readResolvedExpirations, PASSWORD_CHANGES_KEY, PASSWORD_CHANGES_EVENT } from "@/lib/passwordChanges";
+import { readPasswordChanges, writePasswordChanges, recordPasswordChange, deletePasswordChange, PASSWORD_CHANGES_KEY, PASSWORD_CHANGES_EVENT } from "@/lib/passwordChanges";
 
 /* ====================== Tipos ====================== */
 type TipoRegistro = "cuenta" | "pantalla";
@@ -299,10 +299,7 @@ export default function CuentasPantallasVencidasPage() {
   const [pwNewByEmail, setPwNewByEmail] = useState<Record<string, PwQueueItem>>(
     () => readPasswordChanges()
   );
-  const [resolvedExpirations, setResolvedExpirations] = useState(readResolvedExpirations);
-  const rows = useMemo(() => allRows.filter((row) =>
-    !isResolvedExpiration(row.correo, row.fecha_vencimiento, resolvedExpirations)
-  ), [allRows, resolvedExpirations]);
+  const rows = allRows;
   const updateHistory = (update: (prev: Record<string, PwQueueItem>) => Record<string, PwQueueItem>) => {
     writePasswordChanges(update(readPasswordChanges()));
   };
@@ -470,10 +467,9 @@ export default function CuentasPantallasVencidasPage() {
   useEffect(() => {
     const sync = () => {
       setPwNewByEmail(readPasswordChanges());
-      setResolvedExpirations(readResolvedExpirations());
     };
     const onStorage = (event: StorageEvent) => {
-      if (!event.key || event.key === PASSWORD_CHANGES_KEY || event.key === "__pw_resolved_expirations_v1") sync();
+      if (!event.key || event.key === PASSWORD_CHANGES_KEY) sync();
     };
     window.addEventListener(PASSWORD_CHANGES_EVENT, sync);
     window.addEventListener("storage", onStorage);

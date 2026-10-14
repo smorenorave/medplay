@@ -25,13 +25,13 @@ async function main() {
 
     await context.addInitScript(() => localStorage.clear());
     const platform = { id: 1, nombre: 'Test', cantidad_pantallas: 6 };
-    const baseRow = { cuenta_id: 71, plataforma_id: 1, correo: 'same@example.com', contrasena: 'key', contacto: '3001234567', nombre: 'Prueba', fecha_compra: '2026-09-12', fecha_vencimiento: '2026-10-12', estado: 'ACTIVA', meses_pagados: 1, total_pagado: 6900 };
+    const baseRow = { cuenta_id: 71, plataforma_id: 1, correo: 'same@example.com', contrasena: 'key', contacto: '3001234567', nombre: 'Prueba', fecha_compra: '2026-09-12', fecha_vencimiento: '2026-10-13', estado: 'ACTIVA', meses_pagados: 1, total_pagado: 6900 };
     let rows = [], tipo = 'completa', calls = [], revision = 0, failId = null;
     await context.route('**/api/**', async route => {
       const req = route.request(), pathname = new URL(req.url()).pathname;
       let data = { ok: true }, status = 200, headers = {};
       if (req.method() === 'PATCH') {
-        calls.push(req.postDataJSON()); rows = rows.filter(r => r.fecha_vencimiento >= '2026-10-13');
+        calls.push(req.postDataJSON()); rows = rows.filter(r => r.fecha_vencimiento > '2026-10-13');
         headers['X-Expired-Records-Deleted'] = JSON.stringify({ revision: String(++revision), deleted: 2, correos: [] }); data = {};
       } else if (pathname === '/api/account-deletions') throw Error('Unexpected global deletion');
       else if (pathname === '/api/session/me') data = { authenticated: true, expiresAt: Date.now() + 3600000 };
@@ -57,7 +57,8 @@ async function main() {
         await page.locator('tbody tr').filter({ hasText: baseRow.correo }).first().waitFor();
       };
       await open(3);
-      rows[2].fecha_vencimiento = '2026-10-13';
+      rows[1].fecha_vencimiento = '2026-10-12';
+      rows[2].fecha_vencimiento = '2026-10-14';
       const selected = page.locator('tbody tr').filter({ hasText: baseRow.correo }).getByRole('button', { name: /Editar/i }).first();
       await selected.click();
       const modal = page.getByRole('dialog');
@@ -69,6 +70,7 @@ async function main() {
       assert.equal(await page.locator('tbody').getByRole('button',{name:/Editar/i}).count(),1,await page.locator('tbody').innerText());
       assert.equal(rows.length,1); assert.equal(calls.length,1); assert.equal(calls[0].contrasena,'new-password');
       await page.reload(); await page.getByRole('navigation').getByRole('button',{name:view,exact:true}).click();
+      if(view==='Vencimientos') await page.locator('select').filter({has:page.locator('option[value="todos"]')}).selectOption('todos');
       for(let attempt=0; attempt<100 && await page.locator('tbody').getByRole('button',{name:/Editar/i}).count()!==1;attempt++) await page.waitForTimeout(100);
       assert.equal(await page.locator('tbody').getByRole('button',{name:/Editar/i}).count(),1,await page.locator('tbody').innerText());
       assert.equal(dialogs,0);
