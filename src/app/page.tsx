@@ -3,11 +3,8 @@
 import { useState, Suspense, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 
-import FloatingTimer from "@/components/FloatingTimer";
-import WorkTimers from "@/components/WorkTimers";
-
 import OperationsDashboard from "@/components/OperationsDashboard";
-import { Boxes, ChevronRight, CirclePlus, Clock3, LayoutDashboard, LogOut, Monitor, PackagePlus, Rows3, TriangleAlert } from "lucide-react";
+import { Boxes, ChevronRight, CirclePlus, LayoutDashboard, LogOut, Monitor, PackagePlus, Rows3, TriangleAlert } from "lucide-react";
 
 /* ===== Lazy components ===== */
 const CuentasCompletasViewer = dynamic(
@@ -213,35 +210,12 @@ export default function Page() {
   return <DashboardApp onLogout={handleLogout} />;
 }
 
-function readMsFromStorage(key: string) {
-  if (typeof window === "undefined") return 0;
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return 0;
-    const s = JSON.parse(raw);
-    return Number(s.elapsedMs || 0);
-  } catch {
-    return 0;
-  }
-}
-
-
 /* ========================================================= */
 function DashboardApp({ onLogout }: { onLogout: () => void }) {
   const [vista, setVista] = useState<Vista>("dashboard");
   const [contacto] = useState("");
   const [nombre] = useState("");
   const panelRef = useRef<HTMLElement | null>(null);
-
-  // abierto por defecto + recuerda
-  const [timerOpen, setTimerOpen] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return localStorage.getItem("timer_open") !== "0";
-  });
-
-  useEffect(() => {
-    localStorage.setItem("timer_open", timerOpen ? "1" : "0");
-  }, [timerOpen]);
 
   const handleSetVista = (next: Vista) => {
     setVista(next);
@@ -262,13 +236,6 @@ function DashboardApp({ onLogout }: { onLogout: () => void }) {
         </div>
 
         <div className="discreet-scroll flex max-w-full items-center gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:justify-end sm:overflow-visible sm:pb-0">
-
-          <button
-            onClick={() => setTimerOpen(true)}
-            className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-neutral-100 transition hover:border-white/20 hover:bg-white/10 sm:px-4"
-          >
-            <Clock3 size={17} /> Cronómetro
-          </button>
 
           <button
             onClick={onLogout}
@@ -373,21 +340,6 @@ function DashboardApp({ onLogout }: { onLogout: () => void }) {
         </Suspense>
       </section>
       </div>
-
-      {/* POPUP DEL CRONÓMETRO */}
-      <FloatingTimer
-  open={timerOpen}
-  onOpen={() => setTimerOpen(true)}
-  onClose={() => setTimerOpen(false)}
-  title="Cronómetros (Bogotá)"
->
-  <WorkTimers
-    tickMs={500}
-    persistKey="medplay_worktimers_v1"
-    timezone="America/Bogota"
-    extraLabel="Actividad en la tienda"
-  />
-</FloatingTimer>
 
     </main>
   );

@@ -2,6 +2,7 @@
 import { applyPasswordExpiryDeletion } from "@/lib/passwordExpiryClient";
 import RecordDeletionDialog from "@/components/RecordDeletionDialog";
 import type { DeletionSelection } from "@/lib/recordDeletionClient";
+import { expiryAccountAmounts } from "@/lib/expiryAmounts";
 import ColombiaDateInput from "@/components/ui/ColombiaDateInput";
 import { formatDateCO } from "@/lib/bogotaDate";
 import { readCurrentAccountData, registerAccountCache } from "@/lib/accountDataChanges";
@@ -37,7 +38,7 @@ type Base = {
   fecha_compra: string | null; // YYYY-MM-DD
   fecha_vencimiento: string; // YYYY-MM-DD
   meses_pagados: number | null;
-  total_pagado: number | null; // usar total_pagado
+  total_pagado: number | null;
   total_pagado_proveedor: number | null;
   total_ganado: number | null;
   estado: string | null;
@@ -220,7 +221,7 @@ async function fetchCuentasAll(): Promise<Cuenta[]> {
   if (!__allCuentasCache) {
     __allCuentasCache = (async () => {
       const todas = await pagedFetch(`${CUENTAS_BASE}?limit=500`);
-      return (todas as any[]).map((r) => ({ ...r, tipo: "cuenta" as const }));
+      return (todas as any[]).map((r) => ({ ...expiryAccountAmounts(r), tipo: "cuenta" as const }));
     })();
   }
   return __allCuentasCache;
@@ -244,7 +245,7 @@ async function fetchCuentas(): Promise<Cuenta[]> {
   );
 
   return (out as any[]).map((r) => ({
-    ...r,
+    ...expiryAccountAmounts(r),
     tipo: "cuenta" as const,
   }));
 }
@@ -274,7 +275,7 @@ async function fetchVencidasHoyMananaFromServer(): Promise<Registro[]> {
   const response = await fetch("/api/password-managed-records", { cache: "no-store" });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || "No se pudieron cargar los registros gestionados.");
-  for (const row of result.items) map.set(key(row), row);
+  for (const row of result.items) map.set(key(row), row.tipo === "cuenta" ? expiryAccountAmounts(row) : row);
   return Array.from(map.values());
 }
 

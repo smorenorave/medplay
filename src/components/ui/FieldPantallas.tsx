@@ -14,6 +14,7 @@ type BaseInputProps = Omit<
 export type FieldPantallasProps = BaseInputProps & {
   label: string;
   labelRight?: React.ReactNode;
+  inputRight?: React.ReactNode;
   value: string | number;
   onChange: (v: string) => void;
   type?: HTMLInputTypeAttribute;
@@ -26,6 +27,7 @@ export type FieldPantallasProps = BaseInputProps & {
 export function FieldPantallas({
   label,
   labelRight,
+  inputRight,
   value,
   onChange,
   type = "text",
@@ -50,6 +52,7 @@ export function FieldPantallas({
         {labelRight ? <div className="ml-3">{labelRight}</div> : null}
       </div>
 
+      <div className={inputRight ? "flex items-center gap-2" : undefined}>
       <Input
         id={id}
         type={type}
@@ -63,6 +66,8 @@ export function FieldPantallas({
         className={inputClasses}
         {...rest}
       />
+      {inputRight}
+      </div>
     </div>
   );
 }

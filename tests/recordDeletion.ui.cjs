@@ -14,7 +14,7 @@ async function main() {
   try {
     let ready = false;
     for (let attempt = 0; attempt < 100; attempt++) {
-      try { ready = (await fetch(base)).ok; } catch {}
+      try { ready = (await fetch(base, { signal: AbortSignal.timeout(10000) })).ok; } catch {}
       if (ready) break;
       await new Promise(resolve => setTimeout(resolve, 300));
     }
@@ -34,25 +34,28 @@ async function main() {
       if (pathname === '/api/record-deletions') {
         const body = req.postDataJSON();
         calls.push({ method: req.method(), body });
-        const row = rows.find(r => String(r.id) === body.target.id);
+        const row = rows.find(r => String(r.id) === body.target.id && (r.tipo || tipo) === body.target.tipo);
+        const rowType = row?.tipo || tipo;
+        const siblings = rows.filter(r => (r.tipo || tipo) === rowType);
         if (req.method() === 'POST') {
           activePreviews++; maxPreviews = Math.max(maxPreviews, activePreviews);
           const overlaps = activePreviews > 1;
           await new Promise(resolve => setTimeout(resolve, 60));
           if (overlaps) { status = 503; data = { error: 'Conflicto simulado entre verificaciones simultáneas' }; }
-          else data = { cuentaId: tipo === 'pantalla' ? '71' : body.target.id, count: rows.length, last: rows.length === 1 };
+          else data = { cuentaId: rowType === 'pantalla' ? '71' : body.target.id, count: siblings.length, last: siblings.length === 1 };
           activePreviews--;
         }
         else if (body.target.id === failId) { status = 409; data = { error: 'Conflicto simulado; registro conservado' }; }
-        else { assert.ok(row); assert.equal(body.target.tipo, tipo); rows = rows.filter(r => r !== row); data = { archived: body.decision.action === 'inventory', revision: String(++revision), correos: [] }; }
+        else { assert.ok(row); assert.equal(body.target.tipo, rowType); rows = rows.filter(r => r !== row); data = { archived: body.decision.action === 'inventory', revision: String(++revision), correos: [] }; }
       } else if (pathname === '/api/account-deletions') throw Error('Unexpected global deletion');
       else if (pathname === '/api/session/me') data = { authenticated: true, expiresAt: Date.now() + 3600000 };
       else if (pathname === '/api/plataformas') data = [platform];
       else if (pathname === '/api/dashboard') data = { salesToday: 0, activeScreens: 0, expiringSoon: 0, pendingAttention: 0, businessDate: '2026-10-13', topServices: [], lowStock: [], stockRotation: [] };
       else if (pathname === '/api/account-data-revision') data = { revision: String(revision), correos: [] };
       else if (pathname.endsWith('/stamp')) data = { stamp: revision };
-      else if (pathname === '/api/cuentascompletas') data = { items: tipo === 'completa' ? rows : [], nextCursor: null };
-      else if (pathname === '/api/pantallas') data = { items: tipo === 'pantalla' ? rows : [], nextCursor: null };
+      else if (pathname === '/api/cuentascompletas') data = { items: rows.filter(r => (r.tipo || tipo) === 'completa'), nextCursor: null };
+      else if (pathname === '/api/pantallas') data = { items: rows.filter(r => (r.tipo || tipo) === 'pantalla'), nextCursor: null };
+      else if (pathname === '/api/password-managed-records') data = { items: [] };
       else if (pathname === '/api/cuentascompartidas' || pathname === '/api/inventario' || pathname === '/api/usuarios') data = [];
       await route.fulfill({ status, json: data });
     });
@@ -93,6 +96,29 @@ async function main() {
       assert.deepEqual(calls.filter(c=>c.method==='DELETE').map(c=>c.body.decision.action), ['record', 'record', 'record', 'record', 'purge']);
       assert.equal(dialogs, 0);
       console.log('PASS', view, tipo, 'cancelar, intermedio, último/inventario, último/definitivo, lote, cero popups');
+    }
+    for (const action of ['inventory', 'purge']) {
+      tipo = 'mixed'; calls = []; revision++;
+      rows = [
+        ...Array.from({ length: 5 }, (_, i) => ({ ...baseRow, id: i + 1, tipo: 'completa', total_pagado_completa: 7900, total_pagado_proveedor_completa: 2000, total_pagado: undefined })),
+        { ...baseRow, id: 1, tipo: 'pantalla', total_pagado: 14900 },
+      ];
+      await page.goto(base);
+      await page.getByRole('navigation').getByRole('button', { name: 'Vencimientos', exact: true }).click();
+      await page.locator('tbody tr').filter({ hasText: baseRow.correo }).first().waitFor();
+      const visible = page.locator('tbody tr').filter({ hasText: baseRow.correo });
+      assert.equal(await visible.count(), 6);
+      assert.equal(await visible.filter({ hasText: '7.900' }).count(), 5);
+      assert.equal(await visible.filter({ hasText: '14.900' }).count(), 1);
+      for (const box of await visible.getByRole('checkbox').all()) await box.check();
+      await page.getByRole('button', { name: 'Eliminar seleccionados', exact: true }).click();
+      await page.getByRole('dialog').getByRole('button', { name: action === 'inventory' ? 'Enviar al inventario y eliminar' : 'Eliminar definitivamente', exact: true }).click();
+      await page.getByRole('status').getByText('Eliminados: 6.', { exact: false }).waitFor();
+      assert.equal(rows.length, 0);
+      assert.deepEqual(calls.filter(c => c.method === 'DELETE').map(c => [c.body.target.tipo, c.body.decision.action]), [
+        ['completa', 'record'], ['completa', 'record'], ['completa', 'record'], ['completa', 'record'], ['completa', action], ['pantalla', action],
+      ]);
+      console.log('PASS Vencimientos: five complete accounts + one screen, correct totals,', action);
     }
     assert.deepEqual(errors, []);
     assert.equal(maxPreviews, 1, 'Selection preparation must not overlap locking previews');

@@ -2071,6 +2071,15 @@ export default function FormPantallas() {
                       type="date"
                       value={o.fecha_compra}
                       onChange={(v) => setOrder(idx, { fecha_compra: v })}
+                      inputRight={
+                        <button
+                          type="button"
+                          onClick={() => setOrder(idx, { fecha_compra: todayStr() })}
+                          className="shrink-0 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                        >
+                          Hoy
+                        </button>
+                      }
                       required
                       onMouseDown={(e) => {
                         const el = e.currentTarget;

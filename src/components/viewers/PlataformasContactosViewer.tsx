@@ -1,5 +1,7 @@
 "use client";
 import { useInventoryRefresh } from "@/hooks/useInventoryRefresh";
+import { notifyInventoryConsumed } from "@/lib/inventoryChanges";
+import { createPortal } from "react-dom";
 import { deleteEmailsGlobally } from "@/lib/accountDataChanges";
 import { useAccountDataRefresh } from "@/hooks/useAccountDataRefresh";
 
@@ -1122,6 +1124,11 @@ function ContactosPane() {
 /* Pane: Inventario (buscador + lista + form)    */
 /* =================================================================== */
 function InventarioPane() {
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [deleteItems, setDeleteItems] = useState<Inventario[]>([]);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const deleteRunning = useRef(false);
   // plataformas
   const [plataformas, setPlataformas] = useState<Plataforma[]>([]);
   const [loadingPlat, setLoadingPlat] = useState(false);
@@ -1329,6 +1336,30 @@ function InventarioPane() {
     } catch (error) { alert((error as Error).message); }
   };
 
+  useEffect(() => { setSelected(new Set()); }, [q, fPlataformaId]);
+  useEffect(() => {
+    setSelected(previous => new Set([...previous].filter(id => rows.some(row => row.id === id))));
+  }, [rows]);
+  const deleteSelected = async () => {
+    if (deleteRunning.current || !deleteItems.length) return;
+    deleteRunning.current = true;
+    setDeleting(true); setDeleteError("");
+    try {
+      const response = await fetch("/api/inventario/bulk-delete", {
+        method: "DELETE", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: deleteItems.map(row => row.id), confirmed: true }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "No se pudo eliminar la selección.");
+      setSelected(new Set()); setDeleteItems([]);
+      setOkMsg(`Eliminados del inventario: ${result.deleted}.`);
+      if (deleteItems.some(row => row.id === editingId)) cancelEdit();
+      notifyInventoryConsumed();
+      await load();
+    } catch (error) { setDeleteError((error as Error).message); }
+    finally { deleteRunning.current = false; setDeleting(false); }
+  };
+
   /* -------- UI -------- */
   const input =
     "h-10 w-full rounded-lg px-3 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500";
@@ -1375,6 +1406,20 @@ function InventarioPane() {
   return (
     <Card>
       <HeaderRow title="Inventario" onRefresh={load} refreshing={loading} />
+      {!!deleteItems.length && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4">
+          <section role="dialog" aria-modal="true" aria-labelledby="inventory-delete-title" className="max-h-[90vh] w-full max-w-xl overflow-auto rounded-2xl border border-neutral-700 bg-neutral-900 p-5 text-neutral-100">
+            <h2 id="inventory-delete-title" className="text-lg font-semibold">Eliminar {deleteItems.length} registros del inventario</h2>
+            <p className="my-3">Se eliminarán únicamente estos registros del inventario. Las cuentas, pantallas y clientes se conservarán.</p>
+            <ul className="max-h-48 overflow-auto text-sm">{deleteItems.map(row => <li key={row.id}>{platformMap.get(row.plataforma_id)} · {row.correo}</li>)}</ul>
+            {deleteError && <p role="alert" className="my-3 text-red-300">{deleteError}</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" className={btn} disabled={deleting} onClick={() => setDeleteItems([])}>Cancelar</button>
+              <button type="button" className="rounded-lg bg-rose-800 px-3 py-2 disabled:opacity-50" disabled={deleting} onClick={() => void deleteSelected()}>{deleting ? "Eliminando…" : "Eliminar definitivamente"}</button>
+            </div>
+          </section>
+        </div>, document.body,
+      )}
       <div className="px-3 pb-4 pt-3 sm:px-4 space-y-4">
         {platErr && (
           <div className="rounded-lg border border-red-800/50 bg-red-950/30 p-3 text-sm text-red-200">
@@ -1548,12 +1593,18 @@ function InventarioPane() {
         </div>
 
         {/* Tabla con paginación (usa pageRows) */}
+        <div className="flex flex-wrap items-center gap-2 text-sm text-neutral-300">
+          <span>Seleccionados: {selected.size}</span>
+          <button type="button" className={`${btn} text-red-200`} disabled={!selected.size || loading || deleting} onClick={() => { setDeleteError(""); setDeleteItems(filteredClient.filter(row => selected.has(row.id))); }}>Eliminar seleccionados</button>
+          <button type="button" className={btn} disabled={!selected.size || deleting} onClick={() => setSelected(new Set())}>Limpiar selección</button>
+        </div>
         <div className="max-h-[48vh] overflow-auto custom-scroll">
           {err && <div className="p-3 text-sm text-red-300">Error: {err}</div>}
           {!err && (
             <table className="min-w-[840px] w-full table-fixed">
               <thead>
                 <tr className="border-b border-neutral-800">
+                  <Th className="w-10 text-center"><input type="checkbox" aria-label="Seleccionar todos los registros de esta página" disabled={loading || deleting || !pageRows.length} checked={pageRows.length > 0 && pageRows.every(row => selected.has(row.id))} onChange={e => { const checked = e.target.checked; setSelected(previous => { const next = new Set(previous); pageRows.forEach(row => checked ? next.add(row.id) : next.delete(row.id)); return next; }); }} /></Th>
                   <Th className="w-24 text-center">Acciones</Th>
                   <Th className="w-56">Plataforma</Th>
                   <Th className="w-[420px]">Correo</Th>
@@ -1568,6 +1619,7 @@ function InventarioPane() {
                       key={`inv-${row.id}-${idx}`}
                       className={`border-b border-neutral-900 ${idx % 2 === 0 ? "bg-neutral-900/30" : "bg-transparent"} hover:bg-neutral-800/40`}
                     >
+                      <Td className="text-center"><input type="checkbox" aria-label={`Seleccionar inventario ${row.correo}`} disabled={loading || deleting} checked={selected.has(row.id)} onChange={e => { const checked = e.target.checked; setSelected(previous => { const next = new Set(previous); if (checked) next.add(row.id); else next.delete(row.id); return next; }); }} /></Td>
                       <Td className="text-center">
                         {!isEditing ? (
                           <div className="flex items-center justify-center gap-2">
@@ -1682,7 +1734,7 @@ function InventarioPane() {
                 })}
                 {pageRows.length === 0 && (
                   <tr>
-                    <Td colSpan={4} className="text-neutral-300 text-sm py-4">
+                    <Td colSpan={5} className="text-neutral-300 text-sm py-4">
                       No hay resultados.
                     </Td>
                   </tr>
