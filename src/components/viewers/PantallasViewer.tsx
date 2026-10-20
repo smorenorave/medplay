@@ -2,7 +2,6 @@
 import { applyPasswordExpiryDeletion } from "@/lib/passwordExpiryClient";
 import RecordDeletionDialog from "@/components/RecordDeletionDialog";
 import type { DeletionSelection } from "@/lib/recordDeletionClient";
-import { assignmentStatusLabel } from "@/lib/expiredAccountSafety";
 import ColombiaDateInput from "@/components/ui/ColombiaDateInput";
 import { addMonthsYMD, formatDateCO } from "@/lib/bogotaDate";
 import { usePageWindow } from "@/hooks/usePageWindow";
@@ -673,7 +672,6 @@ const mounted = useRef(false);
         normSearch(r.nombre).includes(term) ||
         normSearch(r.contacto).includes(term) ||
         normSearch(r.correo).includes(term) ||
-        normSearch(assignmentStatusLabel(r)).includes(term) ||
         normSearch(r.proveedor).includes(term) ||
         normSearch(r.comentario).includes(term) ||
         normSearch(r.nro_pantalla).includes(term);
@@ -1218,7 +1216,7 @@ const mounted = useRef(false);
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar nombre, contacto, correo, estado, comentario…"
+          placeholder="Buscar nombre, contacto, correo, comentario…"
           className="flex-1 rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
         />
         <select
@@ -1275,12 +1273,10 @@ const mounted = useRef(false);
       <ResultsPagination {...resultPage} />
       <div className="grid gap-3 md:hidden">
         {resultPage.items.map((r) => {
-          const statusLabel = assignmentStatusLabel(r);
-          const isExpired = statusLabel === "VENCIDA";
           const platform = plataformas.find((p) => Number(p.id) === Number(r.plataforma_id))?.nombre ?? "Sin plataforma";
           return <article key={`mobile-${r.id}`} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 shadow-sm">
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="rounded-lg bg-sky-500/10 px-2 py-1 text-xs font-semibold text-sky-200">{platform}</span><span className={`rounded-lg px-2 py-1 text-xs font-semibold ${isExpired ? "bg-rose-500/10 text-rose-200" : "bg-emerald-500/10 text-emerald-200"}`}>{statusLabel}</span></div><h3 className="mt-3 truncate font-semibold text-white">{r.nombre || r.contacto || "Cliente sin nombre"}</h3><p className="mt-1 truncate text-sm text-neutral-400">{r.correo || "Sin correo"}</p></div>
+              <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="rounded-lg bg-sky-500/10 px-2 py-1 text-xs font-semibold text-sky-200">{platform}</span></div><h3 className="mt-3 truncate font-semibold text-white">{r.nombre || r.contacto || "Cliente sin nombre"}</h3><p className="mt-1 truncate text-sm text-neutral-400">{r.correo || "Sin correo"}</p></div>
               <input type="checkbox" className="size-5 shrink-0 accent-sky-500" aria-label={`Seleccionar pantalla ${r.id}`} checked={isRowSelected(r.id)} onChange={(event) => toggleRow(r.id, event.target.checked)} />
             </div>
             <dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-neutral-500">Pantalla</dt><dd className="mt-0.5 font-medium text-neutral-200">{r.nro_pantalla || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Vencimiento</dt><dd className="mt-0.5 font-medium text-neutral-200">{formatDateCO(r.fecha_vencimiento) || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Contacto</dt><dd className="mt-0.5 truncate font-medium text-neutral-200">{r.contacto || "—"}</dd></div><div><dt className="text-xs text-neutral-500">Total</dt><dd className="mt-0.5 font-medium text-neutral-200">{money(r.total_pagado)}</dd></div></dl>
@@ -1322,7 +1318,6 @@ const mounted = useRef(false);
               <th className="px-3 py-2 text-center w-16">Meses</th>
               <th className="px-3 py-2 text-center w-28">Compra</th>
               <th className="px-3 py-2 text-center w-28">Vence</th>
-              <th className="px-3 py-2 text-left w-28">Estado</th>
               <th className="px-3 py-2 text-left w-36">Proveedor</th>
               <th className="px-3 py-2 text-left">Comentario</th>
             </tr>
@@ -1333,7 +1328,7 @@ const mounted = useRef(false);
                 <React.Fragment key={`grp-${gi}-${g.email}`}>
                   {/* Encabezado del grupo (correo) + badges de disponibilidad */}
                   <tr className="bg-neutral-950/60 border-b border-neutral-800">
-                    <td colSpan={17} className="px-3 py-2">
+                    <td colSpan={16} className="px-3 py-2">
                       <div className="flex flex-wrap items-center gap-2 text-sm">
                         <span className="font-semibold text-neutral-200">
                           {g.email}
@@ -1536,9 +1531,6 @@ const mounted = useRef(false);
                       </td>
                       <td className="px-3 py-2 text-center whitespace-nowrap">
                         {formatDateCO(r.fecha_vencimiento) || "—"}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        {assignmentStatusLabel(r)}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         {r.proveedor || "—"}
@@ -1884,20 +1876,6 @@ const mounted = useRef(false);
                       />
                     </label>
                   </div>
-
-                  <label className="grid gap-1">
-                    <span className="text-sm text-neutral-300">Estado</span>
-                    <input
-                      className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                      value={edit.estado ?? ""}
-                      onChange={(e) =>
-                        setEdit((s) => ({
-                          ...(s as EditState),
-                          estado: e.target.value,
-                        }))
-                      }
-                    />
-                  </label>
                   <label className="grid gap-1">
                     <span className="text-sm text-neutral-300">
                       Fecha compra (dd/MM/yyyy)

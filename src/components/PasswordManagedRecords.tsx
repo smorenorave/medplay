@@ -12,7 +12,7 @@ const columns = [
   ["fecha_compra", "Compra"], ["fecha_vencimiento", "Vencimiento"],
   ["meses_pagados", "Meses"], ["total_pagado", "Total pagado"],
   ["total_pagado_proveedor", "Pagado proveedor"], ["total_ganado", "Ganado"],
-  ["estado", "Estado"], ["comentario", "Comentarios"], ["passwordManagedAt", "Clave gestionada"],
+  ["comentario", "Comentarios"], ["passwordManagedAt", "Clave gestionada"],
 ] as const;
 function display(key: string, value: unknown): string {
   if (value == null || value === "") return "—";
@@ -22,7 +22,7 @@ function display(key: string, value: unknown): string {
   return String(value);
 }
 function Detail({ value }: { value: Record<string, unknown> }) {
-  return <dl className="grid gap-2 p-3">{Object.entries(value).map(([key, item]) => <div key={key}>
+  return <dl className="grid gap-2 p-3">{Object.entries(value).filter(([key]) => key !== "estado").map(([key, item]) => <div key={key}>
     <dt className="font-semibold">{columns.find(([name]) => name === key)?.[1] ?? key}</dt>
     <dd className="whitespace-pre-wrap break-words">{item && typeof item === "object" ? <Detail value={item as Record<string, unknown>} /> : display(key, item)}</dd>
   </div>)}</dl>;

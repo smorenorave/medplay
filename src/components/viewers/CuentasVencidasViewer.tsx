@@ -1014,18 +1014,6 @@ export default function CuentasPantallasVencidasPage() {
                   }
                 />
               </Field>
-              <Field label="Estado">
-                <input
-                  className="rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-950 outline-none focus:ring-2 focus:ring-neutral-600"
-                  value={edit.estado ?? ""}
-                  onChange={(e) =>
-                    setEdit((s) => ({
-                      ...(s as EditState),
-                      estado: e.target.value,
-                    }))
-                  }
-                />
-              </Field>
 
               <Field
                 label="Contraseña (doble click en la tabla para editar rápido)"

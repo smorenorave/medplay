@@ -2199,15 +2199,7 @@ export default function FormPantallas() {
                       inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-not-allowed opacity-80"
                     />
 
-                    {/* Estado / Comentario */}
-                    <FieldPantallas
-                      label="Estado *"
-                      placeholder='Ej. "ACTIVA", "PAUSADA"…'
-                      value={o.estado}
-                      onChange={(v: string) => setOrder(idx, { estado: v })}
-                      required
-                      inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-                    />
+                    {/* Comentario */}
 
                     <TextArea
                       className="sm:col-span-2"

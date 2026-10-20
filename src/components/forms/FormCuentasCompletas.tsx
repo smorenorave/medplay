@@ -1619,14 +1619,6 @@ export default function FormCuentaCompletas() {
                     inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500 cursor-not-allowed opacity-80"
                   />
 
-                  <Field
-                    label="Estado"
-                    placeholder='Ej. "ACTIVA", "PAUSADA"…'
-                    value={o.estado}
-                    onChange={(v) => setOrder(idx, { estado: v })}
-                    inputClassName="w-full rounded-lg px-3 py-2 border border-neutral-700 bg-neutral-900 text-neutral-100 outline-none focus:ring-2 focus:ring-neutral-600 focus:border-neutral-500"
-                  />
-
                   <TextArea
                     className="sm:col-span-2"
                     label="Comentario"

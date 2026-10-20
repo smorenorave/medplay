@@ -427,7 +427,7 @@ export default function AdminPanel() {
   const HEADERS = [
     'tipo','id','contacto','plataforma_id','plataforma',
     'cuenta_id','nro_pantalla','nombre','correo','contrasena',
-    'fecha_compra','fecha_vencimiento','meses_pagados','total_ganado','estado'
+    'fecha_compra','fecha_vencimiento','meses_pagados','total_ganado'
   ] as const;
   type HeaderKey = typeof HEADERS[number];
   type Row = Record<HeaderKey, string | number | null>;
@@ -461,7 +461,6 @@ export default function AdminPanel() {
         fecha_vencimiento: p.fecha_vencimiento,
         meses_pagados: p.meses_pagados,
         total_ganado: toMoney(p.total_ganado),
-        estado: p.estado ?? '',
       }));
 
     const cRows: Row[] = completas
@@ -481,7 +480,6 @@ export default function AdminPanel() {
         fecha_vencimiento: c.fecha_vencimiento,
         meses_pagados: c.meses_pagados,
         total_ganado: toMoney(c.total_ganado),
-        estado: c.estado ?? '',
       }));
 
     return [...pRows, ...cRows];
@@ -750,7 +748,6 @@ export default function AdminPanel() {
                     <th className="text-left px-3 py-2">Compra</th>
                     <th className="text-left px-3 py-2">Venc.</th>
                     <th className="text-right px-3 py-2">Total</th>
-                    <th className="text-left px-3 py-2">Estado</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -766,7 +763,6 @@ export default function AdminPanel() {
                           <td className="px-3 py-2">{fmtDate((r as any).fecha_compra)}</td>
                           <td className="px-3 py-2">{fmtDate((r as any).fecha_vencimiento)}</td>
                           <td className="px-3 py-2 text-right">$ {fmt(toMoney((r as any).total_ganado))}</td>
-                          <td className="px-3 py-2">{(r as any).estado ?? ''}</td>
                         </tr>
                       );
                     })}
