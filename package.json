@@ -16,7 +16,11 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit --incremental false",
-    "test:admin-settings": "node --test tests/adminSettings.test.cjs"
+    "test:admin-settings": "node --test tests/adminSettings.test.cjs",
+    "test:monthly-finance": "node --test tests/monthlyFinance.test.cjs",
+    "test:monthly-finance:db": "node --test tests/monthlyFinance.integration.cjs",
+    "finance:audit": "node scripts/monthly-finance.cjs",
+    "test:monthly-finance:ui": "node tests/monthlyFinance.ui.cjs"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.12",

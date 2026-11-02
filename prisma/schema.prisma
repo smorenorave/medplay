@@ -245,3 +245,50 @@ enum LogStatus {
   FALLBACK
   ERROR
 }
+
+// Permanent financial tables have no foreign keys to operational accounts.
+// SQL migration also installs append-only guards and transactional capture triggers.
+model financialCoverage {
+  id                 Int      @id
+  startedAt          DateTime @default(now()) @db.DateTime(3)
+  firstCompleteMonth String   @db.Char(7)
+}
+
+model financialSale {
+  id           BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  tipo         String   @db.Char(1)
+  sourceId     String   @db.VarChar(64)
+  fecha        DateTime @db.Date
+  vence        DateTime? @db.Date
+  contacto     String   @db.VarChar(191)
+  plataformaId Int?
+  plataforma   String   @db.VarChar(100)
+  ingreso      Decimal  @db.Decimal(18, 2)
+  costo        Decimal  @db.Decimal(18, 2)
+  unidades     Int      @default(1)
+  provenance   String   @default("trigger") @db.VarChar(32)
+  saleKey      String?  @unique(map: "saleKey") @db.VarChar(128)
+  createdAt    DateTime @default(now()) @db.DateTime(3)
+  @@index([fecha], map: "financialSale_fecha")
+  @@index([contacto, vence], map: "financialSale_contacto")
+}
+
+model monthlyCloseLog {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  periodLabel String   @db.Char(7)
+  status      String   @db.VarChar(24)
+  result      String   @db.Text
+  createdAt   DateTime @default(now()) @db.DateTime(3)
+  @@index([periodLabel, createdAt], map: "monthlyCloseLog_period")
+}
+
+model monthlySnapshotRevision {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  periodLabel String   @db.Char(7)
+  actor       String   @db.VarChar(100)
+  reason      String   @db.Text
+  evidence    String   @db.Text
+  replacement Json
+  createdAt   DateTime @default(now()) @db.DateTime(3)
+  @@index([periodLabel, id], map: "monthlySnapshotRevision_period")
+}

@@ -1,5 +1,4 @@
 declare global {
-  // eslint-disable-next-line no-var
   var medplaySnapshotSchedulerStarted: boolean | undefined;
 }
 
@@ -20,9 +19,9 @@ export async function register() {
     console.error("[snapshots] No se pudo generar el snapshot inicial", error);
   });
 
-  cron.schedule("10 0 * * *", () => {
-    void refreshAutomaticSnapshots().catch((error) => {
+  cron.schedule("*/5 * * * *", async () => {
+    await refreshAutomaticSnapshots().catch((error) => {
       console.error("[snapshots] No se pudo actualizar el snapshot automático", error);
     });
-  }, { timezone: "America/Bogota" });
+  }, { timezone: "America/Bogota", noOverlap: true });
 }

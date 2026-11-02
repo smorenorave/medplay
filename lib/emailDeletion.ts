@@ -188,8 +188,7 @@ export async function deleteEmails(db: PrismaClient, input: { adminId: number; m
       deleted.inventario += (await tx.inventario.deleteMany({ where: { id: { in: inventory.map(row => row.id).filter(id => !keptInventoryIds.includes(id)) } } })).count;
       if (!input.scopedExpired) deleted.clientes += (await tx.usuarios.deleteMany({ where: { contacto: { in: contactos }, pantallas: { none: {} }, cuentascompletas: { none: {} } } })).count;
     }
-    if (revision !== undefined) await tx.metricasmensuales.deleteMany({}); // Derived snapshots regenerate from live data.
-    else revision = (await tx.accountDataRevision.findUnique({ where: { id: 1 } }))?.revision ?? 0n;
+    if (revision === undefined) revision = (await tx.accountDataRevision.findUnique({ where: { id: 1 } }))?.revision ?? 0n;
     return { correos, revision: String(revision), deleted, audits };
   });
   try {

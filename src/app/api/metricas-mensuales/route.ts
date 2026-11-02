@@ -2,10 +2,12 @@ export const runtime = "nodejs";
 
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
+import { getVerifiedAdminId } from "@/lib/requireAdmin";
+export const dynamic = "force-dynamic";
 import {
   ensureMonthlySnapshot,
   ensureYearSnapshots,
-  generateMonthlySnapshot,
+  MissingHistoricalSnapshot,
   serializeMonthlySnapshot,
 } from "@/lib/monthlySnapshots";
 
@@ -18,7 +20,7 @@ const pad2 = (value: number) => String(value).padStart(2, "0");
 const numberValue = (value: unknown) => Number(value == null ? 0 : String(value));
 
 function csvCell(value: unknown) {
-  const raw = String(value ?? "");
+  const raw = typeof value === 'string' && /^[=+@\t\r-]/.test(value) ? `'${value}` : String(value ?? "");
   return /[",\r\n]/.test(raw) ? `"${raw.replace(/"/g, '""')}"` : raw;
 }
 
@@ -38,11 +40,18 @@ async function exportSnapshot(
     ["Clientes activos", row.clientesActivos],
   ];
 
+  const snapshot = serializeMonthlySnapshot(row);
+  kpis.push(['Costos', snapshot.costos == null ? 'No disponible' : Number(snapshot.costos)], ['Ganancia neta', snapshot.ganancia_neta == null ? 'No disponible' : Number(snapshot.ganancia_neta)]);
+  const records = Array.isArray(snapshot.registros) ? snapshot.registros as Array<Record<string, unknown>> : [];
   if (format === "csv") {
-    const csv = ["KPI,Valor", ...kpis.map(([key, value]) => `${csvCell(key)},${csvCell(value)}`)].join("\r\n");
+    const csv = ["KPI,Valor", ...kpis.map(([key, value]) => [key,value].map(csvCell).join(',')),
+      '', 'Plataforma,Unidades,Total', ...(Array.isArray(row.ranking) ? row.ranking as Array<Record<string,unknown>> : []).map(r => [r.name,r.count,r.total].map(csvCell).join(',')),
+      '', 'Día,Total,Pantallas,Completas', ...(Array.isArray(row.ventasDias) ? row.ventasDias as Array<Record<string,unknown>> : []).map(r => [r.day,r.total,r.pantallas,r.completas].map(csvCell).join(',')),
+      '', 'Registro,Tipo,Fecha,Plataforma,Ingreso,Costo,Unidades', ...records.map(r => [r.id,r.tipo,r.fecha,r.plataforma,r.ingreso,r.costo,r.unidades].map(csvCell).join(','))].join('\r\n');
     return new NextResponse(`\uFEFF${csv}`, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
+        "Cache-Control": "private, no-store",
         "Content-Disposition": `attachment; filename="${filename}.csv"`,
       },
     });
@@ -68,20 +77,25 @@ async function exportSnapshot(
     daySheet.addRow([item.day, item.total, item.pantallas, item.completas]);
   }
 
+  const recordSheet = workbook.addWorksheet('Registros');
+  recordSheet.addRow(['Registro', 'Tipo', 'Fecha', 'Plataforma', 'Ingreso', 'Costo', 'Unidades']);
+  for (const r of records) recordSheet.addRow([r.id,r.tipo,r.fecha,r.plataforma,r.ingreso,r.costo,r.unidades]);
   const buffer = await workbook.xlsx.writeBuffer();
   return new NextResponse(buffer, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Cache-Control": "private, no-store",
       "Content-Disposition": `attachment; filename="${filename}.xlsx"`,
     },
   });
 }
 
 /**
- * GET exacto: genera el snapshot si falta y refresca el mes actual.
- * GET ?year=2026&annual=1: devuelve la serie anual y rellena meses faltantes.
+ * GET exacto: mes actual en vivo; meses cerrados exclusivamente persistidos.
+ * GET anual: solamente cierres guardados, sin rellenar huecos.
  */
 export async function GET(request: NextRequest) {
+  if (!await getVerifiedAdminId(request)) return NextResponse.json({ error: 'Permisos de administrador requeridos' }, { status: 403 });
   try {
     const params = request.nextUrl.searchParams;
     const year = Number(params.get("year"));
@@ -103,6 +117,8 @@ export async function GET(request: NextRequest) {
             cuentas_completas: row.cuentasVendidas,
             pantallas: row.pantallasVendidas,
             total: row.cuentasVendidas + row.pantallasVendidas,
+            ingresos: numberValue(row.totalGeneral),
+            ganancia_neta: serializeMonthlySnapshot(row).ganancia_neta,
           })),
       });
     }
@@ -117,23 +133,13 @@ export async function GET(request: NextRequest) {
     if (format === "csv" || format === "xlsx") return exportSnapshot(row, format);
     return NextResponse.json(serializeMonthlySnapshot(row));
   } catch (error: any) {
+    if (error instanceof MissingHistoricalSnapshot) return NextResponse.json({ error: "history_unavailable", detail: error.message }, { status: 404 });
     console.error("GET /api/metricas-mensuales", error);
-    return NextResponse.json({ error: "read_failed", detail: error?.message }, { status: 500 });
+    return NextResponse.json({ error: "read_failed", detail: 'No fue posible consultar el período. Revise el registro del servidor.' }, { status: 500 });
   }
 }
 
-/** Conserva compatibilidad con el POST anterior, pero el servidor ya no confía en totales del cliente. */
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json().catch(() => ({}));
-    const parsed = Period.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json({ error: "validation", details: parsed.error.flatten() }, { status: 400 });
-    }
-    const row = await generateMonthlySnapshot(parsed.data.year, parsed.data.month);
-    return NextResponse.json(serializeMonthlySnapshot(row), { status: 200 });
-  } catch (error: any) {
-    console.error("POST /api/metricas-mensuales", error);
-    return NextResponse.json({ error: "save_failed", detail: error?.message }, { status: 500 });
-  }
+/** Closed history is corrected only through the audited operator procedure. */
+export async function POST() {
+  return NextResponse.json({ error: 'immutable_history', detail: 'Use el procedimiento de revisión auditada.' }, { status: 405 });
 }

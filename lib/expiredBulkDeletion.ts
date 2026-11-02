@@ -84,8 +84,7 @@ export async function deleteExpiredBulk(db: PrismaClient, input: {
       const remaining = await tx.pantallas.findMany({ where: { cuenta_id: id }, select: { id: true } });
       if (!remaining.length) await tx.cuentascompartidas.deleteMany({ where: { id } });
     }
-    if (revision !== undefined) await tx.metricasmensuales.deleteMany({});
-    else revision = (await tx.accountDataRevision.findUnique({ where: { id: 1 }, select: { revision: true } }))?.revision ?? 0n;
+    if (revision === undefined) revision = (await tx.accountDataRevision.findUnique({ where: { id: 1 }, select: { revision: true } }))?.revision ?? 0n;
     return { correos: [...correos], revision: String(revision), eliminated, skipped };
   });
 }

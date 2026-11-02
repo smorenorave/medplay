@@ -72,10 +72,17 @@ test('restores the selected screen, parent and client with original dates, price
   assert.equal(restored.fecha_compra.toISOString(), f.screen.fecha_compra); assert.equal(restored.fecha_vencimiento.toISOString(), f.screen.fecha_vencimiento);
   assert.equal(restored.total_pagado, '20.00'); assert.equal(restored.total_ganado, '12.00'); assert.equal(restored.estado, 'VENCIDA');
   assert.equal(f.state.cuentascompartidas[0].contrasena, 'Exact KEY '); assert.equal(f.state.usuarios[0].nombre, 'Ana Original');
-  assert.equal(f.state.cuentascompletas.length, 0); assert.equal(f.state.inventario.length, 0); assert.equal(f.state.metricasmensuales.length, 0);
+  assert.equal(f.state.cuentascompletas.length, 0); assert.equal(f.state.inventario.length, 0); assert.equal(f.state.metricasmensuales.length, 1);
   assert.deepEqual(f.state.emailDeletionAudit[0].registros.eventos[0], f.event);
   assert.equal(f.state.emailDeletionAudit[0].registros.restauraciones[0].restauradoPor, 'Admin');
   assert.equal(f.state.emailDeletionAudit[0].fechaEliminacion.toISOString(), f.event.fechaEliminacion);
+});
+
+test('restoration preserves permanent monthly snapshots without accessing their deletion method', async () => {
+  const f = fixture(); const before = structuredClone(f.state.metricasmensuales);
+  f.fail('metricasmensuales.deleteMany');
+  await restoreDeletedRecord(f.db, target, 1);
+  assert.deepEqual(f.state.metricasmensuales, before);
 });
 
 test('restores a complete account to its original table without moving it to inventory', async () => {
@@ -114,7 +121,7 @@ for (const conflict of ['screen-id', 'parent-id', 'screen-number', 'new-parent',
   });
 }
 
-for (const failure of ['pantallas.create', 'usuarios.create', 'emailDeletionAudit.update', 'accountDataRevision.upsert', 'metricasmensuales.deleteMany']) {
+for (const failure of ['pantallas.create', 'usuarios.create', 'emailDeletionAudit.update', 'accountDataRevision.upsert']) {
   test(`restoration rolls back on ${failure} failure`, async () => {
     const f = fixture(); const before = structuredClone(f.state); f.fail(failure);
     await assert.rejects(restoreDeletedRecord(f.db, target, 1), /Injected failure/); assert.deepEqual(f.state, before);

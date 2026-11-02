@@ -89,7 +89,6 @@ export async function restoreDeletedRecord(db: PrismaClient, target: Restoration
     const revision = await tx.accountDataRevision.upsert({ where: { id: 1 }, create: { id: 1, revision: 1n }, update: { revision: { increment: 1n } } });
     const restoration = { evento: target.evento, tipo: target.tipo, id: target.id, fechaRestauracion: new Date().toISOString(), adminId, restauradoPor: actor.usuario };
     await tx.emailDeletionAudit.update({ where: { id: audit.id }, data: { registros: JSON.parse(JSON.stringify({ ...registros, restauraciones: [...restores, restoration] })) as Prisma.InputJsonValue, revision: revision.revision } });
-    await tx.metricasmensuales.deleteMany({});
     return { revision: String(revision.revision), correos: [audit.correo], alreadyRestored: false };
   });
 }

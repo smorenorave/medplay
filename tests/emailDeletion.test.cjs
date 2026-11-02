@@ -165,7 +165,7 @@ test('deletes duplicate email accounts across every live table/platform and reta
   }
   assert.deepEqual(f.state.pantallas, [{ id: 3, cuenta_id: 3, contacto: 'shared-client' }]);
   assert.deepEqual(f.state.usuarios.map(row => row.contacto), ['shared-client']);
-  assert.equal(f.state.metricasmensuales.length, 0); assert.equal(f.state.admin.length, 1);
+  assert.equal(f.state.metricasmensuales.length, 1); assert.equal(f.state.admin.length, 1);
   assert.equal(f.options[0].isolationLevel, 'Serializable'); assert.equal(result.revision, '1');
   assert.equal(f.state.emailDeletionAudit.length, 6);
   const audit = f.state.emailDeletionAudit.find(row => row.clave === 'full-key');
@@ -175,6 +175,13 @@ test('deletes duplicate email accounts across every live table/platform and reta
   assert.equal(audit.claves, 'full-key');
   const event = audit.registros.eventos[0];
   assert.equal(event.cuentascompletas[0].id, '10'); assert.equal(event.pantallas.length, 0); assert.equal(event.usuarios.length, 1);
+});
+
+test('account deletion never writes or invalidates permanent monthly snapshots', async () => {
+  const f = fixture(); const before = structuredClone(f.state.metricasmensuales);
+  f.fail('metricasmensuales.deleteMany');
+  await remove(f);
+  assert.deepEqual(f.state.metricasmensuales, before);
 });
 
 test('retries and simultaneous modules produce one audit and one deletion event', async () => {
@@ -194,7 +201,7 @@ test('recreated email with a different password gets its own audit identity', as
   assert.equal(f.state.accountDataRevision[0].revision, 2n);
 });
 
-for (const failure of ['emailDeletionAudit.upsert', 'cuentascompartidas.deleteMany', 'cuentascompletas.deleteMany', 'inventario.deleteMany', 'usuarios.deleteMany', 'metricasmensuales.deleteMany']) {
+for (const failure of ['emailDeletionAudit.upsert', 'cuentascompartidas.deleteMany', 'cuentascompletas.deleteMany', 'inventario.deleteMany', 'usuarios.deleteMany']) {
   test(`rollback preserves all records, audit and revision on ${failure} failure`, async () => {
     const f = fixture(); const before = structuredClone(f.state); f.fail(failure);
     await assert.rejects(remove(f), /Injected failure/); assert.deepEqual(f.state, before);
@@ -438,7 +445,7 @@ test('disabled platforms still delete globally and advance revision without crea
   const result = await remove(f);
   assert.equal(result.deleted.pantallas, 2); assert.equal(result.deleted.completas, 2);
   assert.deepEqual(result.audits, []); assert.equal(f.state.emailDeletionAudit.length, 0);
-  assert.equal(result.revision, '1'); assert.equal(f.state.metricasmensuales.length, 0);
+  assert.equal(result.revision, '1'); assert.equal(f.state.metricasmensuales.length, 1);
 });
 
 test('mixed enabled and disabled platforms with the same credentials only snapshot enabled records', async () => {
