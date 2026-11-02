@@ -17,6 +17,14 @@ export async function readCurrentAccountData<T>(read: () => Promise<T>): Promise
   throw new Error("Los datos cambiaron durante la consulta. Vuelve a actualizar.");
 }
 export const registerAccountCache = (clear: () => void) => { invalidators.add(clear); };
+/** A committed edit/renewal invalidates operational caches just like deletion. */
+export function notifyAccountUpdate(broadcast = true) {
+  if (typeof window === "undefined") return;
+  generation++;
+  invalidators.forEach(clear => clear());
+  window.dispatchEvent(new CustomEvent(EVENT, { detail: { revision: accountRevision(), correos: [] } }));
+  if (broadcast) try { localStorage.setItem("__account_data_updated", String(Date.now())); } catch {}
+}
 export function accountRevision() { try { return localStorage.getItem(KEY) ?? "0"; } catch { return "0"; } }
 
 export function applyAccountDeletion(change: { revision: string; correos: string[] }, broadcast = true) {
@@ -51,6 +59,7 @@ export function subscribeAccountDeletion(refresh: (change: AccountDeletion) => v
 
 export function listenAccountDeletionStorage() {
   const handler = (event: StorageEvent) => {
+    if (event.key === "__account_data_updated" && event.newValue) { notifyAccountUpdate(false); return; }
     if (event.key !== MESSAGE || !event.newValue) return;
     try { applyAccountDeletion(JSON.parse(event.newValue), false); } catch { /* Invalid message. */ }
   };

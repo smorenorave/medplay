@@ -1,4 +1,5 @@
 // src/lib/cuentasMutationBus.ts
+import { notifyAccountUpdate } from "./accountDataChanges";
 const KEY = 'cuentas:changed';
 
 let bc: BroadcastChannel | undefined;
@@ -7,6 +8,7 @@ try { bc = new BroadcastChannel(KEY); } catch {}
 export type CuentasEvent = { ts: number; payload?: any };
 
 export function notifyCuentasChanged(payload?: any) {
+  notifyAccountUpdate();
   const msg: CuentasEvent = { ts: Date.now(), payload };
   bc?.postMessage(msg);
   try { localStorage.setItem(KEY, String(msg.ts)); } catch {}

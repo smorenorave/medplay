@@ -2,10 +2,12 @@
 import { applyPasswordExpiryDeletion } from "@/lib/passwordExpiryClient";
 import RecordDeletionDialog from "@/components/RecordDeletionDialog";
 import type { DeletionSelection } from "@/lib/recordDeletionClient";
-import { expiryAccountAmounts } from "@/lib/expiryAmounts";
 import ColombiaDateInput from "@/components/ui/ColombiaDateInput";
-import { formatDateCO } from "@/lib/bogotaDate";
-import { readCurrentAccountData, registerAccountCache } from "@/lib/accountDataChanges";
+import { expirationBucket } from "@/lib/expirationsClient";
+import { notifyPantallasChanged } from "@/lib/pantallasMutationBus";
+import { notifyCuentasChanged } from "@/lib/cuentasMutationBus";
+import { formatDateCO, addMonthsYMD } from "@/lib/bogotaDate";
+import { readCurrentAccountData } from "@/lib/accountDataChanges";
 import { useAccountDataRefresh } from "@/hooks/useAccountDataRefresh";
 
 
@@ -28,7 +30,7 @@ type TipoRegistro = "cuenta" | "pantalla";
 
 type Base = {
   passwordManagedAt?: string | null;
-  id: number;
+  id: string | number;
   plataforma_id: number | null;
   contacto: string;
   nombre: string | null;
@@ -50,12 +52,12 @@ type Pantalla = Base & { tipo: "pantalla"; nro_pantalla?: number | null };
 type Registro = Cuenta | Pantalla;
 
 type EditState = Partial<Registro> & {
-  id: number;
+  id: string | number;
   tipo: TipoRegistro;
   __original_contrasena?: string | null;
 };
 
-type ViewFilter = "todos" | "hoy" | "manana" | "anteriores";
+type ViewFilter = "todos" | "hoy" | "manana" | "anteriores" | "proximos";
 type TipoFilter = "all" | "cuenta" | "pantalla";
 
 /* ====================== Constantes (ajusta si necesitas) ====================== */
@@ -80,33 +82,11 @@ const money = (v: number | null | undefined) =>
 const isYYYYMMDD = (s?: string | null) =>
   !!(s && /^\d{4}-\d{2}-\d{2}$/.test(s));
 
-const ymdAddDays = (baseYmd: string, days: number) => {
-  const [y, m, d] = baseYmd.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() + days);
-  const yy = dt.getFullYear();
-  const mm = String(dt.getMonth() + 1).padStart(2, "0");
-  const dd = String(dt.getDate()).padStart(2, "0");
-  return `${yy}-${mm}-${dd}`;
-};
-
 const ymdAddMonths = (baseYmd: string, months: number) => {
-  if (!isYYYYMMDD(baseYmd)) return baseYmd;
-  const [y, m, d] = baseYmd.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setMonth(dt.getMonth() + Number(months || 0));
-  const yy = dt.getFullYear();
-  const mm = String(dt.getMonth() + 1).padStart(2, "0");
-  const dd = String(dt.getDate() + 0).padStart(2, "0");
-  return `${yy}-${mm}-${dd}`;
+  return addMonthsYMD(baseYmd, months);
 };
 
 const today = () => todayYMDLocal();
-const tomorrow = () => ymdAddDays(today(), 1);
-const isToday = (ymd?: string | null) => ymd === today();
-const isTomorrow = (ymd?: string | null) => ymd === tomorrow();
-const isExpired = (ymd?: string | null) =>
-  isYYYYMMDD(ymd) && (ymd as string) < today();
 
 /* ====================== Modal con Portal + Scroll Freeze ====================== */
 function Modal({
@@ -187,97 +167,12 @@ if (typeof window !== "undefined" && "BroadcastChannel" in window) {
 
 /* ====================== Fetchers ====================== */
 
-async function pagedFetch(baseUrl: string) {
-  const out: any[] = [];
-  let cursor: string | null = null;
-  for (let i = 0; i < 50; i++) {
-    const url = `${baseUrl}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""
-      }`;
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) throw new Error(`GET ${baseUrl} -> ${res.status}`);
-    const j: any = await res.json();
-    const items: any[] = Array.isArray(j?.items)
-      ? j.items
-      : Array.isArray(j?.data)
-        ? j.data
-        : Array.isArray(j)
-          ? j
-          : [];
-    out.push(...items);
-    const next =
-      j?.nextCursor ??
-      j?.next_page_token ??
-      j?.nextPageToken ??
-      j?.cursor ??
-      null;
-    cursor = next ? String(next) : null;
-    if (!cursor || items.length === 0) break;
-  }
-  return out;
-}
-
-let __allCuentasCache: Promise<Cuenta[]> | null = null;
-async function fetchCuentasAll(): Promise<Cuenta[]> {
-  if (!__allCuentasCache) {
-    __allCuentasCache = (async () => {
-      const todas = await pagedFetch(`${CUENTAS_BASE}?limit=500`);
-      return (todas as any[]).map((r) => ({ ...expiryAccountAmounts(r), tipo: "cuenta" as const }));
-    })();
-  }
-  return __allCuentasCache;
-}
-
-let __allPantallasCache: Promise<Pantalla[]> | null = null;
-registerAccountCache(() => { __allCuentasCache = null; __allPantallasCache = null; });
-async function fetchPantallasAll(): Promise<Pantalla[]> {
-  if (!__allPantallasCache) {
-    __allPantallasCache = (async () => {
-      const todas = await pagedFetch(`${PANTALLAS_BASE}?limit=500`);
-      return (todas as any[]).map((r) => ({ ...r, tipo: "pantalla" as const }));
-    })();
-  }
-  return __allPantallasCache;
-}
-
-async function fetchCuentas(): Promise<Cuenta[]> {
-  const out = await pagedFetch(
-    `${CUENTAS_BASE}?vencidas=1&limit=500&hoy=${today()}&manana=${tomorrow()}`
-  );
-
-  return (out as any[]).map((r) => ({
-    ...expiryAccountAmounts(r),
-    tipo: "cuenta" as const,
-  }));
-}
-
-
-async function fetchPantallas(): Promise<Pantalla[]> {
-  const out = await pagedFetch(
-    `${PANTALLAS_BASE}?vencidas=1&limit=500&hoy=${today()}&manana=${tomorrow()}`
-  );
-
-  return (out as any[]).map((r) => ({
-    ...r,
-    tipo: "pantalla" as const,
-  }));
-}
-
-
-function fetchVencidasHoyManana(): Promise<Registro[]> { return readCurrentAccountData(fetchVencidasHoyMananaFromServer); }
-async function fetchVencidasHoyMananaFromServer(): Promise<Registro[]> {
-  const [cuentas, pantallas] = await Promise.all([
-    fetchCuentas(),
-    fetchPantallas(),
-  ]);
-  const key = (x: Registro) => `${x.tipo}:${x.id}`;
-  const map = new Map<string, Registro>();
-  [...cuentas, ...pantallas].forEach((r) => map.set(key(r), r));
-  const response = await fetch("/api/password-managed-records", { cache: "no-store" });
+function fetchExpirations(): Promise<Registro[]> { return readCurrentAccountData(async () => {
+  const response = await fetch("/api/cuentasvencidas", { cache: "no-store" });
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || "No se pudieron cargar los registros gestionados.");
-  for (const row of result.items) map.set(key(row), row.tipo === "cuenta" ? expiryAccountAmounts(row) : row);
-  return Array.from(map.values());
-}
+  if (!response.ok) throw new Error(result.error || "No se pudieron cargar los vencimientos.");
+  return result.items;
+}); }
 
 /* ====================== Página ====================== */
 export default function CuentasPantallasVencidasPage() {
@@ -296,7 +191,7 @@ export default function CuentasPantallasVencidasPage() {
 
   const [selected, setSelected] = useState<Set<string>>(new Set()); // key = tipo:id
 
-  const rows = useMemo(() => allRows.filter(row => !row.passwordManagedAt), [allRows]);
+  const rows = allRows;
 
   // Editar
   const [edit, setEdit] = useState<EditState | null>(null);
@@ -316,37 +211,41 @@ export default function CuentasPantallasVencidasPage() {
 
 /* Boot con caché */
   useEffect(() => {
+    let cancelled = false;
+    const seq = ++refreshSeq.current;
     (async () => {
       setErr(null);
       try {
         setLoading(true);
-        const data = await fetchVencidasHoyManana();
+        const data = await fetchExpirations();
+        if (cancelled || seq !== refreshSeq.current) return;
         setRows(data);
         setDaily(DAILY_KEY, data);
         setSource("server");
       } catch (e: any) {
-        setErr(e?.message ?? "No se pudieron cargar los datos.");
+        if (!cancelled && seq === refreshSeq.current) setErr(e?.message ?? "No se pudieron cargar los datos.");
       } finally {
-        setLoading(false);
+        if (!cancelled && seq === refreshSeq.current) setLoading(false);
       }
     })();
+    return () => { cancelled = true; };
   }, []);
 
   // Always accept current server fields: a management change keeps the same IDs.
   const forceRefresh = async () => {
+    const seq = ++refreshSeq.current;
     try {
-      const seq = ++refreshSeq.current;
       setLoading(true);
       setErr(null);
-      const data = await fetchVencidasHoyManana();
+      const data = await fetchExpirations();
       if (seq !== refreshSeq.current) return; // respuesta tardía: descartar
       setDaily(DAILY_KEY, data);
       setSource("server");
       setRows(data);
     } catch (e: any) {
-      setErr(e?.message ?? "No se pudo refrescar.");
+      if (seq === refreshSeq.current) setErr(e?.message ?? "No se pudo refrescar.");
     } finally {
-      setLoading(false);
+      if (seq === refreshSeq.current) setLoading(false);
     }
   };
 
@@ -364,21 +263,21 @@ export default function CuentasPantallasVencidasPage() {
       }, 400);
     };
 
-    // a) BroadcastChannel -> solo cuando t === 'deleted'
+    // a) Changes received from another Vencimientos view
     const onBC = (ev: MessageEvent) => {
       const msg = ev.data || {};
       if (msg.by === INSTANCE_ID) return;
-      if (msg.t === "deleted") refreshSoon();
+      if (msg.t === "deleted" || msg.t === "updated") refreshSoon();
     };
     bc?.addEventListener?.("message", onBC);
 
-    // b) Fallback localStorage -> solo cuando t === 'deleted'
+    // b) Fallback between tabs
     const onStorage = (e: StorageEvent) => {
       if (e.key !== LS_BROADCAST_KEY || !e.newValue) return;
       try {
         const msg = JSON.parse(e.newValue);
         if (msg.by === INSTANCE_ID) return;
-        if (msg.t === "deleted") refreshSoon();
+        if (msg.t === "deleted" || msg.t === "updated") refreshSoon();
       } catch { }
     };
     window.addEventListener("storage", onStorage);
@@ -422,44 +321,19 @@ export default function CuentasPantallasVencidasPage() {
     return idx;
   }, [rows, platformMap]);
 
-  /* Filtro + búsqueda */
-  const filtered = useMemo(() => {
-    // 1) Filtrado por rango (hoy, mañana, anteriores, todos)
-    const base = rows.filter((r) => {
-      const fv = r.fecha_vencimiento;
-      if (!isYYYYMMDD(fv)) return false;
-      switch (view) {
-        case "hoy":
-          return isToday(fv);
-        case "manana":
-          return isTomorrow(fv);
-        case "anteriores":
-          return fv < today();
-        case "todos":
-          return fv < today() || isToday(fv) || isTomorrow(fv);
-      }
-    });
-
-    // 2) Normaliza término y filtro de plataforma
+  // Use the same search, platform and type filters for counters and list.
+  const matchingRows = useMemo(() => {
     const term = normSearch(dq);
-    const pid: number | null = platFilter === "all" ? null : Number(platFilter);
-
-    // 3) Filtro por tipo
-    const byTipo = base.filter((r) =>
-      tipoFilter === "all" ? true : r.tipo === tipoFilter
+    return rows.filter(r =>
+      (tipoFilter === "all" || r.tipo === tipoFilter) &&
+      (platFilter === "all" || r.plataforma_id === Number(platFilter)) &&
+      (!term || (searchIndex.get(`${r.tipo}:${r.id}`) ?? "").includes(term))
     );
-
-    // 4) Si no hay término ni plataforma, regresa byTipo
-    if (!term && pid === null) return byTipo;
-
-    // 5) Aplica filtros usando índice
-    return byTipo.filter((r) => {
-      if (pid !== null && r.plataforma_id !== pid) return false;
-      if (!term) return true;
-      const k = `${r.tipo}:${r.id}`;
-      return (searchIndex.get(k) ?? "").includes(term);
-    });
-  }, [rows, view, dq, platFilter, tipoFilter, searchIndex]);
+  }, [rows, dq, platFilter, tipoFilter, searchIndex]);
+  const filtered = useMemo(() => matchingRows.filter(r => {
+    const bucket = expirationBucket(r.fecha_vencimiento, today());
+    return bucket !== null && (view === "todos" || bucket === view);
+  }), [matchingRows, view]);
 
   /* ====== Inventario: check + helpers ====== */
   const [deletionItems, setDeletionItems] = useState<DeletionSelection[]>([]);
@@ -467,6 +341,15 @@ export default function CuentasPantallasVencidasPage() {
   const onAskDelete = (r: Registro) => { setDeletionItems([selectionFor(r)]); };
   const askBulkDelete = () => { setDeletionItems(rows.filter(r => selected.has(`${r.tipo}:${r.id}`)).map(selectionFor)); };
   useAccountDataRefresh(forceRefresh);
+  useEffect(() => {
+    let day = today();
+    const timer = window.setInterval(() => {
+      if (day !== today()) { day = today(); void forceRefresh(); }
+    }, 30_000);
+    const onFocus = () => { void forceRefresh(); };
+    window.addEventListener("focus", onFocus);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", onFocus); };
+  }, []);
 
   /* ====== Editar ====== */
   const openEdit = useCallback(
@@ -571,7 +454,7 @@ export default function CuentasPantallasVencidasPage() {
           : r
       );
 
-      // Registrar el cambio confirmado y retirar el correo de vencimientos.
+      // Record the password change without changing the assignment lifecycle.
       const updated = merged.find(
         (r) => `${r.tipo}:${r.id}` === `${edit.tipo}:${edit.id}`
       )!;
@@ -588,17 +471,10 @@ export default function CuentasPantallasVencidasPage() {
       if (newPw !== oldPw && emailForQueue) {
         recordPasswordChange(emailForQueue, newPw, updated.plataforma_id ?? undefined);
       }
-      const T = today();
-      const T1 = tomorrow();
-      const next = merged.filter(
-        (r) =>
-          isYYYYMMDD(r.fecha_vencimiento) &&
-          (r.fecha_vencimiento! < T ||
-            r.fecha_vencimiento === T ||
-            r.fecha_vencimiento === T1)
-      );
-      setRows(next);
-      setDaily(DAILY_KEY, next);
+      setRows(merged);
+      setDaily(DAILY_KEY, merged);
+      if (edit.tipo === "pantalla") notifyPantallasChanged();
+      else notifyCuentasChanged();
       closeEdit();
 
       // 🔔 Cambios relevantes podrían venir de otros flujos: emite señal
@@ -621,22 +497,14 @@ export default function CuentasPantallasVencidasPage() {
     }
   };
 
-  /* KPIs */
-  const { kpiHoy, kpiManana, kpiAnteriores } = useMemo(() => {
-    let hoy = 0,
-      man = 0,
-      ant = 0;
-    const T = today(),
-      T1 = tomorrow();
-    for (const r of rows) {
-      const fv = r.fecha_vencimiento;
-      if (!isYYYYMMDD(fv)) continue;
-      if (fv < T) ant++;
-      else if (fv === T) hoy++;
-      else if (fv === T1) man++;
+  const { anteriores: kpiAnteriores, hoy: kpiHoy, manana: kpiManana, proximos: kpiProximos } = useMemo(() => {
+    const counts = { anteriores: 0, hoy: 0, manana: 0, proximos: 0 };
+    for (const r of matchingRows) {
+      const bucket = expirationBucket(r.fecha_vencimiento, today());
+      if (bucket) counts[bucket]++;
     }
-    return { kpiHoy: hoy, kpiManana: man, kpiAnteriores: ant };
-  }, [rows]);
+    return counts;
+  }, [matchingRows]);
 
   const visibleIds = useMemo(
     () => new Set(filtered.map((r) => `${r.tipo}:${r.id}`)),
@@ -662,7 +530,7 @@ export default function CuentasPantallasVencidasPage() {
       <header className="flex flex-wrap items-center gap-3 justify-between">
         <div className="flex items-end gap-3">
           <h1 className="text-2xl font-bold text-neutral-100">
-            Cuentas y Pantallas (vencidas, hoy y mañana)
+            Vencimientos de cuentas y pantallas
           </h1>
           <span className="text-sm text-neutral-400">
             • Fuente:{" "}
@@ -720,15 +588,17 @@ export default function CuentasPantallasVencidasPage() {
           <option value="todos">Todos</option>
           <option value="hoy">Vencen hoy</option>
           <option value="manana">Vencen mañana</option>
+          <option value="proximos">Próximos vencimientos</option>
           <option value="anteriores">Anteriores a hoy (vencidas)</option>
         </select>
       </section>
 
       {/* KPIs */}
-      <section className="grid gap-3 sm:grid-cols-3 lg:grid-cols-3">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KPI title="Anteriores (vencidas)" value={kpiAnteriores} />
         <KPI title="Vencen hoy" value={kpiHoy} />
         <KPI title="Vencen mañana" value={kpiManana} />
+        <KPI title="Próximos vencimientos" value={kpiProximos} />
       </section>
 
       {/* Estados */}
@@ -754,7 +624,7 @@ export default function CuentasPantallasVencidasPage() {
                 ? "Vencen hoy"
                 : view === "manana"
                   ? "Vencen mañana"
-                  : "Anteriores a hoy (vencidas)"}
+                  : view === "proximos" ? "Próximos vencimientos" : "Anteriores a hoy (vencidas)"}
           </div>
           <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
             <button

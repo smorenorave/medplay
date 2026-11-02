@@ -1,4 +1,5 @@
 // Utilidades para notificar cambios y mantener la cache de pantallas sincronizada
+import { notifyAccountUpdate } from "./accountDataChanges";
 
 export type Pantalla = {
   id: number;
@@ -121,6 +122,7 @@ export function removePantallaFromCache(id: number): Pantalla[] {
 /** Sube un "sello" y emite broadcast para que otras pestañas refresquen. */
 export function notifyPantallasChanged() {
   if (!hasWindow()) return;
+  notifyAccountUpdate();
   try {
     localStorage.setItem(LS_STAMP_P, String(Date.now()));
   } catch {}

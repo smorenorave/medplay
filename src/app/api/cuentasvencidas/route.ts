@@ -4,9 +4,23 @@ import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs/promises';
 import fsSync from 'fs';
+import { prisma } from '@/lib/db';
+import { getAuthenticatedAdminId } from '@/lib/adminSession';
+import { readExpirations } from '@/lib/expirations';
+import { expiredDeletionFailure } from '@/lib/expiredDeletionFailure';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+export async function GET(request: Request) {
+  if (!await getAuthenticatedAdminId(request)) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+  try {
+    return NextResponse.json(await readExpirations(prisma), { headers: { 'Cache-Control': 'no-store' } });
+  } catch (error) {
+    const failure = expiredDeletionFailure(error);
+    return NextResponse.json({ error: failure.error, code: failure.code }, { status: failure.status });
+  }
+}
 
 /** ====== LOCK (anti doble POST / doble spawn) ====== */
 const LOCKS_DIR = path.resolve(process.cwd(), '.locks');

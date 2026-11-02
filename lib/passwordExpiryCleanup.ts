@@ -31,9 +31,12 @@ export async function passwordExpiryTransaction<T>(db: PrismaClient, target: Tar
       await tx.cuentascompartidas.updateMany({ where: { id: { in: [...new Set(screenIds.map(r => r.cuenta_id))] } }, data: { contrasena: after.password } });
       const completas = await tx.cuentascompletas.updateMany({ where: { id: { in: completeIds.map(r => r.id) } }, data: { passwordManagedAt, contrasena: after.password } });
       const pantallas = await tx.pantallas.updateMany({ where: { id: { in: screenIds.map(r => r.id) } }, data: { passwordManagedAt } });
-      const revision = await tx.accountDataRevision.upsert({ where: { id: 1 }, create: { id: 1, revision: 1n }, update: { revision: { increment: 1n } } });
-      deletion = { revision: String(revision.revision), correos: [], managed: completas.count + pantallas.count };
+      deletion = { revision: "0", correos: [], managed: completas.count + pantallas.count };
     }
+    // Every committed edit (including a renewal/date-only change) must be seen
+    // by the revision polling used by other sessions, in this same transaction.
+    const revision = await tx.accountDataRevision.upsert({ where: { id: 1 }, create: { id: 1, revision: 1n }, update: { revision: { increment: 1n } } });
+    if (deletion) deletion.revision = String(revision.revision);
     return { value, deletion };
   }, { isolationLevel: "Serializable", maxWait: 10000, timeout: 30000 });
 }

@@ -472,6 +472,7 @@ export default function PantallasViewer() {
 // eliminación masiva
 
 const mounted = useRef(false);
+const refreshSeq = useRef(0);
 
   //recalcular modal
   useEffect(() => {
@@ -500,6 +501,7 @@ const mounted = useRef(false);
   /* ===== Boot ===== */
   useEffect(() => {
     mounted.current = true;
+    const seq = ++refreshSeq.current;
     (async () => {
       setErr(null);
       const cached = readCache();
@@ -523,13 +525,13 @@ const mounted = useRef(false);
       try {
         setLoading(true);
         const all = await fetchAllPantallas();
-        if (!mounted.current) return;
+        if (!mounted.current || seq !== refreshSeq.current) return;
         setRows(all);
         writeCache(all, remoteStamp);
       } catch (e: any) {
-        if (mounted.current) setErr(e?.message ?? "Error cargando pantallas");
+        if (mounted.current && seq === refreshSeq.current) setErr(e?.message ?? "Error cargando pantallas");
       } finally {
-        if (mounted.current) setLoading(false);
+        if (mounted.current && seq === refreshSeq.current) setLoading(false);
       }
     })();
 
@@ -572,6 +574,7 @@ const mounted = useRef(false);
   }, []);
 
   async function forceRefresh() {
+    const seq = ++refreshSeq.current;
     try {
       setLoading(true);
       setErr(null);
@@ -579,13 +582,13 @@ const mounted = useRef(false);
         fetchStamp(),
         fetchAllPantallas(),
       ]);
-      if (!mounted.current) return;
+      if (!mounted.current || seq !== refreshSeq.current) return;
       setRows(all);
       writeCache(all, stamp);
     } catch (e: any) {
-      if (mounted.current) setErr(e?.message ?? "No se pudo refrescar");
+      if (mounted.current && seq === refreshSeq.current) setErr(e?.message ?? "No se pudo refrescar");
     } finally {
-      if (mounted.current) setLoading(false);
+      if (mounted.current && seq === refreshSeq.current) setLoading(false);
     }
   }
 

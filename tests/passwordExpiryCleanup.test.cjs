@@ -93,4 +93,20 @@ for(const fail of ['screens','complete','revision']) test('rollback password and
  const f=fixture(), before=structuredClone(f.state); f.fail(fail);await assert.rejects(edit(f));assert.deepEqual(f.state,before);
 });
 test('unchanged password does not mark records',async()=>{const f=fixture();const r=await edit(f,{password:'old'});assert.equal(r.deletion,null);assert.ok(f.state.screens.every(r=>!r.passwordManagedAt));});
+
+test('date-only renewal advances the shared revision without hiding or deleting assignments', async () => {
+ const f=fixture(); const before=structuredClone(f.state);
+ const r=await edit(f,{password:'old',renew:true});
+ assert.equal(r.deletion,null);
+ assert.equal(f.state.revision,1);
+ assert.equal(f.state.screens[0].fecha_vencimiento.toISOString().slice(0,10),addDaysYMD(today,30));
+ assert.deepEqual(f.state.screens.slice(1),before.screens.slice(1));
+ assert.deepEqual(f.state.history,before.history);
+});
+
+test('revision failure rolls back a date-only renewal', async () => {
+ const f=fixture(), before=structuredClone(f.state); f.fail('revision');
+ await assert.rejects(edit(f,{password:'old',renew:true}));
+ assert.deepEqual(f.state,before);
+});
 test('unauthenticated password change does not mutate data',async()=>{const f=fixture(),before=structuredClone(f.state);await assert.rejects(edit(f,{admin:null}));assert.deepEqual(f.state,before);});

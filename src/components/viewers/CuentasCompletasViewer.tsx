@@ -9,7 +9,7 @@ import { usePageWindow } from "@/hooks/usePageWindow";
 import ResultsPagination from "@/components/ui/ResultsPagination";
 import { useInventoryRefresh } from "@/hooks/useInventoryRefresh";
 import { notifyInventoryConsumed } from "@/lib/inventoryChanges";
-import { readCurrentAccountData, registerAccountCache } from "@/lib/accountDataChanges";
+import { readCurrentAccountData, registerAccountCache, notifyAccountUpdate } from "@/lib/accountDataChanges";
 import { useAccountDataRefresh } from "@/hooks/useAccountDataRefresh";
 
 import { recordPasswordChange } from "@/lib/passwordChanges";
@@ -124,6 +124,7 @@ function removeFromCache(id: number) {
   return next;
 }
 function broadcastInvalidate() {
+  notifyAccountUpdate();
   try {
     const bc = new BroadcastChannel(BC_NAME);
     bc.postMessage({ type: "invalidate-cuentas" });
